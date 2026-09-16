@@ -35,7 +35,7 @@ The glyph is drawn by the same function as the menu bar, at 48 pt. Round nine op
 - **Silhouette offset**: the offset of every slat, so the edge follows each tip and scallops slightly along the sides.
 - **Split**: the envelope and the time capsule as two separate shapes with a 6 pt gap.
 
-At 48 pt with "0:00" at 12 pt the joined bar measures about 82 by 51 pt. Motion is ink only: a slat rises from 55% to full ink in about 0.15 s and settles over 0.6 s; the middle leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph with the dots drifting right one pitch every five seconds, still under Reduce Motion. Nothing changes size.
+At 48 pt with "0:00" at 12 pt the joined bar measures about 82 by 51 pt. Motion is ink only: a slat rises from 55% to full ink in about 0.15 s and settles over 0.6 s; the middle leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph with the dots drifting right one pitch every 3.5 seconds (sped up from five at the maintainer's request), still under Reduce Motion. Nothing changes size.
 
 **Open:** whether the 8 pt gap and 6 pt column gap are right, and whether the motion is now subtle enough; the maintainer accepted the construction without adjustments to either, so they stand until a live check says otherwise. Motion has only been judged in stills by the agent.
 
