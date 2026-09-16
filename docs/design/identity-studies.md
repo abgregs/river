@@ -39,11 +39,11 @@ At 48 pt with "0:00" at 12 pt the joined bar measures about 82 by 51 pt. Motion 
 
 **Open:** whether the 8 pt gap and 6 pt column gap are right, and whether the motion is now subtle enough; the maintainer accepted the construction without adjustments to either, so they stand until a live check says otherwise. Motion has only been judged in stills by the agent.
 
-### Recording indicator: river
+### Recording indicator: river (parked, still of interest)
 
-Three strands, each a slow meander with a faster ripple at an irrational ratio, at their own amplitude, phase, and drift; both ends fade through a gradient mask. Round nine put all three strands in uniform ink (the middle strand had carried the accent, against the confirmed rule); shape and timing untouched. Motion timing is round two's: attack rate 10, release rate 5. At rest the strands settle into three separated, nearly straight lines. The study page shows held frames at levels 0, 0.5, and 1.0.
+Three strands, each a slow meander with a faster ripple at an irrational ratio, at their own amplitude, phase, and drift; both ends fade through a gradient mask; uniform ink. Motion above rest is round two's (attack rate 10, release rate 5), which the maintainer called "really fluid, really nice" at levels 0.5 and 1.0 and in the live transitions.
 
-**Open, awaiting the maintainer's read:** whether the rest state is right, and whether the peak frame is too busy. The faster wake-up variant was tried and rejected as "wayyy over the top".
+**Rest state, rebuilt 2026-09-16.** Round eight's rest state read as "grainy, pixelly, glitchy, rough". Diagnosis, confirmed in a full-scale capture: its amplitude at level 0 was 0.6 to 0.9 px on strokes of 1.3 to 2.6 px, rendered through a 0.9 scale, so near-horizontal hairlines crossed pixel rows at very shallow angles and antialiasing split their coverage between two rows; the slow drift then moved that pattern along the line. The rest state now has zero amplitude: three perfectly flat lines centered on pixel rows (1 px strokes on half-pixel y, the 2 px middle stroke on an integer y, the mark rendered 1:1 at 108 by 40), at 40% ink with a slow breath of plus or minus 6% over about seven seconds. Level blends width, ink, and amplitude into the motion over the first 0.15 of level with round two's timing. The maintainer chose the breathing variant over a frozen one, "assuming we can pull off smooth appearance"; the held rest frame is now crisp, and the breath awaits a live look.
 
 ### Menu bar glyph: river
 
@@ -84,6 +84,7 @@ Red sand `#C4674A` fails as text and as a control ground on white; if chosen, it
 | Round 9, first pass: the enlarged glyph inside the rounded-rectangle panel with the word "Listening", at 40 or 60 pt, with the stroke thickening to 1.6 while listening | "Neither": too much negative space around a roughly rectangular bar, centering problems, and the motion not subtle enough. Replaced the same day by the enveloping bar |
 | Accent color on selected strokes; an emblem ring | Replaced by uniform ink and an empty emblem space |
 | River wake-up with sharp attack and level-scaled speed | Far too snappy; reverted to round two's timing |
+| River rest state as separated, nearly straight lines with a trace of drift (round 8) | Grainy and glitchy: sub-pixel wobble on hairlines, split between pixel rows by antialiasing and then drifted. Replaced by flat lines on pixel rows |
 | River glyph as two banks or live strands | "Stock price chart", then "smashed tweezers"; not recognizable as a river |
 | Icon: hand-drawn stroke R | Messy, hand-drawn |
 | Icon: typeset R from a real font in a squircle | A reasonable start, but not bespoke, and not centered |
@@ -101,7 +102,8 @@ Red sand `#C4674A` fails as text and as a control ground on white; if chosen, it
 7. **Generating letterforms from scratch failed four times.** A bespoke icon letter is better started from a real, openly licensed font outline and modified in one place, not synthesized from curves. Round nine did this; the maintainer endorsed the approach.
 8. **One drawing per mark.** When two surfaces must match (menu bar glyph and indicator), they call the same function at different sizes, so the match holds by construction rather than by comparison.
 9. **The study page takes `?focus=<id>`.** It lifts one block to the top of the page and hides the header and controls, so the first-viewport screenshot sees it; use it instead of scrolling. The in-app browser cannot screenshot `file://` pages: serve the folder with `python3 -m http.server --directory <dir>` and open it over localhost.
-10. **Compute envelopes, don't draw them.** A bar that must hug a mark with a constant gap is the mark's offset (Minkowski sum with a disk), joined and closed with a fillet radius; `shapely` does this in a few lines and the result is exact.
+10. **Hairlines must not wobble sub-pixel.** Any stroke under about 3 px that moves less than a pixel reads as grain, and drifting it reads as a glitch. A rest state is either exactly flat on a pixel row or clearly curved; there is no gentle in-between at that scale.
+11. **Compute envelopes, don't draw them.** A bar that must hug a mark with a constant gap is the mark's offset (Minkowski sum with a disk), joined and closed with a fillet radius; `shapely` does this in a few lines and the result is exact.
 
 ## Impeccable state
 

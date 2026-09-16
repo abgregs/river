@@ -84,7 +84,7 @@
   .hud .word { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap; }
   .hud .time { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; opacity: .65; }
   .hud .mark { display: flex; justify-content: center; align-items: center; height: 44px; border-radius: 4px; overflow: hidden; }
-  .hud .mark svg { width: 108px; height: 40px; }
+  .hud .mark svg { width: 108px; height: 40px; }   /* the river's viewBox is 108 x 40: rendered 1:1 so rest lines sit on pixel rows */
   .frames .ground { min-height: 230px; justify-content: center; align-items: center; }
   .hud[data-state="idle"] { opacity: 0; }
   .construct { color: var(--muted); font-size: 12.5px; max-width: 68ch; margin-top: 8px; }
@@ -199,7 +199,7 @@
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
-    <p class="lead"><b>River.</b> Now in uniform ink: the middle strand no longer carries the accent, per the confirmed rule for marks. Motion is exactly round two's: the same slow drift, the same easing, the same amplitude curve. The one change is the rest state. Below the level threshold the three strands settle into three separated, nearly straight lines with a trace of bend, so the panel reads as calm water rather than a tangle. The three frames below are held at fixed levels so the rest, mid, and peak shapes can be judged without motion.</p>
+    <p class="lead"><b>River, parked.</b> Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state is new: the amplitude is exactly zero, so the strands are three perfectly flat lines centered on pixel rows, dimmed to 40% ink with a slow breath. Round eight's rest state looked grainy because its sub-pixel wobble on hairlines was split between pixel rows by antialiasing and then drifted; flat lines on pixel rows cannot do that. Rising level blends width, ink, and amplitude into the motion with round two's timing.</p>
     <h2>Live</h2>
     <div class="hudstage light live" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
     <div id="sec-c-frames">
@@ -212,8 +212,8 @@
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
-      <li>At rest, three clearly separated lines, almost straight, still drifting slowly. Never a ruler, never a tangle.</li>
-      <li>Rising level widens the water smoothly, with round two's timing. No jump, no snap.</li>
+      <li>At rest, three perfectly flat lines on pixel rows at 40% ink, breathing slowly. No drift, no wobble, nothing sub-pixel.</li>
+      <li>Rising level brightens and widens the water smoothly, with round two's timing. No jump, no snap.</li>
       <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
       <li>Both ends fade to nothing. Nothing clips.</li>
       <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
@@ -349,15 +349,20 @@
     }
   }
 
-  // ---------- River indicator (120 x 44): round-two motion, separated rest state ----------
+  // ---------- River indicator (108 x 40, rendered 1:1): round-two motion, flat rest state ----------
+  // At rest the amplitude is exactly zero, so the strands are straight lines centered on pixel rows (a 1 px
+  // stroke on a half-pixel y, the 2 px middle stroke on an integer y) at 40% ink with a slow breath. Level
+  // blends width, ink, and amplitude into round two's motion with round two's timing. Sub-pixel wobble on a
+  // hairline was what made round eight's rest state look grainy: antialiasing split the line between rows.
   const STRANDS = [
-    { base: 0.28, amp: 0.7, meanderL: 1.9, rippleL: 0.62, phase: 0.4, speed: 0.55, width: 1.6, alpha: 0.7, accent: false },
-    { base: 0.50, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, alpha: 1.0, accent: true },
-    { base: 0.72, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, alpha: 0.55, accent: false },
+    { base: 11.5 / 40, amp: 0.7, meanderL: 1.9, rippleL: 0.62, phase: 0.4, speed: 0.55, width: 1.6, restWidth: 1, alpha: 0.7 },
+    { base: 20 / 40, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, restWidth: 2, alpha: 1.0 },
+    { base: 28.5 / 40, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, restWidth: 1, alpha: 0.55 },
   ];
+  const REST_INK = 0.4, REST_BREATH = 0.06, WAKE = 0.15;   // ink at rest, breath depth, level at which the strands are fully awake
   function riverPath(s, w, h, level, t) {
     const pts = []; const steps = 56;
-    const A = (0.9 + 11 * level) * s.amp;                      // a trace of bend at rest, full water at peak
+    const A = 11 * level * s.amp;                               // flat at rest, full water at peak
     for (let i = 0; i <= steps; i++) {
       const u = i / steps; const x = u * w;
       const meander = Math.sin((u / s.meanderL) * Math.PI * 2 + s.phase + t * s.speed * 0.6);
@@ -367,7 +372,7 @@
     return 'M' + pts.join(' L');
   }
   let maskSeq = 0;
-  function makeRiver(host, hold, w = 120, h = 44) {
+  function makeRiver(host, hold, w = 108, h = 40) {
     const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', 'aria-label': 'River mark' }, host);
     const id = 'fade' + (maskSeq++); const defs = el('defs', {}, svg);
     const grad = el('linearGradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 }, defs);
@@ -385,12 +390,14 @@
       m.smooth += (target - m.smooth) * Math.min(1, (target > m.smooth ? 10 : 5) * dt);   // round-two timing
     }
     const lv = m.hold == null ? m.smooth : m.hold;
+    const k = Math.min(1, lv / WAKE);                              // 0 at rest, 1 once awake
+    const restInk = REST_INK + REST_BREATH * Math.sin(t * 0.9);    // a slow breath, about seven seconds
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
       p.setAttribute('d', riverPath(s, m.w, m.h, lv, t));
       p.setAttribute('stroke', ink);   // uniform ink on marks; the accent never touches the indicator
-      p.setAttribute('stroke-width', String(s.width + 0.8 * lv));
-      p.setAttribute('opacity', String(s.alpha));
+      p.setAttribute('stroke-width', (s.restWidth + (s.width + 0.8 * lv - s.restWidth) * k).toFixed(2));
+      p.setAttribute('opacity', (restInk + (s.alpha - restInk) * k).toFixed(3));
     });
   }
 
