@@ -51,19 +51,19 @@ The redrawn channel glyph (one channel seen from above, wide at the near bank, o
 
 - **Monoline r**: the Young Serif r's stem and shoulder centerlines (the shoulder is the average of its outer and inner edges, computed from the outline), mapped into the 16 px box, with the shoulder leaving the stem tangentially as a confluence. Two lines.
 - **Three lines**: the same shoulder over a stem with a faint river bend, plus the foot serif as a short third line.
-- **Filled r, River join**: the icon's own letter at 16 px, 70% ink when Ready, full when Listening; Transcribing dots its outline.
+- **Filled r, River join** (removed from the page after its rejection): the Instrument Serif letter at 16 px, 70% ink when Ready, full when Listening; Transcribing dotted its outline.
 
 **Read 2026-09-16:** the monoline r and the three-line r both earn a place as candidates beside the slat glyph; the filled r does not (its dotted Transcribing outline collapses into a cloud at 16 px). The microphone slat glyph remains the accepted, working menu bar glyph; the redrawn channel glyph is still without a verdict.
 
-### App icon: Instrument Serif, changed in one place, visibly
+### App icon: a subtle flourish on a real letter (current round)
 
-The lowercase r is taken point for point from Instrument Serif (Rodrigo Fuenzalida and Jordan Egstad, SIL OFL 1.1, from the google/fonts repository on 2026-09-16, extracted with fontTools; the source is not committed). One region is changed: the inner join where the underside of the shoulder meets the stem. In the font the shoulder leaves the stem as a hairline over an empty crotch. In the River letter the underside stays with the shoulder a little longer, then swings into the stem in an S and arrives tangent to it about a third of the way down, filling the crotch with a tapering wedge of ink: a stream widening into the channel. Four contour points move (the three off-curve controls of the inner join and the on-curve point where it meets the stem); every other point, the stem, the serifs, and the ball terminal are the font's. The page shows the change at three strengths (the font as shipped, the River join, a longer confluence), an overlay of the shipped outline on the modified letter so the added ink is plain, and Dock and Finder sizes down to 16 px. Centering is geometric on the ink box, both axes. The letter sits in accent on charcoal, with an inverted tile beside it.
+The maintainer named three faces on 2026-09-16 whose R already carries some curve or shape: **Besley**, **Niconne**, and **Scope One**, capital or lowercase, either viable. All are SIL OFL 1.1 and were taken from the google/fonts repository that day (Besley's variable font at its default weight); extracted with fontTools, sources not committed. The study page's icon tab shows all six glyphs exactly as shipped, on the charcoal squircle at 96, 48, 24, and 16 px and inverted, so the base can be chosen on its own shape.
 
-- **Young Serif was dropped** 2026-09-16: "not readable"; Instrument Serif was "the only one even legible".
-- The first Instrument Serif edit moved the same four points by a few font units and was invisible; the maintainer rightly asked whether the glyph had been modified at all. The current edit is the visible one.
-- The type research at `~/Developer/typography-research` notes that optical centers sit above mathematical ones; an optical nudge is a separate decision for the maintainer, not applied.
+One worked flourish so far: **Besley's capital R**, whose leg ends in a short curled flick. The flick runs on a little further, up and out, as a tapering wave; eleven contour points of the tail move and the bowl, stem, and serifs are the font's. Shown at three strengths (shipped, River tail, longer) with the shipped outline overlaid. This is deliberately subtle: the maintainer rejected the big Instrument Serif confluence the same day ("not a big fan of the way large confluence approach, perhaps a new round with something more subtle").
 
-**Awaiting the maintainer's read:** the confluence strength, the letter's size in the squircle, and accent versus ink for the letter.
+Method that holds: take the outline point for point, change one region, overlay the shipped outline so the change is plain, center geometrically on the ink box. Candidate flourishes not yet drawn: Niconne's lowercase r has a wave-like entry stroke and a looped exit that could trail off as a current; Besley's lowercase r has a ball terminal that could soften into a drop; Scope One is lighter and straighter and would need the flourish to carry more of the character.
+
+**Awaiting the maintainer's read:** which base, and whether the Besley R tail is the right kind of subtle.
 
 ### Accent: measured side by side
 
@@ -98,6 +98,7 @@ Red sand `#C4674A` fails as text and as a control ground on white and would have
 | Icon: calligraphic lowercase r built from width profiles | Looked intentionally malformed |
 | Icon: Young Serif r as the base outline | Not readable at icon sizes; dropped. Instrument Serif was the only legible base |
 | Icon: the first Instrument Serif join edit, four points moved a few units | Invisible; the maintainer could not tell the modified glyph from the shipped one. Replaced by a visible S-taper join |
+| Icon: Instrument Serif r with a large S-taper confluence filling the crotch | "Not a big fan of the large confluence approach"; too much. The next round is subtle flourishes on Besley, Niconne, and Scope One |
 
 ## Working rules these rounds taught
 
