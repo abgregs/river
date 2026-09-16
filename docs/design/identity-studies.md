@@ -53,7 +53,7 @@ The redrawn channel glyph (one channel seen from above, wide at the near bank, o
 - **Three lines**: the same shoulder over a stem with a faint river bend, plus the foot serif as a short third line.
 - **Filled r, River join**: the icon's own letter at 16 px, 70% ink when Ready, full when Listening; Transcribing dots its outline.
 
-**Awaiting the maintainer's read.** The microphone slat glyph remains the accepted, working menu bar glyph.
+**Read 2026-09-16:** the monoline r and the three-line r both earn a place as candidates beside the slat glyph; the filled r does not (its dotted Transcribing outline collapses into a cloud at 16 px). The microphone slat glyph remains the accepted, working menu bar glyph; the redrawn channel glyph is still without a verdict.
 
 ### App icon: from a real outline, one change
 
