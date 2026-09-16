@@ -1,5 +1,5 @@
 <title>River Identity Studies</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Bricolage+Grotesque:wght@800&family=Geologica:wght@700&family=Young+Serif&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Young+Serif&display=swap">
 <style>
   :root {
     --bg: #F3F4F6; --fg: #1B1D21; --muted: #666B74; --line: #D8DBE1; --panel: #FFFFFF; --focus: #1F7F86;
@@ -97,12 +97,45 @@
   @media (max-width: 760px) { .frames { grid-template-columns: 1fr; } }
   .frames .hudstage { height: 150px; padding-bottom: 20px; }
   .frames h3 { margin-bottom: 6px; }
+  .options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .options { grid-template-columns: 1fr; } }
+  .options .hudstage { height: 190px; padding-bottom: 22px; }
+  .hud .mark svg.slats { width: 40px; height: 40px; }
+  .hud.tall .mark svg.slats { width: 60px; height: 60px; }
+  .stages { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 900px) { .stages { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { .stages { grid-template-columns: 1fr 1fr; } }
+  .stages .ground { min-height: 0; padding: 18px 10px; justify-content: center; align-items: center; flex-direction: column; gap: 10px; }
+  .stages .ground span { font-size: 11px; color: rgba(200,200,205,.75); font-variant-numeric: tabular-nums; text-align: center; }
+  .stages .pair { display: flex; align-items: center; gap: 12px; }
+  .stages .pair .cell16 { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(38,39,43,.9); }
+  .options h3 { margin-bottom: 6px; }
+  .options .spec { margin: 6px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .overlaybox { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .overlaybox svg { max-width: 100%; height: auto; }
+  .overlaybox .key { font-size: 12.5px; color: var(--muted); max-width: 40ch; }
+  .overlaybox .key i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .palgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .palgrid { grid-template-columns: 1fr; } }
+  .palcol { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .palcol h3 { font-size: 14px; margin-bottom: 10px; }
+  .palcol .ground { min-height: 0; padding: 16px; margin-top: 12px; border-radius: 12px; align-items: center; }
+  .palcol .ground .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .palcol .ctlrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .palcol .pill { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 8px; color: #fff; }
+  .palcol .link { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+  .palcol .toggle { width: 38px; height: 22px; border-radius: 11px; position: relative; display: inline-block; }
+  .palcol .toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 9px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .contrast { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; }
+  .contrast b { color: var(--fg); font-weight: 500; }
+  .contrast .ok { color: #2E8B57; } .contrast .no { color: #C4674A; }
+  .rctl { margin: 0 0 14px; }
   @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
 </style>
 
 <div class="wrap">
   <h1>River Identity Studies</h1>
-  <p class="sub">Round eight. The microphone indicator rebuilt from pixel measurements of the reference photo and scored against it. Uniform ink, empty emblem space, no size change between states. The river indicator and both menu bar glyphs are unchanged. The icon is open.</p>
+  <p class="sub">Round nine. The recording indicator is now the accepted menu bar glyph enlarged, with ink-only motion per stage. The icon restarted from a real font outline with exactly one change. The two accents compared in every place they would appear, with measured contrast. The river indicator now uses uniform ink like every other mark; its shape and timing are untouched.</p>
 
   <div class="controls" role="group" aria-label="Preview controls">
     <div class="ctl"><label for="pal-turq">Palette</label><div class="seg"><button id="pal-turq" type="button" aria-pressed="true" data-pal="turq">Charcoal + dark turquoise</button><button id="pal-sand" type="button" aria-pressed="false" data-pal="sand">Charcoal + red sand</button></div></div>
@@ -115,45 +148,64 @@
   <div class="tokens" id="tokens"></div>
 
   <div class="tabs" role="tablist" aria-label="Studies">
-    <button role="tab" aria-selected="true" data-world="m" id="tab-m">Indicator &middot; microphone, from the reference</button>
+    <button role="tab" aria-selected="true" data-world="m" id="tab-m">Indicator &middot; the menu bar glyph, enlarged</button>
     <button role="tab" aria-selected="false" data-world="c" id="tab-c">Indicator &middot; river</button>
     <button role="tab" aria-selected="false" data-world="a" id="tab-a">Menu bar &middot; microphone glyph</button>
-    <button role="tab" aria-selected="false" data-world="icon" id="tab-icon">Icon &middot; open</button>
+    <button role="tab" aria-selected="false" data-world="icon" id="tab-icon">Icon &middot; from a font outline</button>
+    <button role="tab" aria-selected="false" data-world="pal" id="tab-pal">Accent &middot; side by side</button>
   </div>
 
   <section class="world active" id="world-m" role="tabpanel" aria-labelledby="tab-m">
-    <p class="lead"><b>Microphone, traced from the reference.</b> Every dimension is measured from the photo's pixels rather than drawn by eye: the head's proportions and corner radius, six top slots aligned along their lower ends with the outer pair giving way to the corners, eight middle rows split by the central rib and stepping back where the emblem sat, and six bottom slots, twice the height of the top ones, aligned along their upper ends. The emblem itself is left as empty space. Regularized to be symmetric and scored against the photo's grooves at a mean overlap of 92%. Every groove is one rounded stroke, and the silhouette is always present at low ink. Level wakes the three groups from the bottom up, each stroke on a short stagger from the center outward.</p>
-    <h2>Recording indicator</h2>
-    <div class="hudstage light" id="m-stage"><div class="hud tall" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
-    <h2>Held, large</h2>
-    <div class="frames">
-      <div><h3>At rest &middot; level 0.00</h3><div class="ground dark" data-mhold="0"></div></div>
-      <div><h3>Speaking &middot; level 0.50</h3><div class="ground dark" data-mhold="0.5"></div></div>
-      <div><h3>Peak &middot; level 1.00</h3><div class="ground dark" data-mhold="1"></div></div>
+    <p class="lead"><b>The accepted menu bar glyph, enlarged.</b> The indicator is the five-slat glyph itself, drawn by the same code as the menu bar at a larger size. Its initial state is the menu bar's Ready glyph exactly: middle slat at full ink, the other four at 55%, one stroke weight. Speech changes ink only. The middle slat thickens first, then the pair beside it wakes above a low level, then the outer pair above a mid level; at full level the mark is the menu bar's Listening glyph exactly. Transcribing is the menu bar's dotted glyph, with the dots drifting slowly to the right. Nothing ever changes size.</p>
+    <div id="sec-m-live">
+    <h2>Live, two panel heights</h2>
+    <div class="options">
+      <div><h3>260 &times; 56, mark 40</h3><div class="hudstage light live" id="m-a"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div><p class="spec">Today's panel. Radius 16, padding 12 at the sides; the glyph's own slat spacing gives it 6 above and below.</p></div>
+      <div><h3>260 &times; 84, mark 60</h3><div class="hudstage light live" id="m-b"><div class="hud tall" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div><p class="spec">The taller panel from round eight, if the 40 reads small. Same glyph, same motion.</p></div>
     </div>
-    <p class="construct">Thresholds: the bottom slots wake above 0.12, the middle rows above 0.42, the top slots above 0.72. Waking is only a change of ink: a groove fades from 25% to full over about a tenth of a second and back over half a second, with the center grooves of each group leading by a few frames. Uniform ink, no accent. The shape never changes size between the empty and the filled state. Transcribing holds every group awake and breathes the whole head slowly.</p>
+    </div>
+    <div id="sec-m-stages">
+    <h2>Every stage, held</h2>
+    <div class="stages">
+      <div class="ground dark"><div class="pair"><div class="mark" data-shold="ready"></div><span class="cell16" data-sref="idle"></span></div><span>Ready<br>the menu bar glyph, 1:1</span></div>
+      <div class="ground dark"><div class="mark" data-shold="0"></div><span>Listening<br>level 0.00, same as Ready</span></div>
+      <div class="ground dark"><div class="mark" data-shold="0.5"></div><span>Listening<br>level 0.50</span></div>
+      <div class="ground dark"><div class="pair"><div class="mark" data-shold="1"></div><span class="cell16" data-sref="recording"></span></div><span>Listening<br>level 1.00, the menu bar's Listening glyph</span></div>
+      <div class="ground dark"><div class="pair"><div class="mark" data-shold="proc"></div><span class="cell16" data-sref="processing"></span></div><span>Transcribing<br>the menu bar's dotted glyph, drifting</span></div>
+    </div>
+    <p class="construct">Where a menu bar glyph sits beside a frame, it is the same drawing at 16 px, produced by the same function, so the match is by construction. Motion: a slat's ink rises from 55% to full in about a tenth of a second and falls back over half a second; the stroke thickens from 1.2 to 1.6 units with it, as the menu bar does between Ready and Listening. Thresholds: middle slat above 0.06, inner pair above 0.18, outer pair above 0.55. Transcribing drifts the dots one pitch every three seconds; under Reduce Motion the dots hold still. The motion has only been judged in stills by the agent; it needs your eye on the live panel.</p>
+    </div>
   </section>
 
   <section class="world" id="world-icon" role="tabpanel" aria-labelledby="tab-icon">
-    <div class="parked"><b>The icon is open again.</b> The drawn letters below did not earn their place and are kept only as the record of what was tried; the next attempt starts from a different premise.</div>
-    <p class="lead">A lowercase serif r, drawn as calligraphic strokes. The stem is the main channel; the shoulder leaves it low and climbs away as a tributary, and the join between them is where the letter carries its feeling. Each stroke is built from a centerline and a width profile, so the tapers are continuous rather than drawn point by point. Every r is measured after drawing and centered in the squircle by its ink box, at every size and on the inverted tile.</p>
-    <div class="varrow" id="variants"></div>
+    <p class="lead"><b>From a real outline, changed in one place.</b> The lowercase r is taken directly from an openly licensed typeface, point for point. One thing is then changed: the inner join where the underside of the shoulder meets the stem. In the font it is a short notch; here it becomes a long concave sweep that arrives tangent to the stem well below the shoulder, so the shoulder reads as a tributary merging into the main channel. Nothing else moves, so the letter keeps the face's stem, serifs, and terminal. The letter is centered in the squircle by its ink box, both axes, at every size.</p>
+    <div class="ctl rctl"><label for="rb-young">Base outline</label><div class="seg"><button id="rb-young" type="button" aria-pressed="true" data-rbase="young">Young Serif</button><button id="rb-instrument" type="button" aria-pressed="false" data-rbase="instrument">Instrument Serif</button></div></div>
+    <div id="sec-icon-strengths">
+    <h2>The confluence at three lengths</h2>
+    <div class="varrow" id="rvariants"></div>
+    </div>
+    <div id="sec-icon-overlay">
+    <h2>What moved</h2>
+    <div class="overlaybox" id="roverlay"></div>
+    </div>
+    <div id="sec-icon-sizes">
     <h2>Chosen r at Dock and Finder sizes</h2>
     <div class="grid"><div class="ground light" id="icon-sizes-light"></div><div class="ground dark" id="icon-sizes-dark"></div></div>
-    <h2>Type references these were drawn against</h2>
-    <div class="refs" id="refs"></div>
-    <p class="construct">The references are real faces, shown only for the shape of their lowercase r. The drawn letters borrow stem weight and shoulder height from them and depart in the join and the terminal. Centering: the icon measures its own bounding box and offsets it to the squircle's center, then nudges 1.5% left so the leg's visual weight reads balanced. The same offset applies at 16 px.</p>
+    </div>
+    <p class="construct">Provenance: Young Serif (Bastien Sozeau, SIL Open Font License 1.1) and Instrument Serif (Rodrigo Fuenzalida and Jordan Egstad, SIL OFL 1.1), both taken from the google/fonts repository on 2026-09-16. The OFL permits modification and redistribution of the outline under the same license; the finished icon would be shipped as a raster, and its source outline recorded. Young Serif is the lead: its stem is heavy enough that the r still reads at 16 px, where Instrument Serif's hairlines disappear. Centering is geometric on the ink box; if the maintainer wants an optical nudge, that is a separate decision, not a correction.</p>
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
-    <p class="lead"><b>River.</b> Motion is exactly round two's: the same slow drift, the same easing, the same amplitude curve. The one change is the rest state. Below the level threshold the three strands settle into three separated, nearly straight lines with a trace of bend, so the panel reads as calm water rather than a tangle. The three frames below are held at fixed levels so the rest, mid, and peak shapes can be judged without motion.</p>
+    <p class="lead"><b>River.</b> Now in uniform ink: the middle strand no longer carries the accent, per the confirmed rule for marks. Motion is exactly round two's: the same slow drift, the same easing, the same amplitude curve. The one change is the rest state. Below the level threshold the three strands settle into three separated, nearly straight lines with a trace of bend, so the panel reads as calm water rather than a tangle. The three frames below are held at fixed levels so the rest, mid, and peak shapes can be judged without motion.</p>
     <h2>Live</h2>
-    <div class="hudstage light" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
+    <div class="hudstage light live" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
+    <div id="sec-c-frames">
     <h2>Held frames</h2>
     <div class="frames">
       <div><h3>At rest &middot; level 0.00</h3><div class="hudstage light" data-hold="0"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div></div>
       <div><h3>Speaking &middot; level 0.50</h3><div class="hudstage light" data-hold="0.5"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:04</div></div></div></div>
       <div><h3>Peak &middot; level 1.00</h3><div class="hudstage light" data-hold="1"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:04</div></div></div></div>
+    </div>
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
@@ -163,15 +215,22 @@
       <li>Both ends fade to nothing. Nothing clips.</li>
       <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
     </ol>
+    <div id="sec-c-menubar">
     <h2>Menu bar</h2>
     <div class="desk light" id="c-desk"><div class="menubar light" id="c-menubar"></div><div class="wall"></div><div class="statesrow" id="c-states"></div></div>
     <p class="construct">Redrawn from the reference: a single river seen from above, wide at the near bank, winding in one S and tapering to a point on the horizon at the upper right. Ready is the outline; Listening fills the water; Transcribing keeps the fill and dots the banks.</p>
+    </div>
   </section>
 
   <section class="world" id="world-a" role="tabpanel" aria-labelledby="tab-a">
-    <div class="parked"><b>The microphone indicator is parked.</b> Two rounds did not get it to a shape worth animating, and the stagger-by-threshold idea is more mechanism than a first release needs. The menu bar glyph below is unchanged from round two and stays as the working candidate for the menu bar.</div>
+    <div class="parked"><b>Accepted as is.</b> Five slats, shortened toward the top and bottom, with distinct Ready, Listening, and Transcribing states. Parked as the working menu bar glyph; shown here unchanged for reference beside the river glyph.</div>
     <h2>Menu bar</h2>
     <div class="desk light" id="a-desk"><div class="menubar light" id="a-menubar"></div><div class="wall"></div><div class="statesrow" id="a-states"></div></div>
+  </section>
+
+  <section class="world" id="world-pal" role="tabpanel" aria-labelledby="tab-pal">
+    <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on the icon, on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses.</p>
+    <div class="palgrid" id="sec-pal"></div>
   </section>
 </div>
 
@@ -187,104 +246,105 @@
   };
   function renderTokens(pal) { const host = document.getElementById('tokens'); host.innerHTML = ''; for (const [n, hex] of PALETTES[pal]) { const t = document.createElement('div'); t.className = 'tok'; const sw = document.createElement('i'); sw.style.background = hex; t.appendChild(sw); const l = document.createElement('span'); l.textContent = `${n} ${hex}`; t.appendChild(l); host.appendChild(t); } }
 
-  // ---------- Bespoke lowercase r: calligraphic ribbons from a centerline and a width profile ----------
-  // A cubic-bezier chain is sampled, offset by its normal at a width that varies along the stroke, and closed
-  // into one filled outline. Tapers, swells, and the confluence at the shoulder come from the profile, not from
-  // hand-placed outline points.
-  function bez(p0, p1, p2, p3, t) { const u = 1 - t; return [u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1]]; }
-  function ribbon(segments, widthAt, steps = 48) {
-    const pts = [];
-    segments.forEach((sg, si) => { for (let i = 0; i <= steps; i++) { if (si > 0 && i === 0) continue; pts.push(bez(sg[0], sg[1], sg[2], sg[3], i / steps)); } });
-    const n = pts.length; const left = [], right = [];
-    for (let i = 0; i < n; i++) {
-      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
-      let nx = -(b[1] - a[1]), ny = b[0] - a[0]; const len = Math.hypot(nx, ny) || 1; nx /= len; ny /= len;
-      const w = widthAt(i / (n - 1)) / 2;
-      left.push([pts[i][0] + nx * w, pts[i][1] + ny * w]); right.push([pts[i][0] - nx * w, pts[i][1] - ny * w]);
+  // ---------- Icon: a real lowercase r outline, changed in one place ----------
+  // Each base is the font's own TrueType contour for "r" (x, y, on-curve flag), in font units, y up.
+  // `edits` names the only points that move: the inner join under the shoulder. Strength k blends the
+  // font's join (0) toward the River join (1); above 1 extrapolates a longer confluence.
+  const R_FONTS = {"young":{"label":"Young Serif","contour":[[231,395,1],[258,453,0],[354,513,0],[407,513,1],[454,513,0],[520,461,0],[520,410,1],[520,388,0],[512,354,0],[494,346,1],[400,308,1],[394,306,0],[391,306,1],[382,306,0],[382,315,1],[382,318,0],[384,324,1],[390,338,0],[393,364,0],[393,374,1],[393,401,0],[366,426,0],[346,426,1],[323,426,0],[283,398,0],[253,358,0],[246,339,1],[246,155,1],[246,115,0],[282,60,0],[319,60,1],[321,60,1],[336,60,0],[336,45,1],[336,15,1],[336,0,0],[321,0,1],[30,0,1],[15,0,0],[15,15,1],[15,45,1],[15,60,0],[30,60,1],[32,60,1],[69,60,0],[105,115,0],[105,155,1],[105,281,1],[105,308,0],[98,358,0],[74,393,0],[46,396,1],[34,397,0],[34,409,1],[34,443,1],[34,453,0],[49,456,1],[120,467,0],[227,515,0],[246,529,1],[249,531,0],[251,531,1],[253,531,1],[255,531,0],[255,529,1],[255,528,0],[250,500,0],[243,457,0],[234,412,0]],"edits":{"23":[318,426],"24":[278,396],"25":[250,322],"26":[246,228]}},"instrument":{"label":"Instrument Serif","contour":[[154,446,1],[195,516,0],[253,516,1],[286,516,0],[318,477,0],[318,453,1],[318,434,0],[299,410,0],[279,410,1],[263,410,0],[248,425,0],[239,445,0],[227,460,0],[213,460,1],[195,460,0],[163,417,0],[142,345,0],[142,299,1],[142,67,1],[142,46,0],[155,28,0],[176,26,1],[203,23,1],[214,21,0],[214,12,1],[214,0,0],[199,0,1],[30,0,1],[15,0,0],[15,11,1],[15,20,0],[28,23,1],[40,25,1],[61,29,0],[74,46,0],[74,67,1],[74,403,1],[74,421,0],[63,434,0],[49,436,1],[28,439,1],[15,440,0],[15,450,1],[15,458,0],[31,461,1],[62,466,0],[95,488,0],[113,504,1],[122,513,0],[128,513,1],[137,513,0],[137,501,1],[137,447,1],[137,440,0],[149,437,0]],"edits":{"14":[192,460],"15":[160,430],"16":[143,330],"17":[142,205]}}};
+  const R_STRENGTHS = [
+    { k: 0, label: 'As shipped in the font', note: 'The face untouched, for reference. The shoulder meets the stem in a short notch.' },
+    { k: 1, label: 'River join', note: 'The underside of the shoulder sweeps into the stem and arrives tangent to it well below the shoulder, like a tributary meeting the channel.' },
+    { k: 1.6, label: 'Longer confluence', note: 'The same change, pushed further: the sweep runs lower and fills more of the inner angle.' },
+  ];
+  function rPoints(font, k) { return font.contour.map((p, i) => { const e = font.edits[i]; return e ? [p[0] + (e[0] - p[0]) * k, p[1] + (e[1] - p[1]) * k, p[2]] : p; }); }
+  function rPath(pts) {
+    const s = pts.findIndex(p => p[2]); const q = pts.slice(s).concat(pts.slice(0, s));
+    const f = v => (+v).toFixed(1); let d = `M${f(q[0][0])} ${f(q[0][1])}`; let off = null;
+    for (const [x, y, on] of q.slice(1).concat([q[0]])) {
+      if (on) { d += off ? ` Q${f(off[0])} ${f(off[1])} ${f(x)} ${f(y)}` : ` L${f(x)} ${f(y)}`; off = null; }
+      else { if (off) d += ` Q${f(off[0])} ${f(off[1])} ${f((off[0] + x) / 2)} ${f((off[1] + y) / 2)}`; off = [x, y]; }
     }
-    const f = v => v.map(c => c.toFixed(2)).join(' ');
-    return 'M' + f(left[0]) + ' L' + left.slice(1).map(f).join(' L') + ' L' + right.reverse().map(f).join(' L') + ' Z';
+    return d + ' Z';
   }
-  const dot = (cx, cy, r) => `M${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
-  const VARIANTS = [
-    {
-      id: 'serif-r', label: 'Serif r, ball terminal',
-      note: 'A bookish lowercase r. The stem carries a slight entasis and a bracketed foot; the shoulder leaves the stem low, climbs, and swells into a ball terminal. The join is the confluence.',
-      paths: [
-        ribbon([[[40, 28], [39, 45], [39, 62], [40, 78]]], t => 12 - 1.5 * Math.sin(t * Math.PI)),          // stem
-        ribbon([[[28, 79.5], [34, 79], [46, 79], [52, 79.5]]], t => 4.5 - 2.5 * Math.abs(t - 0.5) * 2),       // foot serif
-        ribbon([[[31, 31], [34.5, 29.8], [38, 28.6], [42, 28]]], t => 2 + 2.5 * t),                             // entry serif, a thin wedge
-        ribbon([[[43, 50], [45, 38], [54, 30], [63, 30]], [[63, 30], [68, 30], [72, 33], [73, 37]]], t => 3 + 6 * Math.sin(t * Math.PI) * (0.55 + 0.45 * t)),   // shoulder
-        dot(72.2, 38.2, 5.2),                                                                                  // terminal
-      ],
-    },
-    {
-      id: 'flow-r', label: 'Flowing r, tapered',
-      note: 'No serifs. The stem tapers toward the foot like a channel narrowing; the shoulder leaves as a tributary, swells mid-stroke, and thins to a fine trailing point. The most River of the three.',
-      paths: [
-        ribbon([[[41, 26], [40, 44], [39.5, 62], [40, 80]]], t => 12.5 - 4 * t),                                // stem, wide at the top
-        ribbon([[[42, 52], [44, 38], [53, 29], [63, 29]], [[63, 29], [70, 29], [75, 33], [79, 40]]], t => 4.5 + 6 * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (1 - 0.35 * t) - 4 * Math.max(0, t - 0.8) * 5),  // shoulder, wide at the join, thinning to a point
-        dot(40.5, 27, 6.2),                                                                                    // rounded head of the stem
-        dot(40, 79, 4.2),                                                                                      // rounded foot
-      ],
-    },
-    {
-      id: 'brush-r', label: 'Brush r, teardrop',
-      note: 'Between the two: a soft stem, no serifs, and a shoulder that ends in a teardrop rather than a point, so it still holds at 16 px. The join is widened so the underside of the shoulder blends into the stem.',
-      paths: [
-        ribbon([[[40, 27], [39.5, 44], [39.5, 62], [40, 79]]], t => 11.5 - 1.2 * Math.sin(t * Math.PI)),
-        ribbon([[[44, 54], [45, 40], [53, 30], [62, 29]], [[62, 29], [69, 28.5], [74, 32], [75, 37]]], t => 3.5 + 6.5 * Math.sin(t * Math.PI) * (0.6 + 0.4 * t)),
-        dot(74.4, 38.6, 4.6),
-        dot(40, 27.5, 5.8), dot(40, 78.6, 5.6),
-      ],
-    },
-  ];
-  const REFS = [
-    { family: '"Instrument Serif", Georgia, serif', label: 'Instrument Serif' }, { family: '"Geologica", sans-serif', label: 'Geologica 700', weight: 700 },
-    { family: '"Bricolage Grotesque", sans-serif', label: 'Bricolage Grotesque 800', weight: 800 }, { family: '"Young Serif", Georgia, serif', label: 'Young Serif' },
-  ];
+  const rCache = {};
+  function rShape(base, k) {
+    const key = base + ':' + k; if (rCache[key]) return rCache[key];
+    const d = rPath(rPoints(R_FONTS[base], k));
+    const probe = el('svg', { style: 'position:absolute;left:-9999px;top:-9999px', width: 10, height: 10 }); document.body.appendChild(probe);
+    const path = el('path', { d }, probe); const b = path.getBBox(); document.body.removeChild(probe);
+    return (rCache[key] = { d, cx: b.x + b.width / 2, cy: b.y + b.height / 2, size: Math.max(b.width, b.height), box: b });
+  }
   function squircle(svg, fill) { el('path', { d: 'M50 2 C 84 2, 98 16, 98 50 C 98 84, 84 98, 50 98 C 16 98, 2 84, 2 50 C 2 16, 16 2, 50 2 Z', fill }, svg); }
-  const measureCache = {};
-  function measureVariant(v) {
-    if (measureCache[v.id]) return measureCache[v.id];
-    const probe = el('svg', { viewBox: '0 0 100 100', width: 100, height: 100, style: 'position:absolute;left:-9999px;top:-9999px' });
-    document.body.appendChild(probe); const g = el('g', {}, probe);
-    for (const d of v.paths) el('path', { d, 'fill-rule': 'evenodd' }, g);
-    const b = g.getBBox(); document.body.removeChild(probe);
-    return (measureCache[v.id] = { dx: 50 - (b.x + b.width / 2) - 1.5, dy: 50 - (b.y + b.height / 2) });
-  }
-  function iconR(v, size, invert) {
-    const accent = css('--accent'), charcoal = css('--charcoal');
-    const svg = el('svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'icon', role: 'img', 'aria-label': `River icon, ${v.label}` });
+  function iconR(base, k, size, invert, colors) {
+    const accent = colors ? colors.accent : css('--accent'), charcoal = css('--charcoal');
+    const svg = el('svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'icon', role: 'img', 'aria-label': `River icon, ${R_FONTS[base].label} r` });
     squircle(svg, invert ? accent : charcoal);
-    const m = measureVariant(v);
-    const g = el('g', { transform: `translate(${m.dx.toFixed(2)},${m.dy.toFixed(2)}) scale(0.9) translate(5,5)`, fill: invert ? charcoal : accent }, svg);
-    for (const d of v.paths) el('path', { d, 'fill-rule': 'evenodd' }, g);
+    const r = rShape(base, k); const s = 62 / r.size;   // the letter's larger side spans 62 of the 96-wide squircle
+    el('path', { d: r.d, fill: invert ? charcoal : accent, transform: `translate(50,50) scale(${s.toFixed(4)},${(-s).toFixed(4)}) translate(${(-r.cx).toFixed(2)},${(-r.cy).toFixed(2)})` }, svg);
     return svg;
   }
-  let chosen = VARIANTS[0];
+  let rBase = 'young', rK = 1;
   function renderVariants() {
-    const host = document.getElementById('variants'); host.innerHTML = '';
-    for (const v of VARIANTS) {
+    const host = document.getElementById('rvariants'); host.innerHTML = '';
+    for (const v of R_STRENGTHS) {
       const card = document.createElement('div'); card.className = 'varcard';
       const g = document.createElement('div'); g.className = 'ground dark';
-      for (const size of [96, 48, 24, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(v, size, false)); const cap = document.createElement('span'); cap.textContent = size; box.appendChild(cap); g.appendChild(box); }
-      const ib = document.createElement('div'); ib.className = 'iconbox'; ib.appendChild(iconR(v, 48, true)); const ic = document.createElement('span'); ic.textContent = 'inverted'; ib.appendChild(ic); g.appendChild(ib);
+      for (const size of [96, 48, 24, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, v.k, size, false)); const cap = document.createElement('span'); cap.textContent = size; box.appendChild(cap); g.appendChild(box); }
+      const ib = document.createElement('div'); ib.className = 'iconbox'; ib.appendChild(iconR(rBase, v.k, 48, true)); const ic = document.createElement('span'); ic.textContent = 'inverted'; ib.appendChild(ic); g.appendChild(ib);
       card.appendChild(g);
-      const h = document.createElement('h3'); h.textContent = v.label; h.style.marginTop = '10px'; card.appendChild(h);
+      const hd = document.createElement('h3'); hd.textContent = v.label; hd.style.marginTop = '10px'; card.appendChild(hd);
       const p = document.createElement('p'); p.textContent = v.note; card.appendChild(p);
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'pick'; b.textContent = chosen === v ? 'Shown below' : 'Show at all sizes'; b.setAttribute('aria-pressed', String(chosen === v));
-      b.addEventListener('click', () => { chosen = v; renderVariants(); renderIconSizes(); }); card.appendChild(b); host.appendChild(card);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'pick'; b.textContent = rK === v.k ? 'Shown below' : 'Show at all sizes'; b.setAttribute('aria-pressed', String(rK === v.k));
+      b.addEventListener('click', () => { rK = v.k; renderVariants(); renderIconSizes(); renderOverlay(); }); card.appendChild(b); host.appendChild(card);
     }
   }
   function renderIconSizes() {
     for (const ground of ['light', 'dark']) {
       const host = document.getElementById(`icon-sizes-${ground}`); host.innerHTML = '';
-      for (const size of [128, 64, 32, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(chosen, size, false)); const cap = document.createElement('span'); cap.textContent = size + ' px'; box.appendChild(cap); host.appendChild(box); }
-      const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(chosen, 64, true)); const cap = document.createElement('span'); cap.textContent = 'inverted'; box.appendChild(cap); host.appendChild(box);
+      for (const size of [128, 64, 32, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, rK, size, false)); const cap = document.createElement('span'); cap.textContent = size + ' px'; box.appendChild(cap); host.appendChild(box); }
+      const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, rK, 64, true)); const cap = document.createElement('span'); cap.textContent = 'inverted'; box.appendChild(cap); host.appendChild(box);
     }
   }
-  function renderRefs() { const host = document.getElementById('refs'); host.innerHTML = ''; for (const r of REFS) { const d = document.createElement('div'); d.className = 'ref'; const b = document.createElement('b'); b.textContent = 'r'; b.style.fontFamily = r.family; if (r.weight) b.style.fontWeight = r.weight; d.appendChild(b); const s = document.createElement('span'); s.textContent = r.label; d.appendChild(s); host.appendChild(d); } }
+  function renderOverlay() {
+    const host = document.getElementById('roverlay'); host.innerHTML = '';
+    const o = rShape(rBase, 0), m = rShape(rBase, rK); const pad = 40;
+    const x0 = Math.min(o.box.x, m.box.x) - pad, y1 = Math.max(o.box.y + o.box.height, m.box.y + m.box.height) + pad;
+    const W = Math.max(o.box.width, m.box.width) + 2 * pad, H = Math.max(o.box.height, m.box.height) + 2 * pad;
+    const svg = el('svg', { viewBox: `${x0} ${-y1} ${W} ${H}`, width: Math.round(W * 0.42), height: Math.round(H * 0.42), role: 'img', 'aria-label': 'Original outline over the modified letter' }, host);
+    const g = el('g', { transform: 'scale(1,-1)' }, svg);
+    el('path', { d: m.d, fill: css('--fg') }, g);
+    el('path', { d: o.d, fill: 'none', stroke: css('--accent-hi'), 'stroke-width': 3 }, g);
+    const edited = Object.keys(R_FONTS[rBase].edits).map(Number); const pts = rPoints(R_FONTS[rBase], rK);
+    for (const i of edited) el('circle', { cx: pts[i][0], cy: pts[i][1], r: 6, fill: css('--accent-hi') }, g);
+    const key = document.createElement('div'); key.className = 'key';
+    key.innerHTML = `<p><i style="background:${css('--accent-hi')}"></i>The font's outline, as shipped.</p><p><i style="background:${css('--fg')}"></i>The River letter at the chosen length. The dots are the only ${edited.length} points that move; every other point is the font's.</p><p>${R_FONTS[rBase].label}, strength ${rK}.</p>`;
+    host.appendChild(key);
+  }
+  document.querySelectorAll('[data-rbase]').forEach(b => b.addEventListener('click', () => { rBase = b.dataset.rbase; document.querySelectorAll('[data-rbase]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderVariants(); renderIconSizes(); renderOverlay(); }));
+
+  // ---------- Accent comparison ----------
+  function lum(hex) { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+  function renderPal() {
+    const host = document.getElementById('sec-pal'); host.innerHTML = '';
+    const sets = { turq: { name: 'Charcoal + dark turquoise', accent: '#1F7F86', hi: '#3FA3AA' }, sand: { name: 'Charcoal + red sand', accent: '#C4674A', hi: '#DB8E70' } };
+    for (const key in sets) {
+      const s = sets[key]; const col = document.createElement('div'); col.className = 'palcol'; col.style.setProperty('--accent', s.accent); col.style.setProperty('--accent-hi', s.hi);
+      col.innerHTML = `<h3>${s.name}</h3><div class="tokens"><div class="tok"><i style="background:${s.accent}"></i><span>${s.accent} on light</span></div><div class="tok"><i style="background:${s.hi}"></i><span>${s.hi} on dark</span></div></div>`;
+      for (const ground of ['light', 'dark']) {
+        const g = document.createElement('div'); g.className = 'ground ' + ground; const row = document.createElement('div'); row.className = 'row';
+        const acc = ground === 'light' ? s.accent : s.hi;
+        for (const [size, inv] of [[96, false], [48, true]]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, rK, size, inv, { accent: acc })); const cap = document.createElement('span'); cap.textContent = inv ? 'inverted' : 'icon'; box.appendChild(cap); row.appendChild(box); }
+        const ctl = document.createElement('div'); ctl.className = 'ctlrow';
+        ctl.innerHTML = `<span class="pill" style="background:${acc}">Listening</span><span class="toggle" style="background:${acc}" aria-hidden="true"></span><span class="link" style="color:${acc}">Open Settings</span>`;
+        row.appendChild(ctl); g.appendChild(row); col.appendChild(g);
+      }
+      const ul = document.createElement('ul'); ul.className = 'contrast';
+      const rows = [['Accent text on white', s.accent, '#FFFFFF', 4.5], ['Accent text on charcoal', s.hi, '#23262B', 4.5], ['White on accent, pressed control', '#FFFFFF', s.accent, 4.5], ['Charcoal on accent, inverted icon', '#23262B', s.hi, 3], ['Accent letter on charcoal, icon', s.hi, '#23262B', 3]];
+      for (const [label, fg, bg, need] of rows) { const r = ratio(fg, bg); ul.innerHTML += `<li><b>${label}</b></li><li>${r.toFixed(2)}:1</li><li class="${r >= need ? 'ok' : 'no'}">${r >= need ? 'passes' : 'fails'} ${need}:1</li>`; }
+      col.appendChild(ul); host.appendChild(col);
+    }
+  }
 
   // ---------- River indicator (120 x 44): round-two motion, separated rest state ----------
   const STRANDS = [
@@ -315,7 +375,7 @@
     return { paths, w, h, smooth: hold == null ? 0 : hold, hold };
   }
   function drawRiver(m, level, state, dt, t) {
-    const ink = css('--ink'), accent = css('--accent-hi');
+    const ink = css('--ink');
     const proc = state === 'processing';
     if (m.hold == null) {
       const target = proc ? 0.28 : level;
@@ -325,54 +385,43 @@
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
       p.setAttribute('d', riverPath(s, m.w, m.h, lv, t));
-      p.setAttribute('stroke', s.accent ? accent : ink);
+      p.setAttribute('stroke', ink);   // uniform ink on marks; the accent never touches the indicator
       p.setAttribute('stroke-width', String(s.width + 0.8 * lv));
       p.setAttribute('opacity', String(s.alpha));
     });
   }
 
-  // ---------- Microphone measured from the reference photo (head space: 259 x 440) ----------
-  // Every number below comes from the photo's pixels: the head bounding box, six top slots (22 wide, 35 apart,
-  // the inner four 47 tall from the rim, the outer two 35 tall starting lower), eight middle rows (31 tall on a
-  // 33.7 pitch) split by a 24-wide central rib that widens to 35 where the emblem sat, and six bottom slots
-  // (92 tall inner, 77 outer) aligned along their top edge. Scored against the photo at a mean IoU of 0.92.
-  const MIC_W = 259, MIC_H = 440;
-  function micSlots() {
-    const out = []; const cx = MIC_W / 2;
-    for (let i = 0; i < 6; i++) {
-      const half = Math.abs(i - 2.5), inner = half < 2;
-      out.push({ x: 40 + 35 * i - 11, y: inner ? 0 : 12, w: 22, h: inner ? 47 : 35, group: 2, order: half });
-      out.push({ x: 38.5 + 35.1 * i - 11, y: 348, w: 22, h: inner ? 92 : 77, group: 0, order: half });
-    }
-    for (let i = 0; i < 8; i++) {
-      const y = 68 + 33.7 * i, rl = (i === 3 || i === 4) ? 17.5 : 12, order = Math.abs(i - 3.5);
-      out.push({ x: 3, y, w: cx - rl - 3, h: 31, group: 1, order });
-      out.push({ x: cx + rl, y, w: MIC_W - 3 - (cx + rl), h: 31, group: 1, order });
-    }
-    return out;
+  // ---------- Slat mark: the accepted menu bar glyph, one drawing for every size ----------
+  // Five slats in a 16-unit box, shortened toward the top and bottom. The menu bar and the indicator
+  // call the same two functions; the indicator is simply the glyph rendered larger and driven by level.
+  const SLAT_ROWS = [[5.5, 4], [4, 6.5], [3.5, 9], [4, 11.5], [5.5, 14]];
+  const SLAT_THRESH = [0.55, 0.18, 0.06, 0.18, 0.55];    // by row: the middle wakes first, then the inner pair, then the outer pair
+  const SLAT_DOTS = '0.1 2.4', SLAT_PITCH = 2.5;
+  function makeSlats(host, hold, px, color) {
+    const svg = el('svg', { viewBox: '0 0 16 16', width: px, height: px, class: 'slats', role: 'img', 'aria-label': 'River mark' }, host || undefined);
+    const g = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const rows = SLAT_ROWS.map(([x, y]) => { const p = el('path', { d: `M${x} ${y} L${16 - x} ${y}` }, g); p.__wake = 0; return p; });
+    return { kind: 's', svg, rows, hold, color, offset: 0 };
   }
-  const MIC_THRESH = [0.12, 0.42, 0.72];
-  function makeMic(host, hold) {
-    const svg = el('svg', { viewBox: `0 0 ${MIC_W} ${MIC_H}`, role: 'img', 'aria-label': 'Microphone mark' }, host);
-    const head = el('rect', { x: 1.5, y: 1.5, width: MIC_W - 3, height: MIC_H - 3, rx: 62, fill: 'none', 'stroke-width': 3 }, svg);
-    const slots = micSlots().map(sl => { const r = el('rect', { x: sl.x, y: sl.y, width: sl.w, height: sl.h, rx: Math.min(sl.w, sl.h) / 2 }, svg); r.__group = sl.group; r.__order = sl.order; r.__wake = 0; return r; });
-    return { kind: 'm', head, slots, hold };
-  }
-  function drawMic(m, level, state, dt, t) {
-    const ink = css('--ink');
-    const proc = state === 'processing';
-    const lv = m.hold == null ? level : m.hold;
-    const breathe = proc ? 0.85 + 0.15 * Math.sin(t * 2.2) : 1;
-    m.head.setAttribute('stroke', ink); m.head.setAttribute('opacity', '0.3');
-    m.slots.forEach(r => {
-      const target = proc ? 1 : (lv >= MIC_THRESH[r.__group] ? 1 : 0);
-      const lag = 1 - Math.min(0.5, r.__order * 0.16);           // center of each group leads
-      const rate = m.hold != null ? 1e9 : (target > r.__wake ? 11 * lag : 2.2);
-      r.__wake += (target - r.__wake) * Math.min(1, rate * dt);
-      r.setAttribute('fill', ink);
-      r.setAttribute('opacity', String((0.25 + 0.75 * r.__wake) * breathe));   // ink only; the shape never changes size
+  function drawSlats(m, level, state, dt, t) {
+    const ink = m.color || css('--ink');
+    const st = m.hold === 'ready' ? 'idle' : m.hold === 'proc' ? 'processing' : m.hold != null ? 'recording' : state;
+    const lv = typeof m.hold === 'number' ? m.hold : st === 'recording' ? level : 0;
+    const proc = st === 'processing';
+    if (proc && !reduceMotion) m.offset = (m.offset + dt * (SLAT_PITCH / 3)) % SLAT_PITCH;   // one dot pitch every three seconds
+    m.rows.forEach((p, i) => {
+      const target = proc ? 1 : (lv >= SLAT_THRESH[i] ? 1 : 0);
+      const rate = m.hold != null ? 1e9 : (target > p.__wake ? 11 : 2.2);
+      p.__wake += (target - p.__wake) * Math.min(1, rate * dt);
+      const w = p.__wake;
+      p.setAttribute('stroke', ink);
+      p.setAttribute('opacity', i === 2 ? '1' : (0.55 + 0.45 * w).toFixed(3));
+      p.setAttribute('stroke-width', proc ? '1.2' : (1.2 + 0.4 * w).toFixed(2));
+      if (proc) { p.setAttribute('stroke-dasharray', SLAT_DOTS); p.setAttribute('stroke-dashoffset', (-m.offset).toFixed(3)); }
+      else { p.removeAttribute('stroke-dasharray'); p.removeAttribute('stroke-dashoffset'); }
     });
   }
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------- Menu bar glyphs (16 x 16 template) ----------
   // River: one channel from above, wide at the near bank, one S-bend, tapering to a point on the horizon.
@@ -382,8 +431,9 @@
     const g = el('g', { fill: 'none', stroke: color, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
     const dotted = state === 'processing' ? { 'stroke-dasharray': '0.1 2.4' } : {};
     if (world === 'a') {
-      const rows = [[5.5, 4], [4, 6.5], [3.5, 9], [4, 11.5], [5.5, 14]];
-      rows.forEach(([x, y], i) => el('path', { d: `M${x} ${y} L${16 - x} ${y}`, 'stroke-width': state === 'recording' ? 1.6 : 1.2, ...dotted, opacity: state === 'idle' ? (i === 2 ? 1 : .55) : 1 }, g));
+      const m = makeSlats(null, state === 'idle' ? 'ready' : state === 'processing' ? 'proc' : 1, 16, color);
+      drawSlats(m, 0, state, 1, 0); m.svg.setAttribute('class', 'sys'); m.svg.setAttribute('aria-label', `${world} glyph, ${state}`);
+      return m.svg;
     } else {
       if (state !== 'idle') el('path', { d: RIVER_GLYPH, fill: color, stroke: 'none', opacity: state === 'processing' ? .45 : .95 }, g);
       el('path', { d: RIVER_GLYPH, 'stroke-width': 1.25, ...dotted }, g);
@@ -406,8 +456,10 @@
   function setSource(src) { state.src = src; document.querySelectorAll('[data-src]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === src))); if (src === 'mic') startMic(); else { stopMic(); document.getElementById('mic-note').textContent = ''; } }
 
   // ---------- Build ----------
-  const marks = [makeRiver(document.querySelector('#c-stage .mark'), null), makeMic(document.querySelector('#m-stage .mark'), null)];
-  document.querySelectorAll('[data-mhold]').forEach(g => { const m = makeMic(g, parseFloat(g.dataset.mhold)); m.head.ownerSVGElement.setAttribute('width', 124); m.head.ownerSVGElement.setAttribute('height', 210); marks.push(m); });
+  const marks = [makeRiver(document.querySelector('#c-stage .mark'), null)];
+  document.querySelectorAll('#m-a .mark, #m-b .mark').forEach(g => marks.push(makeSlats(g, null, 40)));
+  document.querySelectorAll('[data-shold]').forEach(g => { const v = g.dataset.shold; marks.push(makeSlats(g, isNaN(parseFloat(v)) ? v : parseFloat(v), 96)); });
+  document.querySelectorAll('[data-sref]').forEach(c => c.appendChild(glyph('a', c.dataset.sref, '#f5f5f7')));
   document.querySelectorAll('[data-hold]').forEach(stage => marks.push(makeRiver(stage.querySelector('.mark'), parseFloat(stage.dataset.hold))));
   function buildMenubars() {
     for (const wld of ['a', 'c']) {
@@ -422,8 +474,8 @@
   }
   function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of ['a', 'c']) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
   function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
-  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('#c-stage .hud, #m-stage .hud').forEach(h => { h.dataset.state = state.appState; h.querySelector('.word').textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); updateLiveGlyphs(); state.t0 = performance.now(); }
-  function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); renderVariants(); renderIconSizes(); }
+  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('.live .hud').forEach(h => { h.dataset.state = state.appState; h.querySelector('.word').textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); updateLiveGlyphs(); state.t0 = performance.now(); }
+  function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); renderVariants(); renderIconSizes(); renderOverlay(); }
 
   document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
   document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => { state.appState = b.dataset.state; applyState(); }));
@@ -433,14 +485,15 @@
   slider.addEventListener('input', () => { state.manual = parseFloat(slider.value); if (state.src !== 'manual') setSource('manual'); });
   document.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => { document.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === t))); document.querySelectorAll('.world').forEach(w => w.classList.toggle('active', w.id === `world-${t.dataset.world}`)); }));
 
-  // Deep links for review: ?tab=icon|c|a  ?level=0.5 (switches to manual)  ?state=recording|processing|idle
+  // Deep links for review: ?tab=m|c|a|icon|pal  ?level=0.5 (switches to manual)  ?state=recording|processing|idle
+  // ?focus=<id> lifts one block to the top of the page, above the tabs, so a first-viewport screenshot sees it.
   const q = new URLSearchParams(location.search);
   if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
+  if (q.get('focus')) { const n = document.getElementById(q.get('focus')); if (n) { const wrap = document.querySelector('.wrap'); wrap.insertBefore(n, document.querySelector('.tabs')); n.style.marginBottom = '18px'; } }
   if (q.get('state')) state.appState = q.get('state');
   if (q.get('level') != null) { state.manual = parseFloat(q.get('level')); slider.value = state.manual; setSource('manual'); }
 
-  applyPal(); applyMac(); applyState(); renderRefs();
-  document.fonts && document.fonts.ready.then(renderRefs);
+  applyPal(); applyMac(); applyState(); renderPal();
 
   let last = performance.now();
   const readout = document.getElementById('level-read');
@@ -451,10 +504,10 @@
     else if (state.src === 'mic') readMic();
     else state.level += (state.manual - state.level) * Math.min(1, 14 * dt);
     const t = now / 1000;
-    for (const m of marks) (m.kind === 'm' ? drawMic : drawRiver)(m, state.level, m.hold == null ? state.appState : 'recording', dt, t);
+    for (const m of marks) (m.kind === 's' ? drawSlats : drawRiver)(m, state.level, m.hold == null ? state.appState : 'recording', dt, t);
     const elapsed = state.appState === 'idle' ? 0 : (now - state.t0) / 1000;
     const mm = Math.floor(elapsed / 60), ss = Math.floor(elapsed % 60).toString().padStart(2, '0');
-    document.querySelectorAll('#c-stage .hud .time, #m-stage .hud .time').forEach(n => n.textContent = `${mm}:${ss}`);
+    document.querySelectorAll('.live .hud .time').forEach(n => n.textContent = `${mm}:${ss}`);
     readout.textContent = state.level.toFixed(2);
     if (state.src !== 'manual') slider.value = state.level.toFixed(2);
     requestAnimationFrame(frame);
