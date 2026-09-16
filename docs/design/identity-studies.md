@@ -59,11 +59,22 @@ The redrawn channel glyph (one channel seen from above, wide at the near bank, o
 
 The maintainer named three faces on 2026-09-16 whose R already carries some curve or shape: **Besley**, **Niconne**, and **Scope One**, capital or lowercase, either viable. All are SIL OFL 1.1 and were taken from the google/fonts repository that day (Besley's variable font at its default weight); extracted with fontTools, sources not committed. The study page's icon tab shows all six glyphs exactly as shipped, on the charcoal squircle at 96, 48, 24, and 16 px and inverted, so the base can be chosen on its own shape.
 
-One worked flourish so far: **Besley's capital R**, whose leg ends in a short curled flick. The flick runs on a little further, up and out, as a tapering wave; eleven contour points of the tail move and the bowl, stem, and serifs are the font's. Shown at three strengths (shipped, River tail, longer) with the shipped outline overlaid. This is deliberately subtle: the maintainer rejected the big Instrument Serif confluence the same day ("not a big fan of the way large confluence approach, perhaps a new round with something more subtle").
+Each of the six then gets exactly one subtle flourish in one region, chosen from what the letter already does, shown at three strengths (shipped, River flourish, pushed further) with the shipped outline overlaid so the change is plain, and at Dock and Finder sizes:
 
-Method that holds: take the outline point for point, change one region, overlay the shipped outline so the change is plain, center geometrically on the ink box. Candidate flourishes not yet drawn: Niconne's lowercase r has a wave-like entry stroke and a looped exit that could trail off as a current; Besley's lowercase r has a ball terminal that could soften into a drop; Scope One is lighter and straighter and would need the flourish to carry more of the character.
+| Base | The one region that moves | Points |
+|---|---|---|
+| Besley R | The leg's curled flick runs on a little further, up and out, as a tapering wave | 11 |
+| Besley r | The ball terminal's underside drops into a small teardrop | 4 |
+| Niconne R | The hooked tip of the leg runs on as a longer trailing wave | 6 |
+| Niconne r | The looped exit stroke trails a little further right, like a crest | 3 |
+| Scope One R | The foot of the leg turns up in a slight flick | 5 |
+| Scope One r | The hanging terminal lengthens and drifts outward, like a drop | 5 |
 
-**Awaiting the maintainer's read:** which base, and whether the Besley R tail is the right kind of subtle.
+This round is deliberately subtle: the maintainer rejected the big Instrument Serif confluence the same day ("not a big fan of the way large confluence approach, perhaps a new round with something more subtle") and asked for four to six exploratory versions across these faces.
+
+Method that holds: take the outline point for point, change one region, overlay the shipped outline, center geometrically on the ink box.
+
+**Awaiting the maintainer's read:** which base and flourish, if any, to refine.
 
 ### Accent: measured side by side
 
