@@ -14,7 +14,9 @@ The studies themselves are [studies/river-identity-studies.html](studies/river-i
 - **Anti-goals:** cute or mascot-like; the generic AI aesthetic (purple-blue gradients, sparkles, glowing orbs); heavy or decorative chrome. Literal water imagery was offered as an anti-goal and deliberately *not* chosen.
 - **An indicator's empty and filled states are the same size.** State changes by ink, never by the shape growing or shrinking.
 - **Menu bar glyph: the microphone slats.** Five horizontal slats, shortened toward the top and bottom, with distinct Ready, Listening, and Transcribing states. Accepted as is: "this works, keep it, no edits". Parked as the working glyph.
-- **The recording indicator is that glyph, enlarged.** Directed 2026-09-16: "a simple copying of the menu bar icon, just at a larger size". Its empty, initial state must match the menu bar's Ready glyph 1:1. Very subtle motion per stage (Ready, Listening, Transcribing) is welcome; the appearance is not to be redesigned.
+- **The recording indicator is that glyph, enlarged, at 48 pt.** Directed 2026-09-16: "a simple copying of the menu bar icon, just at a larger size". Its empty, initial state must match the menu bar's Ready glyph 1:1. Very subtle motion per stage (Ready, Listening, Transcribing) is welcome; the appearance is not to be redesigned.
+- **The bar envelops the glyph.** Directed 2026-09-16, replacing the rounded-rectangle panel: two columns with a gap between them and the same padding in each; the left column holds the glyph, horizontally centered, the largest element and the one that sets the height; the right column holds only the time, horizontally centered. No "Listening" text anywhere. The bar's outline follows the glyph's contours with a consistent short gap, "perfectly enveloping" it, then wraps only the time, with none of the empty space of a wide rectangle. Width is fluid.
+- **The slats keep a visible gap while listening.** Directed 2026-09-16: tweak the initial sizing and spacing of the slats and their listening size so that the spacing between them is more notable during Listening.
 - **The app icon starts from a real font outline.** The maintainer endorsed the approach on 2026-09-16: take the vector outline of a real, openly licensed lowercase r and design off that shape.
 
 ## Proposed, not confirmed
@@ -24,15 +26,17 @@ The studies themselves are [studies/river-identity-studies.html](studies/river-i
 
 ## Open candidates
 
-### Recording indicator: the menu bar glyph, enlarged (current focus)
+### Recording indicator: the enveloping bar (current focus)
 
-The indicator is the accepted five-slat glyph drawn by the same function as the menu bar, at 40 pt in the 260 by 56 panel (a 60 pt version in the 84 pt panel is shown beside it in case 40 reads small). Its initial state is the Ready glyph exactly: middle slat at full ink, the other four at 55%, stroke 1.2 units. Speech changes ink only:
+The glyph is drawn by the same function as the menu bar, at 48 pt. Round nine opened its row pitch from 2.5 to 2.6 units and set the stroke to 1.1 at Ready and 1.3 awake (the menu bar had used 1.2 and 1.6), so the gaps between slats stay open while listening. The bar's outline is computed, not drawn ([studies/bar-shape.py](studies/bar-shape.py), which needs `shapely`): the slat silhouette offset outward by a constant 8 pt, joined to the 8 pt offset of the time's text box placed 6 pt to the right of the glyph column, with the concave junctions rounded at 5 pt. Three constructions are on the page:
 
-- Listening: the middle slat thickens to 1.6 above level 0.06, the inner pair wakes (55% to full ink, 1.2 to 1.6) above 0.18, the outer pair above 0.55. Rise about 0.1 s, fall about 0.5 s. At full level the mark is the menu bar's Listening glyph exactly.
-- Transcribing: the menu bar's dotted glyph, all slats full ink, with the dots drifting right one pitch every three seconds. Under Reduce Motion the dots hold still.
-- Nothing changes size in any state.
+- **Group outline offset** (lead): the offset of the group's convex outline, one smooth contour around the slats.
+- **Silhouette offset**: the offset of every slat, so the edge follows each tip and scallops slightly along the sides.
+- **Split**: the envelope and the time capsule as two separate shapes with a 6 pt gap.
 
-**Open, awaiting the maintainer's read:** the panel height (56 with a 40 pt mark, or 84 with a 60 pt mark), and whether the three motions are subtle enough. The motion has only been judged in stills by the agent.
+At 48 pt with "0:00" at 12 pt the joined bar measures about 82 by 51 pt. Motion is ink only: a slat rises from 55% to full ink in about 0.15 s and settles over 0.6 s; the middle leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph with the dots drifting right one pitch every five seconds, still under Reduce Motion. Nothing changes size.
+
+**Open, awaiting the maintainer's read:** which construction, whether the 8 pt gap and 6 pt column gap are right, and whether the motion is now subtle enough. Motion has only been judged in stills by the agent.
 
 ### Recording indicator: river
 
@@ -76,6 +80,7 @@ Red sand `#C4674A` fails as text and as a control ground on white; if chosen, it
 | Round 1 indicators: grille as tributaries, R as a bend, symmetric braided channel | Read as "dots into lines"; the braid read as a woven basket, not a river |
 | Microphone indicator, rounds 2 to 5: lines growing from center, a horizontal capsule, pillars, shimmer highlights, per-threshold stagger with dashes | Chaotic, jagged, "pillars to a building"; did not extend and recede with level |
 | Microphone indicator, round 8: the capsule head measured from the reference photo (28 grooves, IoU 0.92) | Superseded 2026-09-16 by the maintainer's direction that the indicator is the menu bar glyph enlarged. The measurement stays in `studies/mic-groove-geometry.json` and `studies/measure-mic-grooves.py` as the record of the method |
+| Round 9, first pass: the enlarged glyph inside the rounded-rectangle panel with the word "Listening", at 40 or 60 pt, with the stroke thickening to 1.6 while listening | "Neither": too much negative space around a roughly rectangular bar, centering problems, and the motion not subtle enough. Replaced the same day by the enveloping bar |
 | Accent color on selected strokes; an emblem ring | Replaced by uniform ink and an empty emblem space |
 | River wake-up with sharp attack and level-scaled speed | Far too snappy; reverted to round two's timing |
 | River glyph as two banks or live strands | "Stock price chart", then "smashed tweezers"; not recognizable as a river |
@@ -94,7 +99,8 @@ Red sand `#C4674A` fails as text and as a control ground on white; if chosen, it
 6. **The in-app browser captures only the first viewport.** Move the element under review to the top of the page before a screenshot, or the check silently sees nothing.
 7. **Generating letterforms from scratch failed four times.** A bespoke icon letter is better started from a real, openly licensed font outline and modified in one place, not synthesized from curves. Round nine did this; the maintainer endorsed the approach.
 8. **One drawing per mark.** When two surfaces must match (menu bar glyph and indicator), they call the same function at different sizes, so the match holds by construction rather than by comparison.
-9. **The study page takes `?focus=<id>`.** It lifts one block to the top of the page so the first-viewport screenshot sees it; use it instead of scrolling.
+9. **The study page takes `?focus=<id>`.** It lifts one block to the top of the page and hides the header and controls, so the first-viewport screenshot sees it; use it instead of scrolling. The in-app browser cannot screenshot `file://` pages: serve the folder with `python3 -m http.server --directory <dir>` and open it over localhost.
+10. **Compute envelopes, don't draw them.** A bar that must hug a mark with a constant gap is the mark's offset (Minkowski sum with a disk), joined and closed with a fillet radius; `shapely` does this in a few lines and the result is exact.
 
 ## Impeccable state
 
