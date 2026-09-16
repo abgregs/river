@@ -8,12 +8,12 @@ ROWS = [[5.5, 3.8], [4, 6.4], [3.5, 9], [4, 11.6], [5.5, 14.2]]
 CAP = 0.55 * U                       # Ready stroke 1.1 units -> cap radius
 P = 8.0                              # gap from any slat end to the bar edge
 GAP = 6.0                            # column gap between the glyph column and the time column
-TXT_W, TXT_H = 30.0, 14.0            # "0:00" at 12 px tabular, line-height 14
+TXT_W, TXT_H = 24.0, 14.0            # "0:00" ink at 12 px SF Pro tabular measures 23.4 wide; line-height 14
 RF = 5.0                             # fillet radius at concave junctions
 slats = [LineString([(x * U, y * U), ((16 - x) * U, y * U)]).buffer(CAP, quad_segs=24) for x, y in ROWS]
 silhouette = unary_union(slats)
 hull = silhouette.convex_hull
-slat_r = max(s.bounds[2] for s in slats); cy = 8 * U
+slat_r = max(s.bounds[2] for s in slats); cy = 9 * U          # the slat group's own center (rows 3.8 to 14.2), not the 16-unit box's
 def tab_at(left):
     return box(left, cy - TXT_H / 2, left + TXT_W, cy + TXT_H / 2).buffer(P, quad_segs=24)
 def closing(g): return g.buffer(RF, quad_segs=24).buffer(-RF, quad_segs=24)
@@ -25,10 +25,10 @@ variants = {}
 env_sil = silhouette.buffer(P, quad_segs=32)          # follows every slat tip
 env_hull = hull.buffer(P, quad_segs=32)               # follows the group's outer form only
 text_left_joined = slat_r + P + GAP
-A1 = closing(unary_union([env_sil, tab_at(text_left_joined - P)]))
-A2 = closing(unary_union([env_hull, tab_at(text_left_joined - P)]))
+A1 = closing(unary_union([env_sil, tab_at(text_left_joined)]))      # the capsule is the text box's own offset, so P holds on every side
+A2 = closing(unary_union([env_hull, tab_at(text_left_joined)]))
 text_left_split = env_sil.bounds[2] + GAP + P
-B_tab = tab_at(text_left_split - P)
+B_tab = tab_at(text_left_split)
 for key, g, tl, extra in [('sil', A1, text_left_joined, None), ('hull', A2, text_left_joined, None), ('split', env_sil, text_left_split, B_tab)]:
     b = unary_union([g, extra]).bounds if extra is not None else g.bounds
     ox, oy = b[0], b[1]
