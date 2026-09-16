@@ -14,3 +14,6 @@ ab-result.txt
 
 # Transcription eval scorecards (local only — see TranscriptionEvalTests, planning 0022)
 eval-*.txt
+
+# Impeccable decision-page session logs (ephemeral)
+.impeccable/questions/
