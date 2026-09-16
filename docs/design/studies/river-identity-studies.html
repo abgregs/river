@@ -93,6 +93,7 @@
   .options.three { grid-template-columns: repeat(3, 1fr); }
   @media (max-width: 900px) { .options.three { grid-template-columns: 1fr; } }
   .bar { position: relative; flex: none; }
+  .live .bar { transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1), transform 220ms cubic-bezier(0.2, 0, 0, 1); }   /* enter and exit: fade with a 6 px rise, both ease-out */
   .bar .barshadowwrap { position: absolute; inset: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.2)) drop-shadow(0 10px 24px rgba(0,0,0,.24)); }
   .bar .barshadow { position: absolute; inset: 0; background: #23262B; }
   .bar .barfill { position: absolute; inset: 0; background: rgba(35,38,43,.86); backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); }
@@ -124,7 +125,7 @@
   .contrast { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; }
   .contrast b { color: var(--fg); font-weight: 500; }
   .contrast .ok { color: #2E8B57; } .contrast .no { color: #C4674A; }
-  @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .hud, .live .bar { transition: none; } }
 </style>
 
 <div class="wrap">
@@ -162,7 +163,7 @@
     <h2>Every stage, held, at 2&times;</h2>
     <div class="ctl rctl"><label for="bh-hull">Construction</label><div class="seg"><button id="bh-hull" type="button" aria-pressed="true" data-bheld="hull">Group outline</button><button id="bh-sil" type="button" aria-pressed="false" data-bheld="sil">Silhouette</button><button id="bh-split" type="button" aria-pressed="false" data-bheld="split">Split</button></div></div>
     <div class="stages" id="stages"></div>
-    <p class="construct">Ready is the menu bar glyph at 48 pt: middle slat at full ink, the others at 55%, stroke 1.1 units. Listening changes ink only: a slat rises from 55% to full ink over about 0.15 s and settles back over 0.6 s, its stroke going from 1.1 to 1.3 units so the gaps between slats stay open; the middle slat leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph with the dots drifting right one pitch every 3.5 seconds; under Reduce Motion they hold still. Nothing changes size. The 16 px cell beside the Ready frame is the menu bar glyph from the same function. Motion has only been judged in stills by the agent.</p>
+    <p class="construct">Ready is the menu bar glyph at 48 pt: middle slat at full ink, the others at 55%, stroke 1.1 units. Listening changes ink only: a slat rises from 55% to full ink over about 0.15 s and settles back over 0.6 s, its stroke going from 1.1 to 1.3 units so the gaps between slats stay open; the middle slat leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph with the dots drifting right one pitch every 3.5 seconds; solid and dotted crossfade over about 0.2 s rather than cutting. The bar itself fades in and out over 0.22 s with a 6 pt rise, ease-out both ways. Under Reduce Motion the dots hold still and the crossfade and fade become instant. Nothing changes size. The 16 px cell beside the Ready frame is the menu bar glyph from the same function. Motion has only been judged in stills by the agent.</p>
     </div>
   </section>
 
@@ -300,9 +301,12 @@
   const SLAT_DOTS = '0.1 2.4', SLAT_PITCH = 2.5;
   function makeSlats(host, hold, px, color) {
     const svg = el('svg', { viewBox: '0 0 16 16', width: px, height: px, class: 'slats', role: 'img', 'aria-label': 'River mark' }, host || undefined);
-    const g = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
-    const rows = SLAT_ROWS.map(([x, y]) => { const p = el('path', { d: `M${x} ${y} L${16 - x} ${y}` }, g); p.__wake = 0; return p; });
-    return { kind: 's', svg, rows, hold, color, offset: 0 };
+    // Two layers, solid and dotted, crossfaded by opacity so Listening and Transcribing never cut hard.
+    const gSolid = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const gDots = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-dasharray': SLAT_DOTS, 'stroke-width': 1.1, opacity: 0 }, svg);
+    const rows = SLAT_ROWS.map(([x, y]) => { const p = el('path', { d: `M${x} ${y} L${16 - x} ${y}` }, gSolid); p.__wake = 0; return p; });
+    const dots = SLAT_ROWS.map(([x, y]) => el('path', { d: `M${x} ${y} L${16 - x} ${y}` }, gDots));
+    return { kind: 's', svg, rows, dots, gSolid, gDots, hold, color, offset: 0, mix: 0 };
   }
   function drawSlats(m, level, state, dt, t) {
     const ink = m.color || css('--ink');
@@ -310,6 +314,10 @@
     const lv = typeof m.hold === 'number' ? m.hold : st === 'recording' ? level : 0;
     const proc = st === 'processing';
     if (proc && !reduceMotion) m.offset = (m.offset + dt * (SLAT_PITCH / 3.5)) % SLAT_PITCH;   // one dot pitch every 3.5 seconds
+    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // solid and dotted crossfade in about 0.2 s
+    m.mix += ((proc ? 1 : 0) - m.mix) * Math.min(1, mixRate * dt);
+    m.gSolid.setAttribute('opacity', (1 - m.mix).toFixed(3)); m.gDots.setAttribute('opacity', m.mix.toFixed(3));
+    m.gDots.setAttribute('stroke', ink); m.gDots.setAttribute('stroke-dashoffset', (-m.offset).toFixed(3));
     m.rows.forEach((p, i) => {
       const target = proc ? 1 : (lv >= SLAT_THRESH[i] ? 1 : 0);
       const rate = m.hold != null ? 1e9 : (target > p.__wake ? 7 : 1.7);   // about 0.15 s up, 0.6 s down
@@ -317,9 +325,7 @@
       const w = p.__wake;
       p.setAttribute('stroke', ink);
       p.setAttribute('opacity', i === 2 ? '1' : (0.55 + 0.45 * w).toFixed(3));
-      p.setAttribute('stroke-width', proc ? '1.1' : (1.1 + 0.2 * w).toFixed(2));   // 1.1 at Ready, 1.3 awake: the gaps stay open
-      if (proc) { p.setAttribute('stroke-dasharray', SLAT_DOTS); p.setAttribute('stroke-dashoffset', (-m.offset).toFixed(3)); }
-      else { p.removeAttribute('stroke-dasharray'); p.removeAttribute('stroke-dashoffset'); }
+      p.setAttribute('stroke-width', (1.1 + 0.2 * w).toFixed(2));   // 1.1 at Ready, 1.3 awake: the gaps stay open
     });
   }
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -406,7 +412,7 @@
   const GLYPH_WORLDS = ['a', 'c'];
   function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of GLYPH_WORLDS) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
   function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
-  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('.live .hud').forEach(h => { h.dataset.state = state.appState; const w = h.querySelector('.word'); if (w) w.textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); document.querySelectorAll('.live .bar').forEach(b => b.style.opacity = state.appState === 'idle' ? 0 : 1); updateLiveGlyphs(); state.t0 = performance.now(); }
+  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('.live .hud').forEach(h => { h.dataset.state = state.appState; const w = h.querySelector('.word'); if (w) w.textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); document.querySelectorAll('.live .bar').forEach(b => { const idle = state.appState === 'idle'; b.style.opacity = idle ? 0 : 1; b.style.transform = idle ? 'translateY(6px)' : 'none'; }); updateLiveGlyphs(); state.t0 = performance.now(); }
   function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); }
 
   document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
