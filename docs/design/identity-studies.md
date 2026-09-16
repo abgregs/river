@@ -45,9 +45,15 @@ Three strands, each a slow meander with a faster ripple at an irrational ratio, 
 
 **Rest state, rebuilt 2026-09-16.** Round eight's rest state read as "grainy, pixelly, glitchy, rough". Diagnosis, confirmed in a full-scale capture: its amplitude at level 0 was 0.6 to 0.9 px on strokes of 1.3 to 2.6 px, rendered through a 0.9 scale, so near-horizontal hairlines crossed pixel rows at very shallow angles and antialiasing split their coverage between two rows; the slow drift then moved that pattern along the line. The rest state now has zero amplitude: three perfectly flat lines centered on pixel rows (1 px strokes on half-pixel y, the 2 px middle stroke on an integer y, the mark rendered 1:1 at 108 by 40), at 40% ink with a slow breath of plus or minus 6% over about seven seconds. Level blends width, ink, and amplitude into the motion over the first 0.15 of level with round two's timing. The maintainer chose the breathing variant over a frozen one, "assuming we can pull off smooth appearance"; the held rest frame is now crisp, and the breath awaits a live look.
 
-### Menu bar glyph: river
+### Menu bar glyph: river, and the r attempts
 
-Redrawn from a reference glyph: one channel seen from above, wide at the near bank, one S-bend, tapering to a point on the horizon. Outline when Ready, filled when Listening, filled with dotted banks when Transcribing. **Awaiting the maintainer's read.** The microphone glyph above is the accepted one.
+The redrawn channel glyph (one channel seen from above, wide at the near bank, one S-bend, tapering to a point; outline when Ready, filled when Listening, dotted banks when Transcribing) got no verdict on 2026-09-16. Instead the maintainer asked for one more attempt built the way the icon was: from the real r outline, loosely modified, so the menu bar mark and the three-line indicator share a family resemblance "even if merely due to subtle curved lines forming the r". Three attempts are on the river tab, each with the slat glyph's stroke and states (1.1 units and secondary lines at 55% when Ready, 1.3 and full ink when Listening, dotted when Transcribing):
+
+- **Monoline r**: the Young Serif r's stem and shoulder centerlines (the shoulder is the average of its outer and inner edges, computed from the outline), mapped into the 16 px box, with the shoulder leaving the stem tangentially as a confluence. Two lines.
+- **Three lines**: the same shoulder over a stem with a faint river bend, plus the foot serif as a short third line.
+- **Filled r, River join**: the icon's own letter at 16 px, 70% ink when Ready, full when Listening; Transcribing dots its outline.
+
+**Awaiting the maintainer's read.** The microphone slat glyph remains the accepted, working menu bar glyph.
 
 ### App icon: from a real outline, one change
 

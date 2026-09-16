@@ -74,6 +74,9 @@
   .statesrow { display: flex; gap: 18px; align-items: center; padding: 10px 12px; font-size: 12px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
   .statesrow .cell { display: inline-flex; align-items: center; gap: 8px; }
   .statesrow svg.big { width: 48px; height: 48px; }
+  .desk.short .wall { height: 40px; }
+  .desk.short .statesrow { flex-wrap: wrap; gap: 10px 14px; }
+  .desk.short .statesrow svg.big { width: 40px; height: 40px; }
 
   .hudstage { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); height: 210px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 28px; }
   .hudstage.light { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d8e0ec'/><stop offset='.55' stop-color='%23efdfcf'/><stop offset='1' stop-color='%23d5e3d2'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23ffffff' fill-opacity='.7'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%23cfd3da'/></svg>") center/cover; }
@@ -222,6 +225,15 @@
     <h2>Menu bar</h2>
     <div class="desk light" id="c-desk"><div class="menubar light" id="c-menubar"></div><div class="wall"></div><div class="statesrow" id="c-states"></div></div>
     <p class="construct">Redrawn from the reference: a single river seen from above, wide at the near bank, winding in one S and tapering to a point on the horizon at the upper right. Ready is the outline; Listening fills the water; Transcribing keeps the fill and dots the banks.</p>
+    </div>
+    <div id="sec-c-r">
+    <h2>Menu bar &middot; the r, three attempts</h2>
+    <p class="construct">Built the way the icon was: the stem and shoulder centerlines are derived from the Young Serif r's outline (the average of the shoulder's outer and inner edges, the stem's midline), mapped into the 16 px box, and loosely modified so the shoulder leaves the stem as a confluence. The lines share the slat glyph's stroke and states: 1.1 units at Ready with the secondary lines at 55%, 1.3 and full ink at Listening, dotted at Transcribing. The aim is a family resemblance between this mark and the three-line indicator: the same thin curved lines, at rest and awake.</p>
+    <div class="options three">
+      <div><h3>Monoline r</h3><div class="desk light short" id="r1-desk"><div class="menubar light" id="r1-menubar"></div><div class="wall"></div><div class="statesrow" id="r1-states"></div></div><p class="spec">Two lines: a straight stem and the shoulder joining it tangentially, as a tributary. The shoulder is the secondary line at Ready.</p></div>
+      <div><h3>Three lines</h3><div class="desk light short" id="r2-desk"><div class="menubar light" id="r2-menubar"></div><div class="wall"></div><div class="statesrow" id="r2-states"></div></div><p class="spec">The same shoulder over a stem with a faint river bend, plus the foot serif as a third short line. Three lines, like the indicator.</p></div>
+      <div><h3>Filled r, River join</h3><div class="desk light short" id="r3-desk"><div class="menubar light" id="r3-menubar"></div><div class="wall"></div><div class="statesrow" id="r3-states"></div></div><p class="spec">The icon's own letter at 16 px, filled at 70% when Ready and full when Listening; Transcribing dots its outline.</p></div>
+    </div>
     </div>
   </section>
 
@@ -460,6 +472,19 @@
       const m = makeSlats(null, state === 'idle' ? 'ready' : state === 'processing' ? 'proc' : 1, 16, color);
       drawSlats(m, 0, state, 1, 0); m.svg.setAttribute('class', 'sys'); m.svg.setAttribute('aria-label', `${world} glyph, ${state}`);
       return m.svg;
+    } else if (world === 'r1' || world === 'r2') {
+      // Young Serif r centerlines in the 16 px box: stem at x 5.73, shoulder from the stem up over (10.8, 3.0) to the terminal at (12.2, 6.4).
+      const shoulder = 'M5.73 8.4 C 5.9 6.2, 7.0 4.9, 8.3 4.0 C 9.4 3.3, 10.4 2.95, 11.0 3.05 C 12.0 3.2, 12.65 4.0, 12.6 5.0 C 12.55 5.8, 12.4 6.3, 12.15 6.45';
+      const lines = world === 'r1'
+        ? [['M5.73 2.6 L5.73 13.9', true], [shoulder, false]]
+        : [['M5.6 2.6 C 6.1 5.5, 5.4 10.0, 5.8 13.9', true], [shoulder, false], ['M3.3 13.9 L8.3 13.9', false]];
+      const gg = el('g', { transform: world === 'r1' ? 'translate(-1.1,0)' : '' }, g);
+      lines.forEach(([d, primary]) => el('path', { d, 'stroke-width': state === 'recording' ? 1.3 : 1.1, ...dotted, opacity: state === 'idle' && !primary ? .55 : 1 }, gg));
+    } else if (world === 'r3') {
+      const r = rShape('young', 1); const s = 13 / 531;
+      const t = `translate(1.8,14.5) scale(${s},${-s}) translate(-15,0)`;
+      if (state === 'processing') el('path', { d: r.d, transform: t, 'stroke-width': 1.1 / s, 'stroke-dasharray': `${0.1 / s} ${2.4 / s}` }, g);
+      else el('path', { d: r.d, transform: t, fill: color, stroke: 'none', opacity: state === 'idle' ? .7 : 1 }, g);
     } else {
       if (state !== 'idle') el('path', { d: RIVER_GLYPH, fill: color, stroke: 'none', opacity: state === 'processing' ? .45 : .95 }, g);
       el('path', { d: RIVER_GLYPH, 'stroke-width': 1.25, ...dotted }, g);
@@ -502,7 +527,7 @@
   buildStages();
   document.querySelectorAll('[data-hold]').forEach(stage => marks.push(makeRiver(stage.querySelector('.mark'), parseFloat(stage.dataset.hold))));
   function buildMenubars() {
-    for (const wld of ['a', 'c']) {
+    for (const wld of GLYPH_WORLDS) {
       const bar = document.getElementById(`${wld}-menubar`); bar.innerHTML = '';
       const color = state.macDark ? '#f5f5f7' : '#1d1d1f';
       const live = document.createElement('span'); live.className = 'glyph'; live.id = `${wld}-live-glyph`; bar.appendChild(live);
@@ -512,7 +537,8 @@
       for (const s of ['idle', 'recording', 'processing']) { const c = document.createElement('span'); c.className = 'cell'; const big = glyph(wld, s, 'currentColor'); big.setAttribute('class', 'big'); c.appendChild(big); const label = document.createElement('span'); label.textContent = s === 'idle' ? 'Ready' : (s === 'recording' ? 'Listening' : 'Transcribing'); c.appendChild(label); row.appendChild(c); }
     }
   }
-  function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of ['a', 'c']) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
+  const GLYPH_WORLDS = ['a', 'c', 'r1', 'r2', 'r3'];
+  function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of GLYPH_WORLDS) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
   function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
   function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('.live .hud').forEach(h => { h.dataset.state = state.appState; const w = h.querySelector('.word'); if (w) w.textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); document.querySelectorAll('.live .bar').forEach(b => b.style.opacity = state.appState === 'idle' ? 0 : 1); updateLiveGlyphs(); state.t0 = performance.now(); }
   function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); renderVariants(); renderIconSizes(); renderOverlay(); }
