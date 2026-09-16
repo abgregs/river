@@ -6,7 +6,7 @@ The studies themselves are [studies/river-identity-studies.html](studies/river-i
 
 ## Confirmed by the maintainer
 
-- **Palette family: charcoal plus one accent.** Charcoal `#23262B`, raised charcoal `#2E3238`, ink `#ECEEF1`. The accent is one of two, not yet chosen: dark turquoise `#1F7F86` (`#3FA3AA` on dark grounds) or red sand `#C4674A` (`#DB8E70` on dark grounds).
+- **Palette: charcoal plus dark turquoise.** Charcoal `#23262B`, raised charcoal `#2E3238`, ink `#ECEEF1`, accent dark turquoise `#1F7F86` on light grounds and `#3FA3AA` on dark grounds. Chosen 2026-09-16 over red sand after the side-by-side comparison with measured contrast: turquoise passes every text and control pairing; red sand fails on white at 3.90:1.
 - **Uniform ink on marks.** No selective accent color on individual strokes, "for now".
 - **Rounded corners with concentric radii.** Outer radius equals inner radius plus padding, per `better-ui`. The studies use a 16 pt panel radius, 12 pt padding, 4 pt inner radius.
 - **Presence while recording: small but unmistakable.**
@@ -77,7 +77,7 @@ The accent never touches a mark (uniform ink), so it appears on the icon, on pre
 | White on accent, pressed control (needs 4.5:1) | 4.73:1 | 3.90:1, fails |
 | Charcoal on the light variant, inverted icon (needs 3:1) | 5.08:1 | 5.87:1 |
 
-Red sand `#C4674A` fails as text and as a control ground on white; if chosen, its light-appearance value needs darkening to about `#B0583C` before it carries text. **Awaiting the maintainer's choice.**
+Red sand `#C4674A` fails as text and as a control ground on white and would have needed darkening to about `#B0583C`. **Dark turquoise chosen 2026-09-16.** The study page keeps the red sand toggle only as the record of the comparison.
 
 ## Rejected, with reasons
 
@@ -92,6 +92,7 @@ Red sand `#C4674A` fails as text and as a control ground on white; if chosen, it
 | River wake-up with sharp attack and level-scaled speed | Far too snappy; reverted to round two's timing |
 | River rest state as separated, nearly straight lines with a trace of drift (round 8) | Grainy and glitchy: sub-pixel wobble on hairlines, split between pixel rows by antialiasing and then drifted. Replaced by flat lines on pixel rows |
 | River glyph as two banks or live strands | "Stock price chart", then "smashed tweezers"; not recognizable as a river |
+| Accent: red sand `#C4674A` / `#DB8E70` | Fails contrast on white (3.90:1) as text and as a pressed-control ground; dark turquoise passes everywhere and was chosen |
 | Icon: hand-drawn stroke R | Messy, hand-drawn |
 | Icon: typeset R from a real font in a squircle | A reasonable start, but not bespoke, and not centered |
 | Icon: computed capital R with a leg flourish | Looked like a broken glyph, not an intentional design |
