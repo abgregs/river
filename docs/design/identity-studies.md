@@ -55,16 +55,15 @@ The redrawn channel glyph (one channel seen from above, wide at the near bank, o
 
 **Read 2026-09-16:** the monoline r and the three-line r both earn a place as candidates beside the slat glyph; the filled r does not (its dotted Transcribing outline collapses into a cloud at 16 px). The microphone slat glyph remains the accepted, working menu bar glyph; the redrawn channel glyph is still without a verdict.
 
-### App icon: from a real outline, one change
+### App icon: Instrument Serif, changed in one place, visibly
 
-The lowercase r is taken point for point from an openly licensed face, and exactly one thing is changed: the inner join where the underside of the shoulder meets the stem. The font's short notch becomes a long concave sweep that arrives tangent to the stem well below the shoulder, so the shoulder reads as a tributary merging into the channel. Four contour points move; every other point is the font's. The study shows the change at three lengths (the font as shipped, the River join, a longer confluence), an overlay of the original outline on the modified letter, and Dock and Finder sizes.
+The lowercase r is taken point for point from Instrument Serif (Rodrigo Fuenzalida and Jordan Egstad, SIL OFL 1.1, from the google/fonts repository on 2026-09-16, extracted with fontTools; the source is not committed). One region is changed: the inner join where the underside of the shoulder meets the stem. In the font the shoulder leaves the stem as a hairline over an empty crotch. In the River letter the underside stays with the shoulder a little longer, then swings into the stem in an S and arrives tangent to it about a third of the way down, filling the crotch with a tapering wedge of ink: a stream widening into the channel. Four contour points move (the three off-curve controls of the inner join and the on-curve point where it meets the stem); every other point, the stem, the serifs, and the ball terminal are the font's. The page shows the change at three strengths (the font as shipped, the River join, a longer confluence), an overlay of the shipped outline on the modified letter so the added ink is plain, and Dock and Finder sizes down to 16 px. Centering is geometric on the ink box, both axes. The letter sits in accent on charcoal, with an inverted tile beside it.
 
-- **Lead base: Young Serif** (Bastien Sozeau, SIL OFL 1.1). Its stem weight survives 16 px.
-- **Alternate base: Instrument Serif** (Rodrigo Fuenzalida and Jordan Egstad, SIL OFL 1.1). Elegant at 128 px; its hairlines disappear at 16 px, and the same edit barely shows on it.
-- Both outlines were taken from the google/fonts repository on 2026-09-16 and extracted with fontTools; the sources are not committed. The finished icon ships as a raster with its source outline and edit recorded.
-- Centering is geometric on the ink box, both axes, at every size. The type research at `~/Developer/typography-research` notes that optical centers sit above mathematical ones for double-story letters; an optical nudge for the r is a separate decision for the maintainer, not applied.
+- **Young Serif was dropped** 2026-09-16: "not readable"; Instrument Serif was "the only one even legible".
+- The first Instrument Serif edit moved the same four points by a few font units and was invisible; the maintainer rightly asked whether the glyph had been modified at all. The current edit is the visible one.
+- The type research at `~/Developer/typography-research` notes that optical centers sit above mathematical ones; an optical nudge is a separate decision for the maintainer, not applied.
 
-**Awaiting the maintainer's read:** the base face, the confluence length, and whether the letter should sit in accent on charcoal (shown) or in ink.
+**Awaiting the maintainer's read:** the confluence strength, the letter's size in the squircle, and accent versus ink for the letter.
 
 ### Accent: measured side by side
 
@@ -97,6 +96,8 @@ Red sand `#C4674A` fails as text and as a control ground on white and would have
 | Icon: typeset R from a real font in a squircle | A reasonable start, but not bespoke, and not centered |
 | Icon: computed capital R with a leg flourish | Looked like a broken glyph, not an intentional design |
 | Icon: calligraphic lowercase r built from width profiles | Looked intentionally malformed |
+| Icon: Young Serif r as the base outline | Not readable at icon sizes; dropped. Instrument Serif was the only legible base |
+| Icon: the first Instrument Serif join edit, four points moved a few units | Invisible; the maintainer could not tell the modified glyph from the shipped one. Replaced by a visible S-taper join |
 
 ## Working rules these rounds taught
 

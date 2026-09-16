@@ -184,8 +184,7 @@
   </section>
 
   <section class="world" id="world-icon" role="tabpanel" aria-labelledby="tab-icon">
-    <p class="lead"><b>From a real outline, changed in one place.</b> The lowercase r is taken directly from an openly licensed typeface, point for point. One thing is then changed: the inner join where the underside of the shoulder meets the stem. In the font it is a short notch; here it becomes a long concave sweep that arrives tangent to the stem well below the shoulder, so the shoulder reads as a tributary merging into the main channel. Nothing else moves, so the letter keeps the face's stem, serifs, and terminal. The letter is centered in the squircle by its ink box, both axes, at every size.</p>
-    <div class="ctl rctl"><label for="rb-young">Base outline</label><div class="seg"><button id="rb-young" type="button" aria-pressed="true" data-rbase="young">Young Serif</button><button id="rb-instrument" type="button" aria-pressed="false" data-rbase="instrument">Instrument Serif</button></div></div>
+    <p class="lead"><b>Instrument Serif, changed in one place, visibly.</b> The lowercase r is taken directly from Instrument Serif, point for point (Young Serif was dropped as not legible). One region is then changed: the inner join where the underside of the shoulder meets the stem. In the font the shoulder leaves the stem as a hairline and the crotch is empty; here the underside bows outward and sweeps down into the stem, filling the crotch and arriving tangent to it a third of the way down, so the shoulder reads as a tributary merging into the main channel. The overlay below draws the shipped outline over the modified letter so the change is plain. Nothing else moves: the face's stem, serifs, and ball terminal are untouched. The letter is centered in the squircle by its ink box, both axes, at every size.</p>
     <div id="sec-icon-strengths">
     <h2>The confluence at three lengths</h2>
     <div class="varrow" id="rvariants"></div>
@@ -198,7 +197,7 @@
     <h2>Chosen r at Dock and Finder sizes</h2>
     <div class="grid"><div class="ground light" id="icon-sizes-light"></div><div class="ground dark" id="icon-sizes-dark"></div></div>
     </div>
-    <p class="construct">Provenance: Young Serif (Bastien Sozeau, SIL Open Font License 1.1) and Instrument Serif (Rodrigo Fuenzalida and Jordan Egstad, SIL OFL 1.1), both taken from the google/fonts repository on 2026-09-16. The OFL permits modification and redistribution of the outline under the same license; the finished icon would be shipped as a raster, and its source outline recorded. Young Serif is the lead: its stem is heavy enough that the r still reads at 16 px, where Instrument Serif's hairlines disappear. Centering is geometric on the ink box; if the maintainer wants an optical nudge, that is a separate decision, not a correction.</p>
+    <p class="construct">Provenance: Instrument Serif (Rodrigo Fuenzalida and Jordan Egstad, SIL Open Font License 1.1), taken from the google/fonts repository on 2026-09-16. The OFL permits modification and redistribution of the outline under the same license; the finished icon would be shipped as a raster, and its source outline and edit recorded. Centering is geometric on the ink box; if the maintainer wants an optical nudge, that is a separate decision, not a correction.</p>
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
@@ -265,11 +264,11 @@
   // Each base is the font's own TrueType contour for "r" (x, y, on-curve flag), in font units, y up.
   // `edits` names the only points that move: the inner join under the shoulder. Strength k blends the
   // font's join (0) toward the River join (1); above 1 extrapolates a longer confluence.
-  const R_FONTS = {"young":{"label":"Young Serif","contour":[[231,395,1],[258,453,0],[354,513,0],[407,513,1],[454,513,0],[520,461,0],[520,410,1],[520,388,0],[512,354,0],[494,346,1],[400,308,1],[394,306,0],[391,306,1],[382,306,0],[382,315,1],[382,318,0],[384,324,1],[390,338,0],[393,364,0],[393,374,1],[393,401,0],[366,426,0],[346,426,1],[323,426,0],[283,398,0],[253,358,0],[246,339,1],[246,155,1],[246,115,0],[282,60,0],[319,60,1],[321,60,1],[336,60,0],[336,45,1],[336,15,1],[336,0,0],[321,0,1],[30,0,1],[15,0,0],[15,15,1],[15,45,1],[15,60,0],[30,60,1],[32,60,1],[69,60,0],[105,115,0],[105,155,1],[105,281,1],[105,308,0],[98,358,0],[74,393,0],[46,396,1],[34,397,0],[34,409,1],[34,443,1],[34,453,0],[49,456,1],[120,467,0],[227,515,0],[246,529,1],[249,531,0],[251,531,1],[253,531,1],[255,531,0],[255,529,1],[255,528,0],[250,500,0],[243,457,0],[234,412,0]],"edits":{"23":[318,426],"24":[278,396],"25":[250,322],"26":[246,228]}},"instrument":{"label":"Instrument Serif","contour":[[154,446,1],[195,516,0],[253,516,1],[286,516,0],[318,477,0],[318,453,1],[318,434,0],[299,410,0],[279,410,1],[263,410,0],[248,425,0],[239,445,0],[227,460,0],[213,460,1],[195,460,0],[163,417,0],[142,345,0],[142,299,1],[142,67,1],[142,46,0],[155,28,0],[176,26,1],[203,23,1],[214,21,0],[214,12,1],[214,0,0],[199,0,1],[30,0,1],[15,0,0],[15,11,1],[15,20,0],[28,23,1],[40,25,1],[61,29,0],[74,46,0],[74,67,1],[74,403,1],[74,421,0],[63,434,0],[49,436,1],[28,439,1],[15,440,0],[15,450,1],[15,458,0],[31,461,1],[62,466,0],[95,488,0],[113,504,1],[122,513,0],[128,513,1],[137,513,0],[137,501,1],[137,447,1],[137,440,0],[149,437,0]],"edits":{"14":[192,460],"15":[160,430],"16":[143,330],"17":[142,205]}}};
+  const R_FONTS = {"instrument":{"label":"Instrument Serif","contour":[[154,446,1],[195,516,0],[253,516,1],[286,516,0],[318,477,0],[318,453,1],[318,434,0],[299,410,0],[279,410,1],[263,410,0],[248,425,0],[239,445,0],[227,460,0],[213,460,1],[195,460,0],[163,417,0],[142,345,0],[142,299,1],[142,67,1],[142,46,0],[155,28,0],[176,26,1],[203,23,1],[214,21,0],[214,12,1],[214,0,0],[199,0,1],[30,0,1],[15,0,0],[15,11,1],[15,20,0],[28,23,1],[40,25,1],[61,29,0],[74,46,0],[74,67,1],[74,403,1],[74,421,0],[63,434,0],[49,436,1],[28,439,1],[15,440,0],[15,450,1],[15,458,0],[31,461,1],[62,466,0],[95,488,0],[113,504,1],[122,513,0],[128,513,1],[137,513,0],[137,501,1],[137,447,1],[137,440,0],[149,437,0]],"edits":{"14":[208,450],"15":[200,395],"16":[150,270],"17":[142,190]}}};
   const R_STRENGTHS = [
-    { k: 0, label: 'As shipped in the font', note: 'The face untouched, for reference. The shoulder meets the stem in a short notch.' },
-    { k: 1, label: 'River join', note: 'The underside of the shoulder sweeps into the stem and arrives tangent to it well below the shoulder, like a tributary meeting the channel.' },
-    { k: 1.6, label: 'Longer confluence', note: 'The same change, pushed further: the sweep runs lower and fills more of the inner angle.' },
+    { k: 0, label: 'As shipped in the font', note: 'Instrument Serif untouched, for reference. The shoulder leaves the stem as a hairline and the crotch between them is empty.' },
+    { k: 1, label: 'River join', note: 'The underside of the shoulder bows outward and sweeps down into the stem, filling the crotch with ink and arriving tangent to the stem about a third of the way down: a tributary merging into the channel.' },
+    { k: 1.6, label: 'Longer confluence', note: 'The same change pushed further: the sweep bows out more and meets the stem lower, nearly halfway down.' },
   ];
   function rPoints(font, k) { return font.contour.map((p, i) => { const e = font.edits[i]; return e ? [p[0] + (e[0] - p[0]) * k, p[1] + (e[1] - p[1]) * k, p[2]] : p; }); }
   function rPath(pts) {
@@ -298,7 +297,7 @@
     el('path', { d: r.d, fill: invert ? charcoal : accent, transform: `translate(50,50) scale(${s.toFixed(4)},${(-s).toFixed(4)}) translate(${(-r.cx).toFixed(2)},${(-r.cy).toFixed(2)})` }, svg);
     return svg;
   }
-  let rBase = 'young', rK = 1;
+  let rBase = 'instrument', rK = 1;
   function renderVariants() {
     const host = document.getElementById('rvariants'); host.innerHTML = '';
     for (const v of R_STRENGTHS) {
@@ -332,7 +331,7 @@
     const edited = Object.keys(R_FONTS[rBase].edits).map(Number); const pts = rPoints(R_FONTS[rBase], rK);
     for (const i of edited) el('circle', { cx: pts[i][0], cy: pts[i][1], r: 6, fill: css('--accent-hi') }, g);
     const key = document.createElement('div'); key.className = 'key';
-    key.innerHTML = `<p><i style="background:${css('--accent-hi')}"></i>The font's outline, as shipped.</p><p><i style="background:${css('--fg')}"></i>The River letter at the chosen length. The dots are the only ${edited.length} points that move; every other point is the font's.</p><p>${R_FONTS[rBase].label}, strength ${rK}.</p>`;
+    key.innerHTML = `<p><i style="background:${css('--accent-hi')}"></i>Instrument Serif's outline, as shipped.</p><p><i style="background:${css('--fg')}"></i>The River letter at the chosen length. The dots are the only ${edited.length} contour points that move; every other point is the font's. Where the fill shows outside the outline is the added ink of the confluence.</p><p>Strength ${rK}.</p>`;
     host.appendChild(key);
   }
   document.querySelectorAll('[data-rbase]').forEach(b => b.addEventListener('click', () => { rBase = b.dataset.rbase; document.querySelectorAll('[data-rbase]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderVariants(); renderIconSizes(); renderOverlay(); }));
@@ -481,7 +480,7 @@
       const gg = el('g', { transform: world === 'r1' ? 'translate(-1.1,0)' : '' }, g);
       lines.forEach(([d, primary]) => el('path', { d, 'stroke-width': state === 'recording' ? 1.3 : 1.1, ...dotted, opacity: state === 'idle' && !primary ? .55 : 1 }, gg));
     } else if (world === 'r3') {
-      const r = rShape('young', 1); const s = 13 / 531;
+      const r = rShape('instrument', 1); const s = 13 / 516;
       const t = `translate(1.8,14.5) scale(${s},${-s}) translate(-15,0)`;
       if (state === 'processing') el('path', { d: r.d, transform: t, 'stroke-width': 1.1 / s, 'stroke-dasharray': `${0.1 / s} ${2.4 / s}` }, g);
       else el('path', { d: r.d, transform: t, fill: color, stroke: 'none', opacity: state === 'idle' ? .7 : 1 }, g);
