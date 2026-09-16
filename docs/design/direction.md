@@ -39,8 +39,8 @@ The identity brief for the design phase that follows the naming decision ([../pl
 
 Settle these in the phase and record the answer here or in the surface's planning item.
 
-- **Accent color:** one color, or a light/dark pair? Water-adjacent (teal/blue) is the obvious read; decide whether obvious is right.
-- **Glyphs:** SF Symbols only, or a custom template family?
+- **Accent color:** narrowed on 2026-09-16 to charcoal plus either dark turquoise or red sand, each as a light/dark pair; the choice between them is open. See [identity-studies.md](identity-studies.md).
+- **Glyphs:** a custom template family. The microphone slat glyph is accepted as the working menu bar glyph; see [identity-studies.md](identity-studies.md).
 - **Motion implementation:** SwiftUI animations throughout, or Core Animation for the HUD line?
 - **Cues:** custom recordings, or synthesized in code for zero asset weight?
 - **Streaming preview:** should the HUD hint at continuous insertion before 0025 ships, or stay honest about paste-at-the-end?

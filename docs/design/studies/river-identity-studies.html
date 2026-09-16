@@ -1,0 +1,464 @@
+<title>River Identity Studies</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Bricolage+Grotesque:wght@800&family=Geologica:wght@700&family=Young+Serif&display=swap">
+<style>
+  :root {
+    --bg: #F3F4F6; --fg: #1B1D21; --muted: #666B74; --line: #D8DBE1; --panel: #FFFFFF; --focus: #1F7F86;
+    --charcoal: #23262B; --charcoal-2: #2E3238; --ink: #ECEEF1;
+    --accent: #1F7F86; --accent-hi: #3FA3AA;
+  }
+  :root[data-pal="sand"] { --accent: #C4674A; --accent-hi: #DB8E70; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141518; --fg: #ECEEF1; --muted: #9AA0A9; --line: #2A2D33; --panel: #1C1E22; } }
+  :root[data-theme="dark"] { --bg: #141518; --fg: #ECEEF1; --muted: #9AA0A9; --line: #2A2D33; --panel: #1C1E22; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; padding-block: 28px 64px; padding-inline: 20px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; max-width: 64ch; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 26px 0 10px; }
+  h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  p.lead { max-width: 68ch; margin: 0 0 14px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: end; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; }
+  .ctl { display: flex; flex-direction: column; gap: 6px; }
+  .ctl label { font-size: 12px; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; transition: background-color 120ms, color 120ms; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button:focus-visible, input:focus-visible, .tabs button:focus-visible, .pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  input[type=range] { width: 150px; accent-color: var(--accent); }
+  .level-read { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .note { color: var(--muted); font-size: 12px; }
+  .tokens { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
+  .tok { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tok i { width: 22px; height: 22px; border-radius: 7px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+
+  .tabs { display: flex; gap: 6px; margin: 18px 0; flex-wrap: wrap; }
+  .tabs button { appearance: none; font: inherit; font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .world { display: none; } .world.active { display: block; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .ground { border-radius: 16px; padding: 22px; display: flex; align-items: end; gap: 26px; flex-wrap: wrap; min-height: 200px; border: 1px solid var(--line); }
+  .ground.light { background: linear-gradient(160deg, #EEF0F4, #DCE1E8); }
+  .ground.dark { background: linear-gradient(160deg, #2A2C33, #15161A); }
+  .iconbox { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .iconbox span { font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ground.dark .iconbox span { color: rgba(200,200,205,.75); }
+  .ground.light .iconbox span { color: rgba(60,60,70,.75); }
+  .icon { filter: drop-shadow(0 6px 10px rgba(0,0,0,.18)); }
+
+  .varrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .varrow { grid-template-columns: 1fr; } }
+  .varcard { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+  .varcard .ground { min-height: 150px; border-radius: 10px; padding: 14px; gap: 18px; }
+  .varcard p { margin: 8px 2px 2px; font-size: 12.5px; color: var(--muted); }
+  .pick { margin-top: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; background: var(--panel); color: var(--fg); cursor: pointer; border-radius: 8px; border: 1px solid var(--line); }
+  .pick[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .refs { display: flex; gap: 18px; flex-wrap: wrap; align-items: end; margin-top: 10px; }
+  .ref { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .ref b { font-size: 44px; line-height: 1; color: var(--fg); font-weight: 400; }
+
+  .menubar { height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 12px; font-size: 12.5px; font-weight: 500; }
+  .menubar.light { background: rgba(236,237,240,.92); color: #1d1d1f; }
+  .menubar.dark { background: rgba(38,39,43,.9); color: #f5f5f7; }
+  .menubar .glyph { display: inline-flex; align-items: center; height: 24px; }
+  .menubar svg.sys { width: 16px; height: 16px; }
+  .desk { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  .desk .wall { height: 74px; }
+  .desk.light .wall { background: linear-gradient(135deg, #cfd8e6, #e9d9c9 60%, #d7e2d3); }
+  .desk.dark .wall { background: linear-gradient(135deg, #1a2333, #3a2b3f 60%, #1e2f2b); }
+  .statesrow { display: flex; gap: 18px; align-items: center; padding: 10px 12px; font-size: 12px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+  .statesrow .cell { display: inline-flex; align-items: center; gap: 8px; }
+  .statesrow svg.big { width: 48px; height: 48px; }
+
+  .hudstage { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); height: 210px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 28px; }
+  .hudstage.light { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d8e0ec'/><stop offset='.55' stop-color='%23efdfcf'/><stop offset='1' stop-color='%23d5e3d2'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23ffffff' fill-opacity='.7'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%23cfd3da'/></svg>") center/cover; }
+  .hudstage.dark { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231a2333'/><stop offset='.55' stop-color='%233a2b3f'/><stop offset='1' stop-color='%231e2f2b'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23202227' fill-opacity='.85'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%233a3d45'/></svg>") center/cover; }
+  .hud { width: 260px; height: 56px; border-radius: 16px; padding: 0 12px; display: grid; grid-template-columns: 70px 1fr 36px; align-items: center; gap: 6px; backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); transition: opacity .22s ease-in-out; }
+  .hudstage.light .hud { background: rgba(35,38,43,.86); color: #ECEEF1; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 10px 28px rgba(0,0,0,.22); }
+  .hudstage.dark .hud { background: rgba(35,38,43,.78); color: #ECEEF1; box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06); }
+  .hud .word { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap; }
+  .hud .time { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; opacity: .65; }
+  .hud .mark { display: flex; justify-content: center; align-items: center; height: 44px; border-radius: 4px; overflow: hidden; }
+  .hud .mark svg { width: 108px; height: 40px; }
+  .hud.tall { height: 84px; grid-template-columns: 70px 1fr 36px; }
+  .hud.tall .mark { height: 72px; }
+  .hud.tall .mark svg { width: 41px; height: 70px; }
+  .frames .ground { min-height: 230px; justify-content: center; align-items: center; }
+  .hud[data-state="idle"] { opacity: 0; }
+  .construct { color: var(--muted); font-size: 12.5px; max-width: 68ch; margin-top: 8px; }
+  .parked { background: var(--panel); border: 1px dashed var(--line); border-radius: 14px; padding: 14px 16px; color: var(--muted); max-width: 68ch; }
+  .goal { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; max-width: 68ch; }
+  .goal li { margin: 2px 0; }
+  .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .frames { grid-template-columns: 1fr; } }
+  .frames .hudstage { height: 150px; padding-bottom: 20px; }
+  .frames h3 { margin-bottom: 6px; }
+  @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>River Identity Studies</h1>
+  <p class="sub">Round eight. The microphone indicator rebuilt from pixel measurements of the reference photo and scored against it. Uniform ink, empty emblem space, no size change between states. The river indicator and both menu bar glyphs are unchanged. The icon is open.</p>
+
+  <div class="controls" role="group" aria-label="Preview controls">
+    <div class="ctl"><label for="pal-turq">Palette</label><div class="seg"><button id="pal-turq" type="button" aria-pressed="true" data-pal="turq">Charcoal + dark turquoise</button><button id="pal-sand" type="button" aria-pressed="false" data-pal="sand">Charcoal + red sand</button></div></div>
+    <div class="ctl"><label for="src-sim">Level source</label><div class="seg"><button id="src-sim" type="button" aria-pressed="true" data-src="sim">Simulated speech</button><button id="src-mic" type="button" aria-pressed="false" data-src="mic">My microphone</button><button id="src-manual" type="button" aria-pressed="false" data-src="manual">Manual</button></div></div>
+    <div class="ctl"><label for="level-slider">Level <span class="level-read" id="level-read">0.00</span></label><input id="level-slider" type="range" min="0" max="1" step="0.01" value="0" aria-label="Manual level"></div>
+    <div class="ctl"><label for="st-listen">State</label><div class="seg"><button id="st-listen" type="button" aria-pressed="true" data-state="recording">Listening</button><button id="st-proc" type="button" aria-pressed="false" data-state="processing">Transcribing</button><button id="st-idle" type="button" aria-pressed="false" data-state="idle">Idle</button></div></div>
+    <div class="ctl"><label for="th-light">macOS appearance</label><div class="seg"><button id="th-light" type="button" aria-pressed="true" data-mac="light">Light</button><button id="th-dark" type="button" aria-pressed="false" data-mac="dark">Dark</button></div></div>
+    <div class="note" id="mic-note" aria-live="polite"></div>
+  </div>
+  <div class="tokens" id="tokens"></div>
+
+  <div class="tabs" role="tablist" aria-label="Studies">
+    <button role="tab" aria-selected="true" data-world="m" id="tab-m">Indicator &middot; microphone, from the reference</button>
+    <button role="tab" aria-selected="false" data-world="c" id="tab-c">Indicator &middot; river</button>
+    <button role="tab" aria-selected="false" data-world="a" id="tab-a">Menu bar &middot; microphone glyph</button>
+    <button role="tab" aria-selected="false" data-world="icon" id="tab-icon">Icon &middot; open</button>
+  </div>
+
+  <section class="world active" id="world-m" role="tabpanel" aria-labelledby="tab-m">
+    <p class="lead"><b>Microphone, traced from the reference.</b> Every dimension is measured from the photo's pixels rather than drawn by eye: the head's proportions and corner radius, six top slots aligned along their lower ends with the outer pair giving way to the corners, eight middle rows split by the central rib and stepping back where the emblem sat, and six bottom slots, twice the height of the top ones, aligned along their upper ends. The emblem itself is left as empty space. Regularized to be symmetric and scored against the photo's grooves at a mean overlap of 92%. Every groove is one rounded stroke, and the silhouette is always present at low ink. Level wakes the three groups from the bottom up, each stroke on a short stagger from the center outward.</p>
+    <h2>Recording indicator</h2>
+    <div class="hudstage light" id="m-stage"><div class="hud tall" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
+    <h2>Held, large</h2>
+    <div class="frames">
+      <div><h3>At rest &middot; level 0.00</h3><div class="ground dark" data-mhold="0"></div></div>
+      <div><h3>Speaking &middot; level 0.50</h3><div class="ground dark" data-mhold="0.5"></div></div>
+      <div><h3>Peak &middot; level 1.00</h3><div class="ground dark" data-mhold="1"></div></div>
+    </div>
+    <p class="construct">Thresholds: the bottom slots wake above 0.12, the middle rows above 0.42, the top slots above 0.72. Waking is only a change of ink: a groove fades from 25% to full over about a tenth of a second and back over half a second, with the center grooves of each group leading by a few frames. Uniform ink, no accent. The shape never changes size between the empty and the filled state. Transcribing holds every group awake and breathes the whole head slowly.</p>
+  </section>
+
+  <section class="world" id="world-icon" role="tabpanel" aria-labelledby="tab-icon">
+    <div class="parked"><b>The icon is open again.</b> The drawn letters below did not earn their place and are kept only as the record of what was tried; the next attempt starts from a different premise.</div>
+    <p class="lead">A lowercase serif r, drawn as calligraphic strokes. The stem is the main channel; the shoulder leaves it low and climbs away as a tributary, and the join between them is where the letter carries its feeling. Each stroke is built from a centerline and a width profile, so the tapers are continuous rather than drawn point by point. Every r is measured after drawing and centered in the squircle by its ink box, at every size and on the inverted tile.</p>
+    <div class="varrow" id="variants"></div>
+    <h2>Chosen r at Dock and Finder sizes</h2>
+    <div class="grid"><div class="ground light" id="icon-sizes-light"></div><div class="ground dark" id="icon-sizes-dark"></div></div>
+    <h2>Type references these were drawn against</h2>
+    <div class="refs" id="refs"></div>
+    <p class="construct">The references are real faces, shown only for the shape of their lowercase r. The drawn letters borrow stem weight and shoulder height from them and depart in the join and the terminal. Centering: the icon measures its own bounding box and offsets it to the squircle's center, then nudges 1.5% left so the leg's visual weight reads balanced. The same offset applies at 16 px.</p>
+  </section>
+
+  <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
+    <p class="lead"><b>River.</b> Motion is exactly round two's: the same slow drift, the same easing, the same amplitude curve. The one change is the rest state. Below the level threshold the three strands settle into three separated, nearly straight lines with a trace of bend, so the panel reads as calm water rather than a tangle. The three frames below are held at fixed levels so the rest, mid, and peak shapes can be judged without motion.</p>
+    <h2>Live</h2>
+    <div class="hudstage light" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
+    <h2>Held frames</h2>
+    <div class="frames">
+      <div><h3>At rest &middot; level 0.00</h3><div class="hudstage light" data-hold="0"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div></div>
+      <div><h3>Speaking &middot; level 0.50</h3><div class="hudstage light" data-hold="0.5"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:04</div></div></div></div>
+      <div><h3>Peak &middot; level 1.00</h3><div class="hudstage light" data-hold="1"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:04</div></div></div></div>
+    </div>
+    <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
+    <ol class="goal">
+      <li>At rest, three clearly separated lines, almost straight, still drifting slowly. Never a ruler, never a tangle.</li>
+      <li>Rising level widens the water smoothly, with round two's timing. No jump, no snap.</li>
+      <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
+      <li>Both ends fade to nothing. Nothing clips.</li>
+      <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
+    </ol>
+    <h2>Menu bar</h2>
+    <div class="desk light" id="c-desk"><div class="menubar light" id="c-menubar"></div><div class="wall"></div><div class="statesrow" id="c-states"></div></div>
+    <p class="construct">Redrawn from the reference: a single river seen from above, wide at the near bank, winding in one S and tapering to a point on the horizon at the upper right. Ready is the outline; Listening fills the water; Transcribing keeps the fill and dots the banks.</p>
+  </section>
+
+  <section class="world" id="world-a" role="tabpanel" aria-labelledby="tab-a">
+    <div class="parked"><b>The microphone indicator is parked.</b> Two rounds did not get it to a shape worth animating, and the stagger-by-threshold idea is more mechanism than a first release needs. The menu bar glyph below is unchanged from round two and stays as the working candidate for the menu bar.</div>
+    <h2>Menu bar</h2>
+    <div class="desk light" id="a-desk"><div class="menubar light" id="a-menubar"></div><div class="wall"></div><div class="statesrow" id="a-states"></div></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (name, attrs = {}, parent) => { const n = document.createElementNS(NS, name); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  const PALETTES = {
+    turq: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['dark turquoise', '#1F7F86'], ['turquoise, on dark', '#3FA3AA']],
+    sand: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['red sand', '#C4674A'], ['red sand, on dark', '#DB8E70']],
+  };
+  function renderTokens(pal) { const host = document.getElementById('tokens'); host.innerHTML = ''; for (const [n, hex] of PALETTES[pal]) { const t = document.createElement('div'); t.className = 'tok'; const sw = document.createElement('i'); sw.style.background = hex; t.appendChild(sw); const l = document.createElement('span'); l.textContent = `${n} ${hex}`; t.appendChild(l); host.appendChild(t); } }
+
+  // ---------- Bespoke lowercase r: calligraphic ribbons from a centerline and a width profile ----------
+  // A cubic-bezier chain is sampled, offset by its normal at a width that varies along the stroke, and closed
+  // into one filled outline. Tapers, swells, and the confluence at the shoulder come from the profile, not from
+  // hand-placed outline points.
+  function bez(p0, p1, p2, p3, t) { const u = 1 - t; return [u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1]]; }
+  function ribbon(segments, widthAt, steps = 48) {
+    const pts = [];
+    segments.forEach((sg, si) => { for (let i = 0; i <= steps; i++) { if (si > 0 && i === 0) continue; pts.push(bez(sg[0], sg[1], sg[2], sg[3], i / steps)); } });
+    const n = pts.length; const left = [], right = [];
+    for (let i = 0; i < n; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+      let nx = -(b[1] - a[1]), ny = b[0] - a[0]; const len = Math.hypot(nx, ny) || 1; nx /= len; ny /= len;
+      const w = widthAt(i / (n - 1)) / 2;
+      left.push([pts[i][0] + nx * w, pts[i][1] + ny * w]); right.push([pts[i][0] - nx * w, pts[i][1] - ny * w]);
+    }
+    const f = v => v.map(c => c.toFixed(2)).join(' ');
+    return 'M' + f(left[0]) + ' L' + left.slice(1).map(f).join(' L') + ' L' + right.reverse().map(f).join(' L') + ' Z';
+  }
+  const dot = (cx, cy, r) => `M${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+  const VARIANTS = [
+    {
+      id: 'serif-r', label: 'Serif r, ball terminal',
+      note: 'A bookish lowercase r. The stem carries a slight entasis and a bracketed foot; the shoulder leaves the stem low, climbs, and swells into a ball terminal. The join is the confluence.',
+      paths: [
+        ribbon([[[40, 28], [39, 45], [39, 62], [40, 78]]], t => 12 - 1.5 * Math.sin(t * Math.PI)),          // stem
+        ribbon([[[28, 79.5], [34, 79], [46, 79], [52, 79.5]]], t => 4.5 - 2.5 * Math.abs(t - 0.5) * 2),       // foot serif
+        ribbon([[[31, 31], [34.5, 29.8], [38, 28.6], [42, 28]]], t => 2 + 2.5 * t),                             // entry serif, a thin wedge
+        ribbon([[[43, 50], [45, 38], [54, 30], [63, 30]], [[63, 30], [68, 30], [72, 33], [73, 37]]], t => 3 + 6 * Math.sin(t * Math.PI) * (0.55 + 0.45 * t)),   // shoulder
+        dot(72.2, 38.2, 5.2),                                                                                  // terminal
+      ],
+    },
+    {
+      id: 'flow-r', label: 'Flowing r, tapered',
+      note: 'No serifs. The stem tapers toward the foot like a channel narrowing; the shoulder leaves as a tributary, swells mid-stroke, and thins to a fine trailing point. The most River of the three.',
+      paths: [
+        ribbon([[[41, 26], [40, 44], [39.5, 62], [40, 80]]], t => 12.5 - 4 * t),                                // stem, wide at the top
+        ribbon([[[42, 52], [44, 38], [53, 29], [63, 29]], [[63, 29], [70, 29], [75, 33], [79, 40]]], t => 4.5 + 6 * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (1 - 0.35 * t) - 4 * Math.max(0, t - 0.8) * 5),  // shoulder, wide at the join, thinning to a point
+        dot(40.5, 27, 6.2),                                                                                    // rounded head of the stem
+        dot(40, 79, 4.2),                                                                                      // rounded foot
+      ],
+    },
+    {
+      id: 'brush-r', label: 'Brush r, teardrop',
+      note: 'Between the two: a soft stem, no serifs, and a shoulder that ends in a teardrop rather than a point, so it still holds at 16 px. The join is widened so the underside of the shoulder blends into the stem.',
+      paths: [
+        ribbon([[[40, 27], [39.5, 44], [39.5, 62], [40, 79]]], t => 11.5 - 1.2 * Math.sin(t * Math.PI)),
+        ribbon([[[44, 54], [45, 40], [53, 30], [62, 29]], [[62, 29], [69, 28.5], [74, 32], [75, 37]]], t => 3.5 + 6.5 * Math.sin(t * Math.PI) * (0.6 + 0.4 * t)),
+        dot(74.4, 38.6, 4.6),
+        dot(40, 27.5, 5.8), dot(40, 78.6, 5.6),
+      ],
+    },
+  ];
+  const REFS = [
+    { family: '"Instrument Serif", Georgia, serif', label: 'Instrument Serif' }, { family: '"Geologica", sans-serif', label: 'Geologica 700', weight: 700 },
+    { family: '"Bricolage Grotesque", sans-serif', label: 'Bricolage Grotesque 800', weight: 800 }, { family: '"Young Serif", Georgia, serif', label: 'Young Serif' },
+  ];
+  function squircle(svg, fill) { el('path', { d: 'M50 2 C 84 2, 98 16, 98 50 C 98 84, 84 98, 50 98 C 16 98, 2 84, 2 50 C 2 16, 16 2, 50 2 Z', fill }, svg); }
+  const measureCache = {};
+  function measureVariant(v) {
+    if (measureCache[v.id]) return measureCache[v.id];
+    const probe = el('svg', { viewBox: '0 0 100 100', width: 100, height: 100, style: 'position:absolute;left:-9999px;top:-9999px' });
+    document.body.appendChild(probe); const g = el('g', {}, probe);
+    for (const d of v.paths) el('path', { d, 'fill-rule': 'evenodd' }, g);
+    const b = g.getBBox(); document.body.removeChild(probe);
+    return (measureCache[v.id] = { dx: 50 - (b.x + b.width / 2) - 1.5, dy: 50 - (b.y + b.height / 2) });
+  }
+  function iconR(v, size, invert) {
+    const accent = css('--accent'), charcoal = css('--charcoal');
+    const svg = el('svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'icon', role: 'img', 'aria-label': `River icon, ${v.label}` });
+    squircle(svg, invert ? accent : charcoal);
+    const m = measureVariant(v);
+    const g = el('g', { transform: `translate(${m.dx.toFixed(2)},${m.dy.toFixed(2)}) scale(0.9) translate(5,5)`, fill: invert ? charcoal : accent }, svg);
+    for (const d of v.paths) el('path', { d, 'fill-rule': 'evenodd' }, g);
+    return svg;
+  }
+  let chosen = VARIANTS[0];
+  function renderVariants() {
+    const host = document.getElementById('variants'); host.innerHTML = '';
+    for (const v of VARIANTS) {
+      const card = document.createElement('div'); card.className = 'varcard';
+      const g = document.createElement('div'); g.className = 'ground dark';
+      for (const size of [96, 48, 24, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(v, size, false)); const cap = document.createElement('span'); cap.textContent = size; box.appendChild(cap); g.appendChild(box); }
+      const ib = document.createElement('div'); ib.className = 'iconbox'; ib.appendChild(iconR(v, 48, true)); const ic = document.createElement('span'); ic.textContent = 'inverted'; ib.appendChild(ic); g.appendChild(ib);
+      card.appendChild(g);
+      const h = document.createElement('h3'); h.textContent = v.label; h.style.marginTop = '10px'; card.appendChild(h);
+      const p = document.createElement('p'); p.textContent = v.note; card.appendChild(p);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'pick'; b.textContent = chosen === v ? 'Shown below' : 'Show at all sizes'; b.setAttribute('aria-pressed', String(chosen === v));
+      b.addEventListener('click', () => { chosen = v; renderVariants(); renderIconSizes(); }); card.appendChild(b); host.appendChild(card);
+    }
+  }
+  function renderIconSizes() {
+    for (const ground of ['light', 'dark']) {
+      const host = document.getElementById(`icon-sizes-${ground}`); host.innerHTML = '';
+      for (const size of [128, 64, 32, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(chosen, size, false)); const cap = document.createElement('span'); cap.textContent = size + ' px'; box.appendChild(cap); host.appendChild(box); }
+      const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(chosen, 64, true)); const cap = document.createElement('span'); cap.textContent = 'inverted'; box.appendChild(cap); host.appendChild(box);
+    }
+  }
+  function renderRefs() { const host = document.getElementById('refs'); host.innerHTML = ''; for (const r of REFS) { const d = document.createElement('div'); d.className = 'ref'; const b = document.createElement('b'); b.textContent = 'r'; b.style.fontFamily = r.family; if (r.weight) b.style.fontWeight = r.weight; d.appendChild(b); const s = document.createElement('span'); s.textContent = r.label; d.appendChild(s); host.appendChild(d); } }
+
+  // ---------- River indicator (120 x 44): round-two motion, separated rest state ----------
+  const STRANDS = [
+    { base: 0.28, amp: 0.7, meanderL: 1.9, rippleL: 0.62, phase: 0.4, speed: 0.55, width: 1.6, alpha: 0.7, accent: false },
+    { base: 0.50, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, alpha: 1.0, accent: true },
+    { base: 0.72, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, alpha: 0.55, accent: false },
+  ];
+  function riverPath(s, w, h, level, t) {
+    const pts = []; const steps = 56;
+    const A = (0.9 + 11 * level) * s.amp;                      // a trace of bend at rest, full water at peak
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps; const x = u * w;
+      const meander = Math.sin((u / s.meanderL) * Math.PI * 2 + s.phase + t * s.speed * 0.6);
+      const ripple = Math.sin((u / s.rippleL) * Math.PI * 2 - t * s.speed * 1.9 + s.phase * 1.7) * 0.45;
+      pts.push(`${x.toFixed(2)} ${(h * s.base + A * (meander + ripple)).toFixed(2)}`);
+    }
+    return 'M' + pts.join(' L');
+  }
+  let maskSeq = 0;
+  function makeRiver(host, hold, w = 120, h = 44) {
+    const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', 'aria-label': 'River mark' }, host);
+    const id = 'fade' + (maskSeq++); const defs = el('defs', {}, svg);
+    const grad = el('linearGradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 }, defs);
+    [['0', 0], ['0.14', 1], ['0.86', 1], ['1', 0]].forEach(([o, a]) => el('stop', { offset: o, 'stop-color': '#fff', 'stop-opacity': a }, grad));
+    const mask = el('mask', { id: id + 'm' }, defs); el('rect', { x: 0, y: 0, width: w, height: h, fill: `url(#${id})` }, mask);
+    const g = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', mask: `url(#${id}m)` }, svg);
+    const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, g));
+    return { paths, w, h, smooth: hold == null ? 0 : hold, hold };
+  }
+  function drawRiver(m, level, state, dt, t) {
+    const ink = css('--ink'), accent = css('--accent-hi');
+    const proc = state === 'processing';
+    if (m.hold == null) {
+      const target = proc ? 0.28 : level;
+      m.smooth += (target - m.smooth) * Math.min(1, (target > m.smooth ? 10 : 5) * dt);   // round-two timing
+    }
+    const lv = m.hold == null ? m.smooth : m.hold;
+    m.paths.forEach((p, i) => {
+      const s = STRANDS[i];
+      p.setAttribute('d', riverPath(s, m.w, m.h, lv, t));
+      p.setAttribute('stroke', s.accent ? accent : ink);
+      p.setAttribute('stroke-width', String(s.width + 0.8 * lv));
+      p.setAttribute('opacity', String(s.alpha));
+    });
+  }
+
+  // ---------- Microphone measured from the reference photo (head space: 259 x 440) ----------
+  // Every number below comes from the photo's pixels: the head bounding box, six top slots (22 wide, 35 apart,
+  // the inner four 47 tall from the rim, the outer two 35 tall starting lower), eight middle rows (31 tall on a
+  // 33.7 pitch) split by a 24-wide central rib that widens to 35 where the emblem sat, and six bottom slots
+  // (92 tall inner, 77 outer) aligned along their top edge. Scored against the photo at a mean IoU of 0.92.
+  const MIC_W = 259, MIC_H = 440;
+  function micSlots() {
+    const out = []; const cx = MIC_W / 2;
+    for (let i = 0; i < 6; i++) {
+      const half = Math.abs(i - 2.5), inner = half < 2;
+      out.push({ x: 40 + 35 * i - 11, y: inner ? 0 : 12, w: 22, h: inner ? 47 : 35, group: 2, order: half });
+      out.push({ x: 38.5 + 35.1 * i - 11, y: 348, w: 22, h: inner ? 92 : 77, group: 0, order: half });
+    }
+    for (let i = 0; i < 8; i++) {
+      const y = 68 + 33.7 * i, rl = (i === 3 || i === 4) ? 17.5 : 12, order = Math.abs(i - 3.5);
+      out.push({ x: 3, y, w: cx - rl - 3, h: 31, group: 1, order });
+      out.push({ x: cx + rl, y, w: MIC_W - 3 - (cx + rl), h: 31, group: 1, order });
+    }
+    return out;
+  }
+  const MIC_THRESH = [0.12, 0.42, 0.72];
+  function makeMic(host, hold) {
+    const svg = el('svg', { viewBox: `0 0 ${MIC_W} ${MIC_H}`, role: 'img', 'aria-label': 'Microphone mark' }, host);
+    const head = el('rect', { x: 1.5, y: 1.5, width: MIC_W - 3, height: MIC_H - 3, rx: 62, fill: 'none', 'stroke-width': 3 }, svg);
+    const slots = micSlots().map(sl => { const r = el('rect', { x: sl.x, y: sl.y, width: sl.w, height: sl.h, rx: Math.min(sl.w, sl.h) / 2 }, svg); r.__group = sl.group; r.__order = sl.order; r.__wake = 0; return r; });
+    return { kind: 'm', head, slots, hold };
+  }
+  function drawMic(m, level, state, dt, t) {
+    const ink = css('--ink');
+    const proc = state === 'processing';
+    const lv = m.hold == null ? level : m.hold;
+    const breathe = proc ? 0.85 + 0.15 * Math.sin(t * 2.2) : 1;
+    m.head.setAttribute('stroke', ink); m.head.setAttribute('opacity', '0.3');
+    m.slots.forEach(r => {
+      const target = proc ? 1 : (lv >= MIC_THRESH[r.__group] ? 1 : 0);
+      const lag = 1 - Math.min(0.5, r.__order * 0.16);           // center of each group leads
+      const rate = m.hold != null ? 1e9 : (target > r.__wake ? 11 * lag : 2.2);
+      r.__wake += (target - r.__wake) * Math.min(1, rate * dt);
+      r.setAttribute('fill', ink);
+      r.setAttribute('opacity', String((0.25 + 0.75 * r.__wake) * breathe));   // ink only; the shape never changes size
+    });
+  }
+
+  // ---------- Menu bar glyphs (16 x 16 template) ----------
+  // River: one channel from above, wide at the near bank, one S-bend, tapering to a point on the horizon.
+  const RIVER_GLYPH = 'M2.6 15.4 C 1.2 12.2, 6.6 10.8, 6.1 8.3 C 5.7 6.1, 8.6 4.6, 13.4 1.6 C 11.2 4.9, 8.9 6.2, 9.6 8.4 C 10.4 10.9, 6.6 12.3, 9.4 15.4 Z';
+  function glyph(world, state, color) {
+    const svg = el('svg', { viewBox: '0 0 16 16', width: 16, height: 16, class: 'sys', role: 'img', 'aria-label': `${world} glyph, ${state}` });
+    const g = el('g', { fill: 'none', stroke: color, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const dotted = state === 'processing' ? { 'stroke-dasharray': '0.1 2.4' } : {};
+    if (world === 'a') {
+      const rows = [[5.5, 4], [4, 6.5], [3.5, 9], [4, 11.5], [5.5, 14]];
+      rows.forEach(([x, y], i) => el('path', { d: `M${x} ${y} L${16 - x} ${y}`, 'stroke-width': state === 'recording' ? 1.6 : 1.2, ...dotted, opacity: state === 'idle' ? (i === 2 ? 1 : .55) : 1 }, g));
+    } else {
+      if (state !== 'idle') el('path', { d: RIVER_GLYPH, fill: color, stroke: 'none', opacity: state === 'processing' ? .45 : .95 }, g);
+      el('path', { d: RIVER_GLYPH, 'stroke-width': 1.25, ...dotted }, g);
+    }
+    return svg;
+  }
+  function sysGlyphs(color) {
+    const wifi = el('svg', { viewBox: '0 0 16 16', class: 'sys' }); el('path', { d: 'M1.5 6 C 5 2.6, 11 2.6, 14.5 6 M4 8.5 C 6.3 6.4, 9.7 6.4, 12 8.5 M6.5 11 C 7.4 10.2, 8.6 10.2, 9.5 11', fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-linecap': 'round' }, wifi);
+    const batt = el('svg', { viewBox: '0 0 22 12', class: 'sys', width: 22 }); el('rect', { x: 1, y: 1.5, width: 17, height: 9, rx: 2.5, fill: 'none', stroke: color, 'stroke-width': 1.2 }, batt); el('rect', { x: 2.6, y: 3.1, width: 11, height: 5.8, rx: 1.2, fill: color }, batt); el('path', { d: 'M19.5 4.5 v3', stroke: color, 'stroke-width': 1.4, 'stroke-linecap': 'round' }, batt);
+    return [wifi, batt];
+  }
+
+  // ---------- Level engine ----------
+  const state = { src: 'sim', manual: 0, level: 0, appState: 'recording', macDark: false, pal: 'turq', t0: performance.now(), analyser: null, mic: null };
+  let simTarget = 0, simHold = 0;
+  function simulate(dt) { simHold -= dt; if (simHold <= 0) { const inPhrase = Math.random() > 0.22; simTarget = inPhrase ? 0.35 + Math.random() * 0.6 : 0.02 + Math.random() * 0.05; simHold = inPhrase ? 0.12 + Math.random() * 0.16 : 0.35 + Math.random() * 0.9; } state.level += (simTarget - state.level) * Math.min(1, (simTarget > state.level ? 22 : 9) * dt); }
+  function readMic() { const a = state.analyser; if (!a) return; const buf = new Float32Array(a.fftSize); a.getFloatTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; const target = Math.min(1, Math.sqrt(s / buf.length) / 0.2); state.level += (target - state.level) * (target > state.level ? 0.6 : 0.25); }
+  async function startMic() { const note = document.getElementById('mic-note'); try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const ctx = new (window.AudioContext || window.webkitAudioContext)(); const an = ctx.createAnalyser(); an.fftSize = 1024; ctx.createMediaStreamSource(stream).connect(an); state.analyser = an; state.mic = stream; note.textContent = 'Microphone live. Speak to drive the marks.'; } catch (e) { note.textContent = 'Microphone unavailable here (' + (e && e.name ? e.name : 'blocked') + '). Falling back to simulated speech.'; setSource('sim'); } }
+  function stopMic() { if (state.mic) { state.mic.getTracks().forEach(t => t.stop()); state.mic = null; state.analyser = null; } }
+  function setSource(src) { state.src = src; document.querySelectorAll('[data-src]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === src))); if (src === 'mic') startMic(); else { stopMic(); document.getElementById('mic-note').textContent = ''; } }
+
+  // ---------- Build ----------
+  const marks = [makeRiver(document.querySelector('#c-stage .mark'), null), makeMic(document.querySelector('#m-stage .mark'), null)];
+  document.querySelectorAll('[data-mhold]').forEach(g => { const m = makeMic(g, parseFloat(g.dataset.mhold)); m.head.ownerSVGElement.setAttribute('width', 124); m.head.ownerSVGElement.setAttribute('height', 210); marks.push(m); });
+  document.querySelectorAll('[data-hold]').forEach(stage => marks.push(makeRiver(stage.querySelector('.mark'), parseFloat(stage.dataset.hold))));
+  function buildMenubars() {
+    for (const wld of ['a', 'c']) {
+      const bar = document.getElementById(`${wld}-menubar`); bar.innerHTML = '';
+      const color = state.macDark ? '#f5f5f7' : '#1d1d1f';
+      const live = document.createElement('span'); live.className = 'glyph'; live.id = `${wld}-live-glyph`; bar.appendChild(live);
+      for (const s of sysGlyphs(color)) { const sp = document.createElement('span'); sp.className = 'glyph'; sp.appendChild(s); bar.appendChild(sp); }
+      const clock = document.createElement('span'); clock.textContent = 'Tue 9:41 AM'; bar.appendChild(clock);
+      const row = document.getElementById(`${wld}-states`); row.innerHTML = '';
+      for (const s of ['idle', 'recording', 'processing']) { const c = document.createElement('span'); c.className = 'cell'; const big = glyph(wld, s, 'currentColor'); big.setAttribute('class', 'big'); c.appendChild(big); const label = document.createElement('span'); label.textContent = s === 'idle' ? 'Ready' : (s === 'recording' ? 'Listening' : 'Transcribing'); c.appendChild(label); row.appendChild(c); }
+    }
+  }
+  function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of ['a', 'c']) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
+  function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
+  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('#c-stage .hud, #m-stage .hud').forEach(h => { h.dataset.state = state.appState; h.querySelector('.word').textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); updateLiveGlyphs(); state.t0 = performance.now(); }
+  function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); renderVariants(); renderIconSizes(); }
+
+  document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
+  document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => { state.appState = b.dataset.state; applyState(); }));
+  document.querySelectorAll('[data-mac]').forEach(b => b.addEventListener('click', () => { state.macDark = b.dataset.mac === 'dark'; applyMac(); }));
+  document.querySelectorAll('button[data-pal]').forEach(b => b.addEventListener('click', () => { state.pal = b.dataset.pal; applyPal(); }));
+  const slider = document.getElementById('level-slider');
+  slider.addEventListener('input', () => { state.manual = parseFloat(slider.value); if (state.src !== 'manual') setSource('manual'); });
+  document.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => { document.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === t))); document.querySelectorAll('.world').forEach(w => w.classList.toggle('active', w.id === `world-${t.dataset.world}`)); }));
+
+  // Deep links for review: ?tab=icon|c|a  ?level=0.5 (switches to manual)  ?state=recording|processing|idle
+  const q = new URLSearchParams(location.search);
+  if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
+  if (q.get('state')) state.appState = q.get('state');
+  if (q.get('level') != null) { state.manual = parseFloat(q.get('level')); slider.value = state.manual; setSource('manual'); }
+
+  applyPal(); applyMac(); applyState(); renderRefs();
+  document.fonts && document.fonts.ready.then(renderRefs);
+
+  let last = performance.now();
+  const readout = document.getElementById('level-read');
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (state.appState !== 'recording') state.level += (0 - state.level) * Math.min(1, 8 * dt);
+    else if (state.src === 'sim') simulate(dt);
+    else if (state.src === 'mic') readMic();
+    else state.level += (state.manual - state.level) * Math.min(1, 14 * dt);
+    const t = now / 1000;
+    for (const m of marks) (m.kind === 'm' ? drawMic : drawRiver)(m, state.level, m.hold == null ? state.appState : 'recording', dt, t);
+    const elapsed = state.appState === 'idle' ? 0 : (now - state.t0) / 1000;
+    const mm = Math.floor(elapsed / 60), ss = Math.floor(elapsed % 60).toString().padStart(2, '0');
+    document.querySelectorAll('#c-stage .hud .time, #m-stage .hud .time').forEach(n => n.textContent = `${mm}:${ss}`);
+    readout.textContent = state.level.toFixed(2);
+    if (state.src !== 'manual') slider.value = state.level.toFixed(2);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
