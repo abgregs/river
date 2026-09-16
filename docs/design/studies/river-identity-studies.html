@@ -1,5 +1,4 @@
 <title>River Identity Studies</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Young+Serif&display=swap">
 <style>
   :root {
     --bg: #F3F4F6; --fg: #1B1D21; --muted: #666B74; --line: #D8DBE1; --panel: #FFFFFF; --focus: #1F7F86;
@@ -51,16 +50,6 @@
   .ground.light .iconbox span { color: rgba(60,60,70,.75); }
   .icon { filter: drop-shadow(0 6px 10px rgba(0,0,0,.18)); }
 
-  .varrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 900px) { .varrow { grid-template-columns: 1fr; } }
-  .varcard { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
-  .varcard .ground { min-height: 150px; border-radius: 10px; padding: 14px; gap: 18px; }
-  .varcard p { margin: 8px 2px 2px; font-size: 12.5px; color: var(--muted); }
-  .pick { margin-top: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; background: var(--panel); color: var(--fg); cursor: pointer; border-radius: 8px; border: 1px solid var(--line); }
-  .pick[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .refs { display: flex; gap: 18px; flex-wrap: wrap; align-items: end; margin-top: 10px; }
-  .ref { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
-  .ref b { font-size: 44px; line-height: 1; color: var(--fg); font-weight: 400; }
 
   .menubar { height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 12px; font-size: 12.5px; font-weight: 500; }
   .menubar.light { background: rgba(236,237,240,.92); color: #1d1d1f; }
@@ -121,14 +110,6 @@
   .stages .pair .cell16 { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(38,39,43,.9); }
   .options h3 { margin-bottom: 6px; }
   .options .spec { margin: 6px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .sheet { display: grid; gap: 10px; }
-  .sheet .ground { min-height: 0; padding: 14px 18px; align-items: end; gap: 18px; }
-  .sheet .ground b { align-self: center; }
-  .sheet .ground b { width: 110px; color: rgba(236,238,241,.8); font-weight: 600; font-size: 12.5px; }
-  .overlaybox { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
-  .overlaybox svg { max-width: 100%; height: auto; }
-  .overlaybox .key { font-size: 12.5px; color: var(--muted); max-width: 40ch; }
-  .overlaybox .key i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
   .palgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 760px) { .palgrid { grid-template-columns: 1fr; } }
   .palcol { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
@@ -143,13 +124,12 @@
   .contrast { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; }
   .contrast b { color: var(--fg); font-weight: 500; }
   .contrast .ok { color: #2E8B57; } .contrast .no { color: #C4674A; }
-  .rctl { margin: 0 0 14px; }
   @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
 </style>
 
 <div class="wrap">
   <h1>River Identity Studies</h1>
-  <p class="sub">Round nine. The recording bar now envelops the 48 pt glyph with a constant gap and hugs the time; the word is gone, the slats gained breathing room, and the motion is lighter. The icon restarted from a real font outline with exactly one change. The two accents compared in every place they would appear, with measured contrast. The river indicator now uses uniform ink like every other mark; its shape and timing are untouched.</p>
+  <p class="sub">Round nine. The recording bar now envelops the 48 pt glyph with a constant gap and hugs the time; the word is gone, the slats gained breathing room, and the motion is lighter. The icon and the r-based menu bar glyphs are dropped until an agent can design a mark; the slat glyph stays as the approved menu bar mark. The accent is settled on dark turquoise. The river indicator now uses uniform ink like every other mark; its shape and timing are untouched.</p>
 
   <div class="controls" role="group" aria-label="Preview controls">
     <div class="ctl"><label for="pal-turq">Palette</label><div class="seg"><button id="pal-turq" type="button" aria-pressed="true" data-pal="turq">Charcoal + dark turquoise</button><button id="pal-sand" type="button" aria-pressed="false" data-pal="sand">Charcoal + red sand (not chosen)</button></div></div>
@@ -165,7 +145,6 @@
     <button role="tab" aria-selected="true" data-world="m" id="tab-m">Indicator &middot; the menu bar glyph, enlarged</button>
     <button role="tab" aria-selected="false" data-world="c" id="tab-c">Indicator &middot; river</button>
     <button role="tab" aria-selected="false" data-world="a" id="tab-a">Menu bar &middot; microphone glyph</button>
-    <button role="tab" aria-selected="false" data-world="icon" id="tab-icon">Icon &middot; from a font outline</button>
     <button role="tab" aria-selected="false" data-world="pal" id="tab-pal">Accent &middot; side by side</button>
   </div>
 
@@ -185,28 +164,6 @@
     <div class="stages" id="stages"></div>
     <p class="construct">Ready is the menu bar glyph at 48 pt: middle slat at full ink, the others at 55%, stroke 1.1 units. Listening changes ink only: a slat rises from 55% to full ink over about 0.15 s and settles back over 0.6 s, its stroke going from 1.1 to 1.3 units so the gaps between slats stay open; the middle slat leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph with the dots drifting right one pitch every 3.5 seconds; under Reduce Motion they hold still. Nothing changes size. The 16 px cell beside the Ready frame is the menu bar glyph from the same function. Motion has only been judged in stills by the agent.</p>
     </div>
-  </section>
-
-  <section class="world" id="world-icon" role="tabpanel" aria-labelledby="tab-icon">
-    <p class="lead"><b>A subtle flourish on a real letter, six ways.</b> Six candidates from the three faces the maintainer named, capital and lowercase, shown first exactly as shipped so each base can be judged on its own shape. Then each gets exactly one subtle flourish in one region, chosen from what the letter already does: Besley R's flick runs on; Besley r's ball drops into a teardrop; Niconne R's hooked tip trails; Niconne r's looped exit crests further; Scope One R's foot flicks up; Scope One r's terminal drifts like a drop. Pick a base to see its flourish at three strengths, the overlay of the shipped outline on the modified letter, and Dock and Finder sizes. Each letter is centered in the squircle by its ink box, both axes, at every size.</p>
-    <div id="sec-icon-sheet">
-    <h2>Candidates, as shipped</h2>
-    <div class="sheet" id="rsheet"></div>
-    </div>
-    <div id="sec-icon-strengths">
-    <div class="ctl rctl"><label for="rb-0">Base</label><div class="seg" id="rbases"></div></div>
-    <h2>The flourish at three strengths</h2>
-    <div class="varrow" id="rvariants"></div>
-    </div>
-    <div id="sec-icon-overlay">
-    <h2>What moved</h2>
-    <div class="overlaybox" id="roverlay"></div>
-    </div>
-    <div id="sec-icon-sizes">
-    <h2>Chosen r at Dock and Finder sizes</h2>
-    <div class="grid"><div class="ground light" id="icon-sizes-light"></div><div class="ground dark" id="icon-sizes-dark"></div></div>
-    </div>
-    <p class="construct">Provenance: Besley (Indestructible Type, SIL Open Font License 1.1; the variable font's default weight), Niconne (Vernon Adams, SIL OFL 1.1), and Scope One (Dalton Maag, SIL OFL 1.1), all taken from the google/fonts repository on 2026-09-16 and extracted with fontTools. The OFL permits modification and redistribution under the same license; the finished icon would ship as a raster with its source outline and edit recorded. Centering is geometric on the ink box; an optical nudge is a separate decision.</p>
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
@@ -232,15 +189,7 @@
     <div id="sec-c-menubar">
     <h2>Menu bar</h2>
     <div class="desk light" id="c-desk"><div class="menubar light" id="c-menubar"></div><div class="wall"></div><div class="statesrow" id="c-states"></div></div>
-    <p class="construct">Redrawn from the reference: a single river seen from above, wide at the near bank, winding in one S and tapering to a point on the horizon at the upper right. Ready is the outline; Listening fills the water; Transcribing keeps the fill and dots the banks.</p>
-    </div>
-    <div id="sec-c-r">
-    <h2>Menu bar &middot; the r, two candidates</h2>
-    <p class="construct">Built the way the icon was: the stem and shoulder centerlines are derived from the Young Serif r's outline (the average of the shoulder's outer and inner edges, the stem's midline), mapped into the 16 px box, and loosely modified so the shoulder leaves the stem as a confluence. The lines share the slat glyph's stroke and states: 1.1 units at Ready with the secondary lines at 55%, 1.3 and full ink at Listening, dotted at Transcribing. The aim is a family resemblance between this mark and the three-line indicator: the same thin curved lines, at rest and awake.</p>
-    <div class="options three">
-      <div><h3>Monoline r</h3><div class="desk light short" id="r1-desk"><div class="menubar light" id="r1-menubar"></div><div class="wall"></div><div class="statesrow" id="r1-states"></div></div><p class="spec">Two lines: a straight stem and the shoulder joining it tangentially, as a tributary. The shoulder is the secondary line at Ready.</p></div>
-      <div><h3>Three lines</h3><div class="desk light short" id="r2-desk"><div class="menubar light" id="r2-menubar"></div><div class="wall"></div><div class="statesrow" id="r2-states"></div></div><p class="spec">The same shoulder over a stem with a faint river bend, plus the foot serif as a third short line. Three lines, like the indicator.</p></div>
-    </div>
+    <p class="construct">Parked without a verdict. Redrawn from the reference: a single river seen from above, wide at the near bank, winding in one S and tapering to a point on the horizon at the upper right. Ready is the outline; Listening fills the water; Transcribing keeps the fill and dots the banks.</p>
     </div>
   </section>
 
@@ -251,7 +200,7 @@
   </section>
 
   <section class="world" id="world-pal" role="tabpanel" aria-labelledby="tab-pal">
-    <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on the icon, on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses. Dark turquoise was chosen on 2026-09-16; red sand stays here as the record of the comparison.</p>
+    <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses. Dark turquoise was chosen on 2026-09-16; red sand stays here as the record of the comparison.</p>
     <div class="palgrid" id="sec-pal"></div>
   </section>
 </div>
@@ -268,94 +217,6 @@
   };
   function renderTokens(pal) { const host = document.getElementById('tokens'); host.innerHTML = ''; for (const [n, hex] of PALETTES[pal]) { const t = document.createElement('div'); t.className = 'tok'; const sw = document.createElement('i'); sw.style.background = hex; t.appendChild(sw); const l = document.createElement('span'); l.textContent = `${n} ${hex}`; t.appendChild(l); host.appendChild(t); } }
 
-  // ---------- Icon: a real lowercase r outline, changed in one place ----------
-  // Each base is the font's own TrueType contours for the glyph (x, y, on-curve flag), in font units, y up.
-  // `edits[contour][point]` names the only points that move. Strength k blends the font (0) toward the
-  // River flourish (1); above 1 extrapolates it further.
-  const R_FONTS = {"Besley R":{"label":"Besley R","contours":[[[1590,190,1],[1594,203,0],[1580,213,0],[1565,218,1],[1515,234,1],[1500,239,0],[1489,224,0],[1484,212,1],[1462,160,0],[1405,110,0],[1377,110,1],[1322,110,0],[1279,176,0],[1272,285,0],[1273,417,0],[1253,553,0],[1186,671,0],[1112,710,1],[1079,727,0],[1080,747,0],[1108,756,1],[1251,800,0],[1365,977,0],[1365,1100,1],[1365,1210,0],[1266,1392,0],[1046,1500,0],[865,1500,1],[103,1500,1],[84,1500,0],[75,1486,0],[75,1466,1],[75,1435,1],[75,1408,0],[85,1390,0],[111,1390,1],[246,1390,1],[278,1390,0],[295,1374,0],[295,1342,1],[295,153,1],[295,123,0],[278,110,0],[247,110,1],[111,110,1],[90,110,0],[75,98,0],[75,75,1],[75,32,1],[75,13,0],[87,0,0],[106,0,1],[672,0,1],[692,0,0],[705,10,0],[705,29,1],[705,74,1],[705,96,0],[695,110,0],[674,110,1],[525,110,1],[501,110,0],[485,121,0],[485,144,1],[485,638,1],[485,671,0],[498,690,0],[531,690,1],[785,690,1],[895,690,0],[1009,613,0],[1054,486,0],[1063,335,0],[1069,184,0],[1105,57,0],[1205,-20,0],[1305,-20,1],[1428,-20,0],[1563,99,0]],[[532,810,1],[500,810,0],[485,827,0],[485,858,1],[485,1343,1],[485,1378,0],[497,1390,0],[532,1390,1],[865,1390,1],[941,1390,0],[1078,1328,0],[1165,1199,0],[1165,1100,1],[1165,1001,0],[1078,873,0],[941,810,0],[865,810,1]]],"edits":{"0":{"0":[1660,255],"1":[1666,270],"2":[1650,282],"3":[1632,286],"4":[1578,300],"5":[1562,304],"6":[1549,288],"7":[1541,272],"8":[1505,205],"77":[1460,-20],"78":[1625,120]}},"flourish":"the leg's curled flick runs on a little further, up and out, as a tapering wave"},"Besley r":{"label":"Besley r","contours":[[[260,892,1],[260,145,1],[260,123,0],[242,110,0],[219,110,1],[108,110,1],[93,110,0],[80,99,0],[80,82,1],[80,19,1],[80,6,0],[95,0,0],[108,0,1],[594,0,1],[611,0,0],[620,13,0],[620,31,1],[620,76,1],[620,95,0],[613,110,0],[594,110,1],[472,110,1],[449,110,0],[440,128,0],[440,151,1],[440,566,1],[440,669,0],[501,850,0],[608,962,0],[676,962,1],[712,962,0],[736,947,0],[736,932,1],[736,920,0],[713,897,0],[690,858,0],[690,822,1],[690,776,0],[761,720,0],[812,720,1],[847,720,0],[903,761,0],[936,830,0],[936,872,1],[936,959,0],[804,1060,0],[720,1060,1],[622,1060,0],[497,971,0],[461,903,1],[448,878,0],[440,882,0],[440,907,1],[440,1012,1],[440,1031,0],[421,1040,0],[404,1040,1],[112,1040,1],[91,1040,0],[80,1026,0],[80,1005,1],[80,968,1],[80,946,0],[88,930,0],[110,930,1],[224,930,1],[247,930,0],[260,916,0]]],"edits":{"0":{"38":[775,690],"39":[840,660],"40":[880,680],"41":[925,740]}},"flourish":"the ball terminal's underside drops into a small teardrop"},"Niconne R":{"label":"Niconne R","contours":[[[1752,213,1],[1815,182,1],[1785,104,0],[1740,56,1],[1660,-29,0],[1559,-29,1],[1466,-29,0],[1396,86,1],[1342,175,0],[1270,382,0],[1250,432,1],[1205,547,0],[1162,547,1],[1066,255,0],[689,-34,0],[423,-34,1],[263,-34,0],[138,36,1],[75,70,0],[-1,187,0],[-1,347,0],[81,487,0],[148,530,1],[286,621,0],[459,621,1],[465,886,0],[638,1100,1],[813,1318,0],[1055,1400,1],[1181,1442,0],[1391,1442,0],[1543,1401,0],[1673,1321,0],[1752,1183,0],[1752,1006,0],[1685,843,0],[1625,778,1],[1513,656,0],[1340,569,1],[1408,513,0],[1488,298,1],[1517,222,0],[1595,102,0],[1635,102,1],[1674,102,0],[1700,136,1],[1733,179,0]],[[572,313,1],[511,299,1],[487,346,0],[466,468,1],[459,508,1],[293,508,0],[164,430,1],[121,403,0],[64,317,0],[64,205,0],[126,112,0],[178,86,1],[280,33,0],[405,33,1],[619,33,0],[879,261,0],[951,473,1],[966,517,0],[1015,670,0],[1045,761,0],[1097,898,0],[1141,990,0],[1210,1106,0],[1247,1150,1],[1336,1254,0],[1443,1321,1],[1419,1335,0],[1291,1358,0],[1221,1358,1],[1102,1358,0],[849,1230,0],[649,1026,0],[518,752,0],[517,616,1],[737,585,0],[863,424,1],[830,389,1],[824,392,0],[770,429,0],[719,457,0],[683,474,1],[607,510,0],[517,510,1],[522,445,0],[571,316,0]],[[1166,567,1],[1345,623,0],[1580,885,0],[1580,1063,1],[1580,1124,0],[1532,1249,0],[1490,1284,1],[1379,1205,0],[1325,1104,1],[1294,1046,0],[1256,967,0],[1236,888,1],[1211,791,0],[1171,592,0]]],"edits":{"0":{"0":[1790,240],"1":[1870,205],"2":[1840,120],"3":[1780,60],"45":[1735,150],"46":[1770,205]}},"flourish":"the hooked tip of the leg runs on as a longer trailing wave"},"Niconne r":{"label":"Niconne r","contours":[[[549,473,1],[511,473,0],[407,376,0],[358,306,1],[280,194,0],[199,48,1],[172,0,1],[31,0,1],[31,0,0],[62,94,1],[149,354,0],[149,451,0],[133,451,1],[104,451,0],[64,382,1],[55,366,0],[43,347,0],[28,320,0],[26,317,1],[-41,356,1],[37,483,0],[167,604,0],[235,604,1],[266,604,0],[311,552,0],[311,481,0],[303,426,0],[293,380,0],[275,316,0],[264,282,0],[246,224,0],[244,219,1],[262,255,0],[348,395,0],[374,431,0],[420,491,0],[455,524,0],[504,567,0],[526,578,1],[582,604,0],[686,604,0],[749,543,0],[749,462,0],[698,401,0],[631,401,0],[593,424,0],[586,437,1],[565,473,0]]],"edits":{"0":{"41":[790,525],"42":[800,445],"43":[745,380]}},"flourish":"the looped exit stroke trails a little further to the right, like a crest"},"Scope One R":{"label":"Scope One R","contours":[[[430,82,1],[320,273,1],[181,273,1],[181,46,1],[239,46,1],[255,46,0],[255,32,1],[255,25,0],[250,8,1],[248,0,1],[55,0,1],[51,6,0],[51,16,1],[51,27,0],[58,36,1],[125,44,1],[125,599,1],[67,599,1],[51,599,0],[51,613,1],[51,620,0],[56,637,1],[58,645,1],[321,645,1],[377,645,0],[455,610,0],[503,553,0],[525,488,0],[525,459,1],[525,425,0],[496,350,0],[430,290,0],[377,279,1],[487,96,1],[506,64,0],[536,43,0],[561,43,1],[569,43,0],[588,44,0],[595,45,1],[603,31,0],[604,8,1],[570,-4,0],[540,-4,1],[508,-4,0],[456,37,0]],[[181,319,1],[321,319,1],[388,319,0],[466,400,0],[466,459,1],[466,518,0],[388,599,0],[321,599,1],[181,599,1]]],"edits":{"0":{"38":[600,50],"39":[615,70],"40":[628,52],"41":[626,22],"42":[585,0]}},"flourish":"the foot of the leg turns up in a slight flick"},"Scope One r":{"label":"Scope One r","contours":[[[277,0,1],[44,0,1],[41,8,0],[41,14,1],[41,22,0],[47,33,1],[115,41,1],[115,453,1],[39,453,1],[36,460,0],[36,467,1],[36,476,0],[42,486,1],[141,505,1],[158,496,0],[169,483,1],[156,361,1],[183,427,0],[279,506,0],[336,506,1],[347,506,0],[376,503,0],[388,500,1],[399,487,0],[407,470,1],[409,361,1],[402,358,0],[394,358,1],[384,358,0],[375,364,1],[353,461,1],[349,462,0],[342,462,0],[339,462,1],[296,462,0],[218,403,0],[169,308,0],[169,256,1],[169,43,1],[267,43,1],[283,43,0],[283,29,1],[283,23,0],[279,8,1]]],"edits":{"0":{"25":[425,330],"26":[415,326],"27":[404,330],"28":[392,336],"29":[381,346]}},"flourish":"the hanging terminal lengthens and drifts outward, like a drop"}};
-  const R_STRENGTHS = [
-    { k: 0, label: 'As shipped in the font', note: f => `${f.label} untouched, for reference.` },
-    { k: 1, label: 'River flourish', note: f => `One region changes: ${f.flourish}. Everything else is the font's.` },
-    { k: 1.6, label: 'Pushed further', note: f => 'The same change extrapolated, for the comparison.' },
-  ];
-  function rPoints(font, k) { return font.contours.map((c, ci) => c.map((p, i) => { const e = (font.edits[ci] || {})[i]; return e ? [p[0] + (e[0] - p[0]) * k, p[1] + (e[1] - p[1]) * k, p[2]] : p; })); }
-  function rPath(contours) { return contours.map(rContour).join(' '); }
-  function rContour(pts) {
-    const s = pts.findIndex(p => p[2]); const q = pts.slice(s).concat(pts.slice(0, s));
-    const f = v => (+v).toFixed(1); let d = `M${f(q[0][0])} ${f(q[0][1])}`; let off = null;
-    for (const [x, y, on] of q.slice(1).concat([q[0]])) {
-      if (on) { d += off ? ` Q${f(off[0])} ${f(off[1])} ${f(x)} ${f(y)}` : ` L${f(x)} ${f(y)}`; off = null; }
-      else { if (off) d += ` Q${f(off[0])} ${f(off[1])} ${f((off[0] + x) / 2)} ${f((off[1] + y) / 2)}`; off = [x, y]; }
-    }
-    return d + ' Z';
-  }
-  const rCache = {};
-  function rShape(base, k) {
-    const key = base + ':' + k; if (rCache[key]) return rCache[key];
-    const d = rPath(rPoints(R_FONTS[base], k));
-    const probe = el('svg', { style: 'position:absolute;left:-9999px;top:-9999px', width: 10, height: 10 }); document.body.appendChild(probe);
-    const path = el('path', { d }, probe); const b = path.getBBox(); document.body.removeChild(probe);
-    return (rCache[key] = { d, cx: b.x + b.width / 2, cy: b.y + b.height / 2, size: Math.max(b.width, b.height), box: b });
-  }
-  function squircle(svg, fill) { el('path', { d: 'M50 2 C 84 2, 98 16, 98 50 C 98 84, 84 98, 50 98 C 16 98, 2 84, 2 50 C 2 16, 16 2, 50 2 Z', fill }, svg); }
-  function iconR(base, k, size, invert, colors) {
-    const accent = colors ? colors.accent : css('--accent'), charcoal = css('--charcoal');
-    const svg = el('svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'icon', role: 'img', 'aria-label': `River icon, ${R_FONTS[base].label} r` });
-    squircle(svg, invert ? accent : charcoal);
-    const r = rShape(base, k); const s = 62 / r.size;   // the letter's larger side spans 62 of the 96-wide squircle
-    el('path', { d: r.d, fill: invert ? charcoal : accent, transform: `translate(50,50) scale(${s.toFixed(4)},${(-s).toFixed(4)}) translate(${(-r.cx).toFixed(2)},${(-r.cy).toFixed(2)})` }, svg);
-    return svg;
-  }
-  let rBase = 'Besley R', rK = 1;
-  function renderVariants() {
-    const host = document.getElementById('rvariants'); host.innerHTML = '';
-    for (const v of R_STRENGTHS) {
-      const card = document.createElement('div'); card.className = 'varcard';
-      const g = document.createElement('div'); g.className = 'ground dark';
-      for (const size of [96, 48, 24, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, v.k, size, false)); const cap = document.createElement('span'); cap.textContent = size; box.appendChild(cap); g.appendChild(box); }
-      const ib = document.createElement('div'); ib.className = 'iconbox'; ib.appendChild(iconR(rBase, v.k, 48, true)); const ic = document.createElement('span'); ic.textContent = 'inverted'; ib.appendChild(ic); g.appendChild(ib);
-      card.appendChild(g);
-      const hd = document.createElement('h3'); hd.textContent = v.label; hd.style.marginTop = '10px'; card.appendChild(hd);
-      const p = document.createElement('p'); p.textContent = v.note(R_FONTS[rBase]); card.appendChild(p);
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'pick'; b.textContent = rK === v.k ? 'Shown below' : 'Show at all sizes'; b.setAttribute('aria-pressed', String(rK === v.k));
-      b.addEventListener('click', () => { rK = v.k; renderVariants(); renderIconSizes(); renderOverlay(); }); card.appendChild(b); host.appendChild(card);
-    }
-  }
-  function renderSheet() {
-    const host = document.getElementById('rsheet'); host.innerHTML = '';
-    for (const key in R_FONTS) {
-      const g = document.createElement('div'); g.className = 'ground dark sheetrow';
-      const lab = document.createElement('b'); lab.textContent = key; g.appendChild(lab);
-      for (const size of [96, 48, 24, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(key, 0, size, false)); const cap = document.createElement('span'); cap.textContent = size; box.appendChild(cap); g.appendChild(box); }
-      const ib = document.createElement('div'); ib.className = 'iconbox'; ib.appendChild(iconR(key, 0, 48, true)); const ic = document.createElement('span'); ic.textContent = 'inverted'; ib.appendChild(ic); g.appendChild(ib);
-      host.appendChild(g);
-    }
-  }
-  function renderIconSizes() {
-    for (const ground of ['light', 'dark']) {
-      const host = document.getElementById(`icon-sizes-${ground}`); host.innerHTML = '';
-      for (const size of [128, 64, 32, 16]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, rK, size, false)); const cap = document.createElement('span'); cap.textContent = size + ' px'; box.appendChild(cap); host.appendChild(box); }
-      const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, rK, 64, true)); const cap = document.createElement('span'); cap.textContent = 'inverted'; box.appendChild(cap); host.appendChild(box);
-    }
-  }
-  function renderOverlay() {
-    const host = document.getElementById('roverlay'); host.innerHTML = '';
-    const o = rShape(rBase, 0), m = rShape(rBase, rK); const pad = 40;
-    const x0 = Math.min(o.box.x, m.box.x) - pad, y1 = Math.max(o.box.y + o.box.height, m.box.y + m.box.height) + pad;
-    const W = Math.max(o.box.width, m.box.width) + 2 * pad, H = Math.max(o.box.height, m.box.height) + 2 * pad;
-    const svg = el('svg', { viewBox: `${x0} ${-y1} ${W} ${H}`, width: Math.round(W * (280 / H)), height: 280, role: 'img', 'aria-label': 'Original outline over the modified letter' }, host);
-    const g = el('g', { transform: 'scale(1,-1)' }, svg);
-    el('path', { d: m.d, fill: css('--fg') }, g);
-    el('path', { d: o.d, fill: 'none', stroke: css('--accent-hi'), 'stroke-width': 3 }, g);
-    const pts = rPoints(R_FONTS[rBase], rK); let edited = 0;
-    for (const ci in R_FONTS[rBase].edits) for (const i in R_FONTS[rBase].edits[ci]) { edited++; el('circle', { cx: pts[ci][i][0], cy: pts[ci][i][1], r: 6, fill: css('--accent-hi') }, g); }
-    const key = document.createElement('div'); key.className = 'key';
-    key.innerHTML = `<p><i style="background:${css('--accent-hi')}"></i>${R_FONTS[rBase].label}, as shipped.</p><p><i style="background:${css('--fg')}"></i>The River letter at the chosen strength. The dots are the only ${edited} contour points that move; every other point is the font's.</p><p>Strength ${rK}.</p>`;
-    host.appendChild(key);
-  }
-  (function () { const host = document.getElementById('rbases'); Object.keys(R_FONTS).forEach((key, i) => { const b = document.createElement('button'); b.type = 'button'; b.id = 'rb-' + i; b.dataset.rbase = key; b.textContent = key; b.setAttribute('aria-pressed', String(key === rBase)); host.appendChild(b); }); })();
-  document.querySelectorAll('[data-rbase]').forEach(b => b.addEventListener('click', () => { rBase = b.dataset.rbase; document.querySelectorAll('[data-rbase]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderVariants(); renderIconSizes(); renderOverlay(); }));
-
   // ---------- Accent comparison ----------
   function lum(hex) { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
   function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
@@ -368,13 +229,12 @@
       for (const ground of ['light', 'dark']) {
         const g = document.createElement('div'); g.className = 'ground ' + ground; const row = document.createElement('div'); row.className = 'row';
         const acc = ground === 'light' ? s.accent : s.hi;
-        for (const [size, inv] of [[96, false], [48, true]]) { const box = document.createElement('div'); box.className = 'iconbox'; box.appendChild(iconR(rBase, rK, size, inv, { accent: acc })); const cap = document.createElement('span'); cap.textContent = inv ? 'inverted' : 'icon'; box.appendChild(cap); row.appendChild(box); }
         const ctl = document.createElement('div'); ctl.className = 'ctlrow';
         ctl.innerHTML = `<span class="pill" style="background:${acc}">Listening</span><span class="toggle" style="background:${acc}" aria-hidden="true"></span><span class="link" style="color:${acc}">Open Settings</span>`;
         row.appendChild(ctl); g.appendChild(row); col.appendChild(g);
       }
       const ul = document.createElement('ul'); ul.className = 'contrast';
-      const rows = [['Accent text on white', s.accent, '#FFFFFF', 4.5], ['Accent text on charcoal', s.hi, '#23262B', 4.5], ['White on accent, pressed control', '#FFFFFF', s.accent, 4.5], ['Charcoal on accent, inverted icon', '#23262B', s.hi, 3], ['Accent letter on charcoal, icon', s.hi, '#23262B', 3]];
+      const rows = [['Accent text on white', s.accent, '#FFFFFF', 4.5], ['Accent text on charcoal', s.hi, '#23262B', 4.5], ['White on accent, pressed control', '#FFFFFF', s.accent, 4.5]];
       for (const [label, fg, bg, need] of rows) { const r = ratio(fg, bg); ul.innerHTML += `<li><b>${label}</b></li><li>${r.toFixed(2)}:1</li><li class="${r >= need ? 'ok' : 'no'}">${r >= need ? 'passes' : 'fails'} ${need}:1</li>`; }
       col.appendChild(ul); host.appendChild(col);
     }
@@ -491,14 +351,6 @@
       const m = makeSlats(null, state === 'idle' ? 'ready' : state === 'processing' ? 'proc' : 1, 16, color);
       drawSlats(m, 0, state, 1, 0); m.svg.setAttribute('class', 'sys'); m.svg.setAttribute('aria-label', `${world} glyph, ${state}`);
       return m.svg;
-    } else if (world === 'r1' || world === 'r2') {
-      // Young Serif r centerlines in the 16 px box: stem at x 5.73, shoulder from the stem up over (10.8, 3.0) to the terminal at (12.2, 6.4).
-      const shoulder = 'M5.73 8.4 C 5.9 6.2, 7.0 4.9, 8.3 4.0 C 9.4 3.3, 10.4 2.95, 11.0 3.05 C 12.0 3.2, 12.65 4.0, 12.6 5.0 C 12.55 5.8, 12.4 6.3, 12.15 6.45';
-      const lines = world === 'r1'
-        ? [['M5.73 2.6 L5.73 13.9', true], [shoulder, false]]
-        : [['M5.6 2.6 C 6.1 5.5, 5.4 10.0, 5.8 13.9', true], [shoulder, false], ['M3.3 13.9 L8.3 13.9', false]];
-      const gg = el('g', { transform: world === 'r1' ? 'translate(-1.1,0)' : '' }, g);
-      lines.forEach(([d, primary]) => el('path', { d, 'stroke-width': state === 'recording' ? 1.3 : 1.1, ...dotted, opacity: state === 'idle' && !primary ? .55 : 1 }, gg));
     } else {
       if (state !== 'idle') el('path', { d: RIVER_GLYPH, fill: color, stroke: 'none', opacity: state === 'processing' ? .45 : .95 }, g);
       el('path', { d: RIVER_GLYPH, 'stroke-width': 1.25, ...dotted }, g);
@@ -551,11 +403,11 @@
       for (const s of ['idle', 'recording', 'processing']) { const c = document.createElement('span'); c.className = 'cell'; const big = glyph(wld, s, 'currentColor'); big.setAttribute('class', 'big'); c.appendChild(big); const label = document.createElement('span'); label.textContent = s === 'idle' ? 'Ready' : (s === 'recording' ? 'Listening' : 'Transcribing'); c.appendChild(label); row.appendChild(c); }
     }
   }
-  const GLYPH_WORLDS = ['a', 'c', 'r1', 'r2'];
+  const GLYPH_WORLDS = ['a', 'c'];
   function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of GLYPH_WORLDS) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
   function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
   function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('.live .hud').forEach(h => { h.dataset.state = state.appState; const w = h.querySelector('.word'); if (w) w.textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); document.querySelectorAll('.live .bar').forEach(b => b.style.opacity = state.appState === 'idle' ? 0 : 1); updateLiveGlyphs(); state.t0 = performance.now(); }
-  function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); renderSheet(); renderVariants(); renderIconSizes(); renderOverlay(); }
+  function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); }
 
   document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
   document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => { state.appState = b.dataset.state; applyState(); }));
@@ -569,7 +421,6 @@
   // ?focus=<id> lifts one block to the top of the page, above the tabs, so a first-viewport screenshot sees it.
   const q = new URLSearchParams(location.search);
   if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
-  if (q.get('rbase') && R_FONTS[q.get('rbase')]) { rBase = q.get('rbase'); document.querySelectorAll('[data-rbase]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.rbase === rBase))); }
   if (q.get('focus')) { const n = document.getElementById(q.get('focus')); if (n) { const wrap = document.querySelector('.wrap'); wrap.insertBefore(n, document.querySelector('.tabs')); n.style.marginBottom = '18px'; for (const sel of ['h1', '.sub', '.controls', '.tokens', '.tabs']) document.querySelector(sel).hidden = true; document.body.style.paddingBlock = '12px'; } }
   if (q.get('state')) state.appState = q.get('state');
   if (q.get('level') != null) { state.manual = parseFloat(q.get('level')); slider.value = state.manual; setSource('manual'); }

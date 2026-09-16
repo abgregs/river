@@ -18,7 +18,7 @@ The studies themselves are [studies/river-identity-studies.html](studies/river-i
 - **The bar envelops the glyph.** Directed 2026-09-16, replacing the rounded-rectangle panel: two columns with a gap between them and the same padding in each; the left column holds the glyph, horizontally centered, the largest element and the one that sets the height; the right column holds only the time, horizontally centered. No "Listening" text anywhere. The bar's outline follows the glyph's contours with a consistent short gap, "perfectly enveloping" it, then wraps only the time, with none of the empty space of a wide rectangle. Width is fluid.
 - **Bar construction: the group outline offset.** Chosen 2026-09-16 over the silhouette offset and the split shapes: the offset of the slat group's convex outline, one smooth contour, joined to the time capsule.
 - **The slats keep a visible gap while listening.** Directed 2026-09-16: tweak the initial sizing and spacing of the slats and their listening size so that the spacing between them is more notable during Listening.
-- **The app icon starts from a real font outline.** The maintainer endorsed the approach on 2026-09-16: take the vector outline of a real, openly licensed lowercase r and design off that shape.
+- **The app icon and any r-based glyph are dropped for now.** Decided 2026-09-16 after the font-outline rounds: "too big of a waste of time given disappointing results. Drop the menu bar r font/glyph approach altogether until we have an agent that can adequately design an icon/mark." The slat microphone glyph stays parked and approved as the menu bar mark; the work focuses on the indicators.
 
 ## Proposed, not confirmed
 
@@ -45,36 +45,13 @@ Three strands, each a slow meander with a faster ripple at an irrational ratio, 
 
 **Rest state, rebuilt 2026-09-16.** Round eight's rest state read as "grainy, pixelly, glitchy, rough". Diagnosis, confirmed in a full-scale capture: its amplitude at level 0 was 0.6 to 0.9 px on strokes of 1.3 to 2.6 px, rendered through a 0.9 scale, so near-horizontal hairlines crossed pixel rows at very shallow angles and antialiasing split their coverage between two rows; the slow drift then moved that pattern along the line. The rest state now has zero amplitude: three perfectly flat lines centered on pixel rows (1 px strokes on half-pixel y, the 2 px middle stroke on an integer y, the mark rendered 1:1 at 108 by 40), at 40% ink with a slow breath of plus or minus 6% over about seven seconds. Level blends width, ink, and amplitude into the motion over the first 0.15 of level with round two's timing. The maintainer chose the breathing variant over a frozen one, "assuming we can pull off smooth appearance"; the held rest frame is now crisp, and the breath awaits a live look.
 
-### Menu bar glyph: river, and the r attempts
+### Menu bar glyph: river (parked, no verdict)
 
-The redrawn channel glyph (one channel seen from above, wide at the near bank, one S-bend, tapering to a point; outline when Ready, filled when Listening, dotted banks when Transcribing) got no verdict on 2026-09-16. Instead the maintainer asked for one more attempt built the way the icon was: from the real r outline, loosely modified, so the menu bar mark and the three-line indicator share a family resemblance "even if merely due to subtle curved lines forming the r". Three attempts are on the river tab, each with the slat glyph's stroke and states (1.1 units and secondary lines at 55% when Ready, 1.3 and full ink when Listening, dotted when Transcribing):
+The redrawn channel glyph (one channel seen from above, wide at the near bank, one S-bend, tapering to a point; outline when Ready, filled when Listening, dotted banks when Transcribing) never got a read. It stays on the page beside the river indicator. The r-based menu bar glyphs tried on 2026-09-16 (a monoline r and a three-line r from Young Serif centerlines, and a filled Instrument Serif r) were dropped with the icon work; the two line-based ones had briefly been kept as candidates.
 
-- **Monoline r**: the Young Serif r's stem and shoulder centerlines (the shoulder is the average of its outer and inner edges, computed from the outline), mapped into the 16 px box, with the shoulder leaving the stem tangentially as a confluence. Two lines.
-- **Three lines**: the same shoulder over a stem with a faint river bend, plus the foot serif as a short third line.
-- **Filled r, River join** (removed from the page after its rejection): the Instrument Serif letter at 16 px, 70% ink when Ready, full when Listening; Transcribing dotted its outline.
+### App icon: dropped until an agent can design a mark
 
-**Read 2026-09-16:** the monoline r and the three-line r both earn a place as candidates beside the slat glyph; the filled r does not (its dotted Transcribing outline collapses into a cloud at 16 px). The microphone slat glyph remains the accepted, working menu bar glyph; the redrawn channel glyph is still without a verdict.
-
-### App icon: a subtle flourish on a real letter (current round)
-
-The maintainer named three faces on 2026-09-16 whose R already carries some curve or shape: **Besley**, **Niconne**, and **Scope One**, capital or lowercase, either viable. All are SIL OFL 1.1 and were taken from the google/fonts repository that day (Besley's variable font at its default weight); extracted with fontTools, sources not committed. The study page's icon tab shows all six glyphs exactly as shipped, on the charcoal squircle at 96, 48, 24, and 16 px and inverted, so the base can be chosen on its own shape.
-
-Each of the six then gets exactly one subtle flourish in one region, chosen from what the letter already does, shown at three strengths (shipped, River flourish, pushed further) with the shipped outline overlaid so the change is plain, and at Dock and Finder sizes:
-
-| Base | The one region that moves | Points |
-|---|---|---|
-| Besley R | The leg's curled flick runs on a little further, up and out, as a tapering wave | 11 |
-| Besley r | The ball terminal's underside drops into a small teardrop | 4 |
-| Niconne R | The hooked tip of the leg runs on as a longer trailing wave | 6 |
-| Niconne r | The looped exit stroke trails a little further right, like a crest | 3 |
-| Scope One R | The foot of the leg turns up in a slight flick | 5 |
-| Scope One r | The hanging terminal lengthens and drifts outward, like a drop | 5 |
-
-This round is deliberately subtle: the maintainer rejected the big Instrument Serif confluence the same day ("not a big fan of the way large confluence approach, perhaps a new round with something more subtle") and asked for four to six exploratory versions across these faces.
-
-Method that holds: take the outline point for point, change one region, overlay the shipped outline, center geometrically on the ink box.
-
-**Awaiting the maintainer's read:** which base and flourish, if any, to refine.
+Nine attempts across two sessions, the last six being one subtle one-region flourish each on Besley, Niconne, and Scope One (capital and lowercase) taken point for point from the OFL outlines. The maintainer closed the line on 2026-09-16: "too big of a waste of time given disappointing results". The brief in [direction.md](direction.md) still stands for whoever picks it up; the method that held (take the outline, change one region, overlay the shipped outline, center on the ink box) is recorded in the rejected table and the working rules. The app ships the generic icon until then; nothing else in the identity depends on it.
 
 ### Accent: measured side by side
 
@@ -109,7 +86,9 @@ Red sand `#C4674A` fails as text and as a control ground on white and would have
 | Icon: calligraphic lowercase r built from width profiles | Looked intentionally malformed |
 | Icon: Young Serif r as the base outline | Not readable at icon sizes; dropped. Instrument Serif was the only legible base |
 | Icon: the first Instrument Serif join edit, four points moved a few units | Invisible; the maintainer could not tell the modified glyph from the shipped one. Replaced by a visible S-taper join |
-| Icon: Instrument Serif r with a large S-taper confluence filling the crotch | "Not a big fan of the large confluence approach"; too much. The next round is subtle flourishes on Besley, Niconne, and Scope One |
+| Icon: Instrument Serif r with a large S-taper confluence filling the crotch | "Not a big fan of the large confluence approach"; too much |
+| Icon: one subtle one-region flourish on each of Besley R and r, Niconne R and r, Scope One R and r | "Too big of a waste of time given disappointing results"; the icon and every r-based glyph dropped until an agent can design a mark |
+| Menu bar: monoline r and three-line r from Young Serif centerlines | Briefly kept as candidates, then dropped with the icon work; the slat glyph is the menu bar mark |
 
 ## Working rules these rounds taught
 
