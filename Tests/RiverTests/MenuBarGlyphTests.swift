@@ -31,16 +31,25 @@ enum MenuBarGlyphRenderer {
         context.translateBy(x: 0, y: CGFloat(pixels))
         context.scaleBy(x: CGFloat(scale), y: -CGFloat(scale))
         context.setShouldAntialias(true)
+        drawSlats(glyph, scale: scale, unit: 1, color: CGColor(gray: 0, alpha: 1), in: context)
+        guard let image = context.makeImage() else { throw ContextUnavailable() }
+        return image
+    }
+
+    // The mark itself, in a box of `Constants.menuBarGlyphSize` units scaled by `unit`.
+    // Shared with the app icon so both surfaces are one drawing (identity-studies rule 8).
+    static func drawSlats(_ glyph: MenuBarPresentation.Glyph, scale: Int, unit: Double, color: CGColor, in context: CGContext) {
+        let size = Constants.menuBarGlyphSize
         let centers = scale == 1 ? Constants.menuBarGlyphRowCenters1x : Constants.menuBarGlyphRowCenters2x
         for (row, inset) in Constants.menuBarGlyphRowInsets.enumerated() {
-            let y = centers[row]
-            let start = inset, end = size - inset
+            let y = centers[row] * unit
+            let start = inset * unit, end = (size - inset) * unit
             switch glyph {
             case .ready, .listening:
                 let isReady = glyph == .ready
                 let ink = isReady && row != 2 ? Constants.menuBarGlyphReadySideInk : 1
-                context.setStrokeColor(CGColor(gray: 0, alpha: ink))
-                context.setLineWidth(isReady ? Constants.menuBarGlyphReadyStroke : Constants.menuBarGlyphListeningStroke)
+                context.setStrokeColor(color.copy(alpha: ink) ?? color)
+                context.setLineWidth((isReady ? Constants.menuBarGlyphReadyStroke : Constants.menuBarGlyphListeningStroke) * unit)
                 context.setLineCap(.round)
                 context.move(to: CGPoint(x: start, y: y))
                 context.addLine(to: CGPoint(x: end, y: y))
@@ -49,19 +58,17 @@ enum MenuBarGlyphRenderer {
                 // Real circles whose first and last sit on the slat's endpoints, so the dotted
                 // outline is the solid outline (identity-studies working rule 12).
                 let count = Constants.menuBarGlyphDotCounts[row]
-                let radius = Constants.menuBarGlyphDotRadius
-                context.setFillColor(CGColor(gray: 0, alpha: 1))
+                let radius = Constants.menuBarGlyphDotRadius * unit
+                context.setFillColor(color)
                 for dot in 0..<count {
                     let even = start + (end - start) * Double(dot) / Double(count - 1)
                     // At 2x the in-between dots snap to device pixels so none renders as two
                     // half-lit columns; the endpoints already sit on the grid and never move.
-                    let x = scale == 2 ? (even * 2).rounded() / 2 : even
+                    let x = scale == 2 ? (even * 2 / unit).rounded() / 2 * unit : even
                     context.fillEllipse(in: CGRect(x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius))
                 }
             }
         }
-        guard let image = context.makeImage() else { throw ContextUnavailable() }
-        return image
     }
 
     static func alpha(of image: CGImage) -> [UInt8] {

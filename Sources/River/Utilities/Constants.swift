@@ -241,6 +241,16 @@ enum Constants {
     static let menuBarGlyphDotCounts: [Int] = [3, 4, 5, 4, 3]
     static let menuBarGlyphDotRadius: Double = 0.8
 
+    // App icon: the same slat mark in ink on a charcoal squircle, drawn on Apple's 1024
+    // grid where the rounded square occupies 824 of the canvas. The accent stays off it
+    // for now, so the icon matches every other River mark (maintainer, 2026-09-17).
+    static let appIconCanvas: Double = 1024
+    static let appIconSquircleInset: Double = 100
+    static let appIconCornerRadius: Double = 185.4
+    // The mark's width as a fraction of the squircle's.
+    static let appIconMarkFraction: Double = 0.58
+    static let appIconFileName = "River.icns"
+
     // How long an error toast stays on the HUD before auto-dismissing (planning
     // 0018 acceptance criterion 1). Long enough to read a headline + hint, short
     // enough to "get out of the way."
