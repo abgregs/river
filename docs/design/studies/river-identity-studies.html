@@ -187,9 +187,8 @@
     </div>
     <div id="sec-c-frames">
     <h2>Every stage, held, at 2&times;</h2>
-    <div class="ctl rctl"><label for="bm-crest">Transcribing beads</label><div class="seg"><button id="bm-crest" type="button" aria-pressed="true" data-bead="crest">Ink crest travels along the beads</button><button id="bm-drift" type="button" aria-pressed="false" data-bead="drift">Beads drift with the current</button></div></div>
     <div class="stages" id="rstages"></div>
-    <p class="construct">Transcribing makes the strands beaded, the same solid-to-dots change the menu bar glyph makes: beads sit every 4.5 px along each strand and ride its wave at the calm transcribing motion. Lead: the beads stay put and a crest of ink travels along them every 2.4 s, the same crest as the microphone indicator's dots. Alternate: the beads themselves drift downstream at 14 px per second, entering and leaving under the end fade so none ever pops. Strokes and beads crossfade over 0.2 s. Under Reduce Motion the beads hold at full ink and do not drift.</p>
+    <p class="construct">Transcribing keeps every strand's exact wave and splits it into segments: three, four, and three, at breakpoints and gap widths that differ per strand, each segment a sub-range of the same curve with round ends, so the segments ride the motion. The gaps open from zero over the 0.2 s crossfade, so the continuous line morphs into the segments rather than being replaced. Each segment's ink then pulses between 60% and full on its own period (2.3, 2.0, and 2.6 s per strand), with neighbouring segments offset so the pulse flows downstream. Under Reduce Motion the segments hold at full ink.</p>
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
@@ -197,7 +196,7 @@
       <li>Rising level brightens and widens the water smoothly, with round two's timing; on release the ink dims in step with the motion settling to its floor. No jump, no snap.</li>
       <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
       <li>Both ends fade to nothing inside the capsule. Nothing clips, and the bar never changes size.</li>
-      <li>Transcribing beads the strands, the river's version of the slats becoming dots, with a crest of ink along them: unmistakably a different state.</li>
+      <li>Transcribing breaks each strand into a few pulsing segments, the river's version of the slats becoming dots: unmistakably a different state, on the same waves.</li>
     </ol>
     <div id="sec-c-menubar">
     <h2>Menu bar</h2>
@@ -294,11 +293,16 @@
     for (let i = 0; i <= steps; i++) { const u = i / steps; pts.push(`${(u * w).toFixed(2)} ${riverY(s, h, u, level, t).toFixed(2)}`); }
     return 'M' + pts.join(' L');
   }
-  // Transcribing: the strands become beaded, like the menu bar's slats becoming dots. Beads sit at a fixed
-  // pitch along each strand and ride its wave; a crest of ink travels along them (lead), or the beads
-  // themselves drift with the current, entering and leaving under the end fade (alternate).
-  const BEAD_PITCH = 4.5, BEAD_PERIOD = 2.4, BEAD_DRIFT = 14;   // px between beads; seconds per crest crossing; px per second of drift
-  let beadMode = 'crest';
+  // Transcribing: each strand keeps its exact wave but splits into three or four segments at breakpoints
+  // that differ per strand, drawn as sub-ranges of the same curve with round ends. The gaps open from zero
+  // over the crossfade, so the continuous line morphs into the segments; each segment's ink then pulses on
+  // its own phase, offset along the strand so the pulse flows downstream.
+  const SEGMENTS = [
+    { breaks: [0.38, 0.68], gaps: [0.05, 0.04], period: 2.3, phase: 0.0 },
+    { breaks: [0.24, 0.52, 0.77], gaps: [0.045, 0.055, 0.04], period: 2.0, phase: 1.9 },
+    { breaks: [0.31, 0.63], gaps: [0.04, 0.05], period: 2.6, phase: 3.7 },
+  ];
+  const SEG_PULSE = 0.4, SEG_FLOW = 0.8;   // pulse depth below full ink; phase offset between neighbouring segments
   let maskSeq = 0;
   function makeRiver(host, hold, w = 108, h = 40) {
     const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', 'aria-label': 'River mark' }, host);
@@ -310,8 +314,9 @@
     const gP = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
     const gB = el('g', { opacity: 0 }, g);
     const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, gP));
-    const beads = STRANDS.map(() => { const n = Math.round(w / BEAD_PITCH) + 2; return Array.from({ length: n }, () => el('circle', { r: 1 }, gB)); });
-    return { paths, beads, gP, gB, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0, beadMix: 0, beadPhase: 0, drift: 0 };
+    gB.setAttribute('fill', 'none'); gB.setAttribute('stroke-linecap', 'round'); gB.setAttribute('stroke-linejoin', 'round');
+    const segs = SEGMENTS.map(sg => Array.from({ length: sg.breaks.length + 1 }, () => el('path', {}, gB)));
+    return { paths, segs, gP, gB, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0, segMix: 0 };
   }
   function makeRiverBar(host, hold) {
     const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '132px'; wrap.style.height = '56px'; host.appendChild(wrap);
@@ -333,10 +338,9 @@
     const motion = Math.max(lv, REST_LEVEL);                       // amplitude and width never drop below the rest floor
     m.clock += dt * (REST_SPEED + (1 - REST_SPEED) * k);          // the drift slows toward rest instead of stopping
     const restInk = REST_INK + (reduceMotion ? 0 : REST_BREATH * Math.sin(t * 0.9));    // a slow breath, about seven seconds; still under Reduce Motion
-    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // strokes and beads crossfade in about 0.2 s
-    m.beadMix += ((proc ? 1 : 0) - m.beadMix) * Math.min(1, mixRate * dt);
-    m.gP.setAttribute('opacity', (1 - m.beadMix).toFixed(3)); m.gB.setAttribute('opacity', m.beadMix.toFixed(3));
-    if (proc && !reduceMotion) { m.beadPhase = (m.beadPhase + dt / BEAD_PERIOD) % 1; m.drift = (m.drift + dt * BEAD_DRIFT) % BEAD_PITCH; }
+    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // line and segments crossfade in about 0.2 s while the gaps open
+    m.segMix += ((proc ? 1 : 0) - m.segMix) * Math.min(1, mixRate * dt);
+    m.gP.setAttribute('opacity', (1 - m.segMix).toFixed(3)); m.gB.setAttribute('opacity', m.segMix.toFixed(3));
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
       const width = s.width + 0.8 * motion, alpha = restInk + (s.alpha - restInk) * k;
@@ -344,14 +348,15 @@
       p.setAttribute('stroke', ink);   // uniform ink on marks; the accent never touches the indicator
       p.setAttribute('stroke-width', width.toFixed(2));
       p.setAttribute('opacity', alpha.toFixed(3));
-      if (m.beadMix > 0.001) m.beads[i].forEach((c, j) => {
-        const x = beadMode === 'drift' ? (j - 1) * BEAD_PITCH + m.drift : (j - 1) * BEAD_PITCH;   // drifting beads enter and leave under the end fade
-        const u = x / m.w;
-        const crest = beadMode === 'crest' && !reduceMotion ? Math.pow(Math.max(0, Math.cos(2 * Math.PI * (u - m.beadPhase))), 1.6) : 1;
-        c.setAttribute('cx', x.toFixed(2)); c.setAttribute('cy', riverY(s, m.h, u, motion, m.clock).toFixed(2));
-        c.setAttribute('r', (width * 0.6).toFixed(2)); c.setAttribute('fill', ink);
-        c.setAttribute('opacity', (alpha * (0.55 + 0.45 * crest)).toFixed(3));
-      });
+      if (m.segMix > 0.001) { const sg = SEGMENTS[i]; m.segs[i].forEach((sp, j) => {
+        const a = j === 0 ? 0 : sg.breaks[j - 1] + sg.gaps[j - 1] * m.segMix / 2;                 // the gaps open with the crossfade, from a continuous line
+        const b = j === sg.breaks.length ? 1 : sg.breaks[j] - sg.gaps[j] * m.segMix / 2;
+        const pts = []; const steps = 18;
+        for (let q = 0; q <= steps; q++) { const u = a + (b - a) * q / steps; pts.push(`${(u * m.w).toFixed(2)} ${riverY(s, m.h, u, motion, m.clock).toFixed(2)}`); }
+        const pulse = reduceMotion ? 1 : 1 - SEG_PULSE * (0.5 + 0.5 * Math.sin(2 * Math.PI * t / sg.period + sg.phase - j * SEG_FLOW));   // each segment on its own phase, flowing downstream
+        sp.setAttribute('d', 'M' + pts.join(' L')); sp.setAttribute('stroke', ink); sp.setAttribute('stroke-width', width.toFixed(2));
+        sp.setAttribute('opacity', (alpha * pulse).toFixed(3));
+      }); }
     });
   }
 
@@ -494,8 +499,6 @@
   function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); }
 
   document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
-  document.querySelectorAll('[data-bead]').forEach(b => b.addEventListener('click', () => { beadMode = b.dataset.bead; document.querySelectorAll('[data-bead]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
-  if (q.get('beads')) { beadMode = q.get('beads'); document.querySelectorAll('[data-bead]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.bead === beadMode))); }
   document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => { state.appState = b.dataset.state; applyState(); }));
   document.querySelectorAll('[data-mac]').forEach(b => b.addEventListener('click', () => { state.macDark = b.dataset.mac === 'dark'; applyMac(); }));
   document.querySelectorAll('button[data-pal]').forEach(b => b.addEventListener('click', () => { state.pal = b.dataset.pal; applyPal(); }));
@@ -503,7 +506,7 @@
   slider.addEventListener('input', () => { state.manual = parseFloat(slider.value); if (state.src !== 'manual') setSource('manual'); });
   document.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => { document.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === t))); document.querySelectorAll('.world').forEach(w => w.classList.toggle('active', w.id === `world-${t.dataset.world}`)); }));
 
-  // Deep links for review: ?tab=m|c|a|pal  ?level=0.5 (switches to manual)  ?state=recording|processing|idle  ?mac=dark  ?beads=crest|drift  ?elapsed=650
+  // Deep links for review: ?tab=m|c|a|pal  ?level=0.5 (switches to manual)  ?state=recording|processing|idle  ?mac=dark  ?elapsed=650
   // ?focus=<id> lifts one block to the top of the page, above the tabs, so a first-viewport screenshot sees it.
   if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
   if (q.get('focus')) { const n = document.getElementById(q.get('focus')); if (n) { const wrap = document.querySelector('.wrap'); wrap.insertBefore(n, document.querySelector('.tabs')); n.style.marginBottom = '18px'; for (const sel of ['h1', '.sub', '.controls', '.tokens', '.tabs']) document.querySelector(sel).hidden = true; document.body.style.paddingBlock = '12px'; } }
