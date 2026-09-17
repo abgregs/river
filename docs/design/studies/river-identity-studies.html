@@ -162,7 +162,7 @@
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
-    <p class="lead"><b>River, parked.</b> Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state is new: the amplitude is exactly zero, so the strands are three perfectly flat lines centered on pixel rows, dimmed to 44% ink with a slow breath. Round eight's rest state looked grainy because its sub-pixel wobble on hairlines was split between pixel rows by antialiasing and then drifted; flat lines on pixel rows cannot do that. Ink, width, and amplitude all follow the level, ink through a smoothstep over the first half of the range, so on release they settle together rather than the ink dropping in a late step.</p>
+    <p class="lead"><b>River, parked.</b> Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state stays alive: a calmer version of the 0.5 shape, its amplitude at 70% of that level's, its drift at 45% speed, its stroke just under the 0.5 width, and its ink dimmed to 44% with a slow breath. Ink is what says resting; the water never stops. The amplitude floor keeps the strands out of the sub-pixel band that made round eight's rest state look grainy. Ink follows the level through a smoothstep over the first half of the range, so on release it settles in step with the motion.</p>
     <h2>Live</h2>
     <div class="hudstage light live" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
     <div id="sec-c-frames">
@@ -175,8 +175,8 @@
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
-      <li>At rest, three perfectly flat lines on pixel rows at 44% ink, breathing slowly. No drift, no wobble, nothing sub-pixel.</li>
-      <li>Rising level brightens and widens the water smoothly, with round two's timing; on release, ink and motion come to rest together. No jump, no snap.</li>
+      <li>At rest, three living strands: the 0.5 shape slightly compressed, drifting at under half speed, at 44% ink breathing slowly. Never flat, never sub-pixel.</li>
+      <li>Rising level brightens and widens the water smoothly, with round two's timing; on release the ink dims in step with the motion settling to its floor. No jump, no snap.</li>
       <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
       <li>Both ends fade to nothing. Nothing clips.</li>
       <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
@@ -235,19 +235,20 @@
     }
   }
 
-  // ---------- River indicator (108 x 40, rendered 1:1): round-two motion, flat rest state ----------
-  // At rest the amplitude is exactly zero, so the strands are straight lines centered on pixel rows (a 1 px
-  // stroke on a half-pixel y, the 2 px middle stroke on an integer y) at 40% ink with a slow breath. Level
-  // blends width, ink, and amplitude into round two's motion with round two's timing. Sub-pixel wobble on a
-  // hairline was what made round eight's rest state look grainy: antialiasing split the line between rows.
+  // ---------- River indicator (108 x 40, rendered 1:1): round-two motion, a living rest state ----------
+  // At rest the strands keep undulating: the amplitude has a floor at 70% of the level-0.5 shape, the drift
+  // runs at 45% speed, the stroke sits just under its level-0.5 width, and the ink dims to 44% with a slow
+  // breath. Ink is what says "resting"; motion never stops. The amplitude floor (about 2.7 px on the thinnest
+  // strand) keeps the strands out of the sub-pixel band that made round eight's rest state look grainy.
   const STRANDS = [
-    { base: 11.5 / 40, amp: 0.7, meanderL: 1.9, rippleL: 0.62, phase: 0.4, speed: 0.55, width: 1.6, restWidth: 1, alpha: 0.7 },
-    { base: 20 / 40, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, restWidth: 2, alpha: 1.0 },
-    { base: 28.5 / 40, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, restWidth: 1, alpha: 0.55 },
+    { base: 11.5 / 40, amp: 0.7, meanderL: 1.9, rippleL: 0.62, phase: 0.4, speed: 0.55, width: 1.6, alpha: 0.7 },
+    { base: 20 / 40, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, alpha: 1.0 },
+    { base: 28.5 / 40, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, alpha: 0.55 },
   ];
-  const REST_INK = 0.44, REST_BREATH = 0.06, INK_SPAN = 0.5;  // ink at rest (the breath's low point stays above 3:1 on charcoal), breath depth, the level range over which ink and width follow the amplitude
+  const REST_INK = 0.44, REST_BREATH = 0.06, INK_SPAN = 0.5;  // ink at rest (the breath's low point stays above 3:1 on charcoal), breath depth, the level range over which ink follows the level
+  const REST_LEVEL = 0.35, REST_SPEED = 0.45;                  // the motion floor: amplitude and width never fall below this level's, and the drift slows to this fraction at rest
   const smoothstep = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
-  function riverPath(s, w, h, level, t) {
+  function riverPath(s, w, h, level, t) {   // t is the strand's own clock, which slows toward rest
     const pts = []; const steps = 56;
     const A = 11 * level * s.amp;                               // flat at rest, full water at peak
     for (let i = 0; i <= steps; i++) {
@@ -267,23 +268,25 @@
     const mask = el('mask', { id: id + 'm' }, defs); el('rect', { x: 0, y: 0, width: w, height: h, fill: `url(#${id})` }, mask);
     const g = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', mask: `url(#${id}m)` }, svg);
     const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, g));
-    return { paths, w, h, smooth: hold == null ? 0 : hold, hold };
+    return { paths, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0 };
   }
   function drawRiver(m, level, state, dt, t) {
     const ink = css('--ink');
     const proc = state === 'processing';
     if (m.hold == null) {
-      const target = proc ? 0.28 : level;
+      const target = proc ? 0.4 : level;                          // Transcribing: a touch more motion than rest, brighter ink
       m.smooth += (target - m.smooth) * Math.min(1, (target > m.smooth ? 10 : 5) * dt);   // round-two timing
     }
     const lv = m.hold == null ? m.smooth : m.hold;
-    const k = smoothstep(lv / INK_SPAN);                           // ink and width ride the same decay as the amplitude, so they settle together; no kink at a threshold
+    const k = smoothstep(lv / INK_SPAN);                           // ink follows the level through a smoothstep, so it settles in step with the motion; no kink at a threshold
+    const motion = Math.max(lv, REST_LEVEL);                       // amplitude and width never drop below the rest floor
+    m.clock += dt * (REST_SPEED + (1 - REST_SPEED) * k);          // the drift slows toward rest instead of stopping
     const restInk = REST_INK + (reduceMotion ? 0 : REST_BREATH * Math.sin(t * 0.9));    // a slow breath, about seven seconds; still under Reduce Motion
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
-      p.setAttribute('d', riverPath(s, m.w, m.h, lv, t));
+      p.setAttribute('d', riverPath(s, m.w, m.h, motion, m.clock));
       p.setAttribute('stroke', ink);   // uniform ink on marks; the accent never touches the indicator
-      p.setAttribute('stroke-width', (s.restWidth + (s.width + 0.8 * lv - s.restWidth) * k).toFixed(2));
+      p.setAttribute('stroke-width', (s.width + 0.8 * motion).toFixed(2));
       p.setAttribute('opacity', (restInk + (s.alpha - restInk) * k).toFixed(3));
     });
   }
