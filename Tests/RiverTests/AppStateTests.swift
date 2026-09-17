@@ -55,6 +55,22 @@ struct AppStateTests {
     }
 
     @MainActor
+    @Test("a notice left by a canceled recording never rides into the next one")
+    func canceledNoticeClearedByNextRecording() {
+        // `handleCancel` sends `.idle` and *then* the cancel notice, so the
+        // clear-on-leaving-recording above fires before the notice even arrives. Without
+        // a clear on the way in, the next recording opened showing "Recording canceled."
+        // (the 0017 bleed, seen in the maintainer's smoke 2026-09-17).
+        let appState = AppState()
+        appState.apply(.recording)
+        appState.apply(.idle)
+        appState.apply(notice: ActivationNotice.recordingCanceled)
+        #expect(appState.notice == ActivationNotice.recordingCanceled)
+        appState.apply(.recording)
+        #expect(appState.notice == nil)
+    }
+
+    @MainActor
     @Test("bind(to:) wires state, notices, and errors from a real session end to end")
     func bindWiresAllThreeChannels() async throws {
         // `apply(_:)` is unit-tested above, but nothing asserts `bind` actually

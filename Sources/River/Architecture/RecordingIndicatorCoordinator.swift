@@ -40,8 +40,7 @@ final class RecordingIndicatorCoordinator {
     // The HUD's single source of truth is `AppState`. Re-arm the observation on each
     // change (Observation's `onChange` is one-shot) and recompute visibility, so a
     // state transition *or* the toast's own auto-dismiss both flow through the same
-    // decision — no timer racing between the two. A notice is observed too: it grows
-    // the content mid-recording, and `showPanel` refits the panel to it.
+    // decision — no timer racing between the two.
     private func observeAppState() {
         withObservationTracking {
             _ = appState.state
@@ -75,10 +74,6 @@ final class RecordingIndicatorCoordinator {
     private func showPanel() {
         let panel = panel ?? makePanel()
         self.panel = panel
-        if let hosting = panel.contentView {
-            let fitting = hosting.fittingSize
-            if fitting.width > 0, fitting.height > 0 { panel.setContentSize(fitting) }
-        }
         positionPanel(panel)
         // `orderFrontRegardless` only — never `makeKey`/`activate`, so focus stays
         // on whatever app the user is dictating into.
@@ -100,7 +95,9 @@ final class RecordingIndicatorCoordinator {
 
     private func makePanel() -> NSPanel {
         let panel = NonActivatingPanel(
-            contentRect: .zero,
+            // One fixed size for every state (the content reserves room for a message),
+            // so nothing the view shows can resize or reposition the panel.
+            contentRect: NSRect(origin: .zero, size: Self.panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -119,17 +116,26 @@ final class RecordingIndicatorCoordinator {
         return panel
     }
 
+    static let panelSize = NSSize(
+        width: Constants.hudMessageWidth + 2 * Constants.hudShadowMargin,
+        height: Constants.hudShadowMargin * 2 + Constants.riverCapsuleHeight
+            + Constants.hudStackSpacing + Constants.hudMessageReservedHeight
+    )
+
     // Fixed position (no caret anchoring, so no AX dependency): bottom-center of the
     // active screen's visible frame (planning 0002 "fixed-position, not caret-anchored").
-    // The capsule's bottom edge is the anchor, so a message rectangle appearing below
-    // it never moves the capsule; the panel's transparent shadow margin is discounted.
+    // The capsule sits a fixed distance below the panel's top edge, so anchoring its
+    // bottom edge is arithmetic on constants — a message can never move it.
     private func positionPanel(_ panel: NSPanel) {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let size = panel.frame.size
-        let x = visible.midX - size.width / 2
+        let size = Self.panelSize
         let capsuleBottomInPanel = size.height - Constants.hudShadowMargin - Constants.riverCapsuleHeight
-        let y = visible.minY + CGFloat(Constants.hudBottomMargin) - capsuleBottomInPanel
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+        panel.setFrame(
+            NSRect(
+                x: visible.midX - size.width / 2,
+                y: visible.minY + CGFloat(Constants.hudBottomMargin) - capsuleBottomInPanel,
+                width: size.width, height: size.height),
+            display: false)
     }
 }

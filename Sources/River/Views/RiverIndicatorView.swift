@@ -10,13 +10,18 @@ struct RiverIndicatorView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        // Fixed geometry: the capsule keeps its place whether or not a message is on
+        // screen, and the panel never resizes under an animating transition.
         VStack(spacing: Constants.hudStackSpacing) {
             RiverCapsule(state: appState.state, inputLevel: Double(appState.inputLevel))
                 .modifier(HUDFade(isVisible: appState.state != .idle, reduceMotion: reduceMotion))
-            if hasMessage {
-                messages
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise)))
+            ZStack(alignment: .top) {
+                if hasMessage {
+                    messages
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise)))
+                }
             }
+            .frame(width: Constants.hudMessageWidth, height: Constants.hudMessageReservedHeight, alignment: .top)
         }
         .padding(Constants.hudShadowMargin)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
@@ -30,8 +35,15 @@ struct RiverIndicatorView: View {
         appState.state == .idle ? RecordingIndicatorPresentation.loadingLabel(for: appState.modelLoadState) : nil
     }
 
+    // A notice belongs to the recording it describes: showing one at `.idle` would put
+    // last cycle's message under a capsule that is on its way out (planning 0017's
+    // canceled-notice bleed). The menu row stays its lingering home.
+    private var notice: String? {
+        appState.state == .recording ? appState.notice : nil
+    }
+
     private var hasMessage: Bool {
-        appState.toast != nil || loadingLabel != nil || appState.notice != nil
+        appState.toast != nil || loadingLabel != nil || notice != nil
     }
 
     private var messages: some View {
@@ -45,7 +57,7 @@ struct RiverIndicatorView: View {
                     Text(label).font(.callout)
                 }
             }
-            if let notice = appState.notice {
+            if let notice {
                 Text(notice)
                     .font(.caption)
                     .foregroundStyle(.secondary)

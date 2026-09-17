@@ -83,6 +83,10 @@ final class AppState {
         state = newState
         if newState == .recording {
             errorMessage = nil
+            // A fresh recording also clears a notice left by the previous one — a cancel
+            // sends `.idle` and *then* its notice, so the clear below cannot catch it and
+            // the message otherwise rode into the next recording (planning 0017).
+            notice = nil
             // A fresh recording clears a stale toast too (its lingering-record twin
             // stays on the menu row); its own auto-dismiss timer is now moot.
             toast = nil

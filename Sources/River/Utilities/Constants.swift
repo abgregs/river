@@ -174,6 +174,11 @@ enum Constants {
     static let hudMessagePadding: Double = 12
     static let hudMessageWidth: Double = 260
     static let hudStackSpacing: Double = 8
+    // Space always reserved below the capsule for that rectangle. The panel is this one
+    // fixed size whatever it shows, so the capsule's position is arithmetic and a message
+    // appearing or leaving can never move it (the shift the maintainer saw on cancel,
+    // 2026-09-17, when a notice grew the content inside an already-sized panel).
+    static let hudMessageReservedHeight: Double = 140
 
     // Level engine, per display frame: attack and release rates per second (round two's timing).
     static let riverAttackRate: Double = 10
@@ -216,24 +221,25 @@ enum Constants {
     // The crest profile blends in and out at this rate per second (about 0.2 s).
     static let riverCrestBlendRate: Double = 12
 
-    // Menu bar slat glyph (planning 0028): five slats in a 16 pt template image. The
-    // group was widened and its pitch opened from 2.5 to 3 (maintainer's smoke,
-    // 2026-09-17): at the studies' size the mark read optically smaller than the
-    // neighboring status items. The indicator keeps the study page's own geometry. The
-    // left x of each row (mirrored on the right); the row y centers are snapped per
-    // scale so stroke edges land on device pixels: on pixel centers at 1x, on pixel
-    // boundaries at 2x.
-    static let menuBarGlyphSize: Double = 16
-    static let menuBarGlyphRowInsets: [Double] = [4.25, 2, 1.5, 2, 4.25]
-    static let menuBarGlyphRowCenters1x: [Double] = [2.5, 5.5, 8.5, 11.5, 14.5]
-    static let menuBarGlyphRowCenters2x: [Double] = [3, 6, 9, 12, 15]
-    static let menuBarGlyphReadyStroke: Double = 1.4
-    static let menuBarGlyphListeningStroke: Double = 1.7
+    // Menu bar slat glyph (planning 0028): five slats in an 18 pt template image. The
+    // studies' 16 pt mark read optically smaller than the neighboring status items and
+    // sat a point low, so the box grew, the group widened, and the pitch opened from 2.5
+    // to 3.5 (maintainer's smoke, 2026-09-17). The indicator keeps the study page's own
+    // geometry. Rows are centered on the box at 2x, where stroke edges land on device
+    // pixels; 1x cannot both center five rows and sit on pixel centers, so it keeps the
+    // crisp rows and gives up half a point of centering.
+    // The left x of each row, mirrored on the right.
+    static let menuBarGlyphSize: Double = 18
+    static let menuBarGlyphRowInsets: [Double] = [4.75, 2.25, 1.75, 2.25, 4.75]
+    static let menuBarGlyphRowCenters1x: [Double] = [3.5, 6.5, 9.5, 12.5, 15.5]
+    static let menuBarGlyphRowCenters2x: [Double] = [2, 5.5, 9, 12.5, 16]
+    static let menuBarGlyphReadyStroke: Double = 1.6
+    static let menuBarGlyphListeningStroke: Double = 1.9
     // Ready: the middle slat at full ink, the others dimmed.
     static let menuBarGlyphReadySideInk: Double = 0.55
     // Transcribing: dots per row, the first and last centered on the slat's endpoints.
     static let menuBarGlyphDotCounts: [Int] = [3, 4, 5, 4, 3]
-    static let menuBarGlyphDotRadius: Double = 0.7
+    static let menuBarGlyphDotRadius: Double = 0.8
 
     // How long an error toast stays on the HUD before auto-dismissing (planning
     // 0018 acceptance criterion 1). Long enough to read a headline + hint, short

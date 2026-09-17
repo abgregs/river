@@ -95,7 +95,8 @@ struct MenuBarGlyphTests {
     func assetsMatchGeometry(glyph: MenuBarPresentation.Glyph, scale: Int) throws {
         let url = MenuBarGlyphRenderer.assetDirectory.appendingPathComponent(MenuBarGlyphRenderer.fileName(glyph, scale: scale))
         let shipped = try #require(NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil))
-        #expect(shipped.width == 16 * scale && shipped.height == 16 * scale)
+        #expect(shipped.width == Int(Constants.menuBarGlyphSize) * scale)
+        #expect(shipped.height == Int(Constants.menuBarGlyphSize) * scale)
         let expected = MenuBarGlyphRenderer.alpha(of: try MenuBarGlyphRenderer.render(glyph, scale: scale))
         let actual = MenuBarGlyphRenderer.alpha(of: shipped)
         let worst = zip(expected, actual).map { abs(Int($0) - Int($1)) }.max() ?? 255
@@ -108,17 +109,18 @@ struct MenuBarGlyphTests {
     @Test("every transcribing dot at 2x is centered on a device-pixel boundary")
     func dotsAreCrispAt2x() throws {
         let alpha = MenuBarGlyphRenderer.alpha(of: try MenuBarGlyphRenderer.render(.transcribing, scale: 2))
+        let side = Int(Constants.menuBarGlyphSize) * 2
         let middleRow = Int(Constants.menuBarGlyphRowCenters2x[2] * 2)
-        let lit = (0..<32).map { alpha[middleRow * 32 + $0] }
+        let lit = (0..<side).map { alpha[middleRow * side + $0] }
         // Each dot's two center columns are equally lit, so no dot leans into a half column.
-        let peaks = (1..<32).filter { lit[$0] > 100 && lit[$0] == lit[$0 - 1] }
+        let peaks = (1..<side).filter { lit[$0] > 100 && lit[$0] == lit[$0 - 1] }
         #expect(peaks.count == Constants.menuBarGlyphDotCounts[2])
     }
 
     @Test("slat bodies fill whole device-pixel rows at 1x and 2x", arguments: [1, 2])
     func slatsAreCrisp(scale: Int) throws {
         let alpha = MenuBarGlyphRenderer.alpha(of: try MenuBarGlyphRenderer.render(.listening, scale: scale))
-        let side = 16 * scale
+        let side = Int(Constants.menuBarGlyphSize) * scale
         let middleX = side / 2
         let centers = scale == 1 ? Constants.menuBarGlyphRowCenters1x : Constants.menuBarGlyphRowCenters2x
         for center in centers {
