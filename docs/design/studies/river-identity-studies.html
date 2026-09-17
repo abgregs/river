@@ -84,8 +84,13 @@
   .bar .barfill { position: absolute; inset: 0; background: rgba(35,38,43,.96); }   /* no backdrop blur: browsers blur the unclipped box, which showed as rectangles behind the shape */
   .hudstage.dark .bar .barfill { background: rgba(35,38,43,.94); }
   .bar .barglyph { position: absolute; width: 48px; height: 48px; }
-  .rbar .barfill, .rbar .barshadow { border-radius: 28px; }   /* capsule: the 108 x 40 band plus 8 pt on every side */
-  .rbar .barmark { position: absolute; left: 8px; top: 8px; width: 108px; height: 40px; }
+  .rbar .barfill, .rbar .barshadow, .rbar .barline { border-radius: 28px; }   /* capsule: the 108 x 40 band plus 12 pt at the sides and 8 pt above and below */
+  .rbar .barmark { position: absolute; left: 12px; top: 8px; width: 108px; height: 40px; }
+  .bar .barline { position: absolute; inset: 0; pointer-events: none; opacity: 0; }   /* 1 pt inner hairline, white at 7%: the edge catching light. Dark grounds only */
+  .rbar .barline { box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+  .hudstage.dark .bar .barline, .hudstage.black .bar .barline, .ground.dark .bar .barline { opacity: 1; }
+  .hudstage.black { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><rect width='600' height='210' fill='%23141416'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%231a1b1e'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%23292b30'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%23292b30'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%23292b30'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%23292b30'/></svg>") center/cover; }   /* a near-black editor window: the worst case for the bar's edge */
+  .hudstage.black .bar .barfill { background: rgba(35,38,43,.94); }
   .rbar .barmark svg { display: block; width: 108px; height: 40px; }
   .bar .barglyph svg { display: block; width: 48px; height: 48px; }
   .bar .time { position: absolute; color: #ECEEF1; font-size: 12px; line-height: 14px; font-variant-numeric: tabular-nums; text-align: center; opacity: .8; }
@@ -142,7 +147,12 @@
     <div id="sec-m-live">
     <h2>Live</h2>
     <div class="hudstage light live" id="m-live"><div class="bar" data-bar="hull"></div></div>
-    <p class="spec">The chosen construction: the offset of the slat group's outline, one smooth contour, joined to the time capsule. The bar is filled with near-opaque charcoal and no backdrop blur, so its edge is the clipped shape and nothing else.</p>
+    <p class="spec">The chosen construction: the offset of the slat group's outline, one smooth contour, joined to the time capsule. The bar is filled with near-opaque charcoal and no backdrop blur, so its edge is the clipped shape and nothing else. On dark grounds a 1 pt inner hairline of white at 7% catches the edge.</p>
+    </div>
+    <div id="sec-m-black">
+    <h2>Edge check, near-black ground</h2>
+    <div class="hudstage black live"><div class="bar" data-bar="hull"></div></div>
+    <p class="spec">A near-black editor window, the worst case for the bar's edge: the shadow vanishes into the ground and the hairline alone separates the bar.</p>
     </div>
     <div id="sec-m-stages">
     <h2>Every stage, held, at 2&times;</h2>
@@ -156,7 +166,11 @@
     <div id="sec-c-live">
     <h2>Live</h2>
     <div class="hudstage light live" id="c-stage"><div class="bar rbar" data-rbar="live"></div></div>
-    <p class="spec">The bar is a capsule: the 108 by 40 band the strands move in, plus 8 pt on every side, so it holds the full range of motion without ever changing size, and its rounded ends follow the fade at the strands' ends. No word, no timer. Same fill, shadow, and enter and exit as the microphone bar.</p>
+    <p class="spec">The bar is a capsule: the 108 by 40 band the strands move in, plus 12 pt at the sides and 8 pt above and below, so it holds the full range of motion without ever changing size, and its rounded ends follow the fade at the strands' ends. No word, no timer. Same fill, shadow, hairline, and enter and exit as the microphone bar.</p>
+    </div>
+    <div id="sec-c-black">
+    <h2>Edge check, near-black ground</h2>
+    <div class="hudstage black live"><div class="bar rbar" data-rbar="live"></div></div>
     </div>
     <div id="sec-c-frames">
     <h2>Every stage, held, at 2&times;</h2>
@@ -260,9 +274,10 @@
     return { paths, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0 };
   }
   function makeRiverBar(host, hold) {
-    const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '124px'; wrap.style.height = '56px'; host.appendChild(wrap);
+    const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '132px'; wrap.style.height = '56px'; host.appendChild(wrap);
     const sw = document.createElement('div'); sw.className = 'barshadowwrap'; wrap.appendChild(sw); const sh = document.createElement('div'); sh.className = 'barshadow'; sw.appendChild(sh);
     const fill = document.createElement('div'); fill.className = 'barfill'; wrap.appendChild(fill);
+    const line = document.createElement('div'); line.className = 'barline'; wrap.appendChild(line);
     const mk = document.createElement('div'); mk.className = 'barmark'; wrap.appendChild(mk);
     const m = makeRiver(mk, hold); m.bar = wrap; return m;
   }
@@ -343,6 +358,7 @@
     const sw = document.createElement('div'); sw.className = 'barshadowwrap'; wrap.appendChild(sw);
     for (const d of shapes) { const s = document.createElement('div'); s.className = 'barshadow'; s.style.clipPath = `path('${d}')`; sw.appendChild(s); }
     for (const d of shapes) { const s = document.createElement('div'); s.className = 'barfill'; s.style.clipPath = `path('${d}')`; wrap.appendChild(s); }
+    for (const d of shapes) { const svg = el('svg', { class: 'barline', viewBox: `0 0 ${v.w} ${v.h}`, width: v.w, height: v.h, style: `clip-path:path('${d}')` }); el('path', { d, fill: 'none', stroke: 'rgba(255,255,255,.07)', 'stroke-width': 2 }, svg); wrap.appendChild(svg); }
     const gh = document.createElement('div'); gh.className = 'barglyph'; gh.style.left = v.glyph[0] + 'px'; gh.style.top = v.glyph[1] + 'px'; wrap.appendChild(gh);
     const m = makeSlats(gh, hold, BAR.glyph);
     const t = document.createElement('div'); t.className = 'time'; const [l, tp, w, ht] = v.text; t.style.left = l + 'px'; t.style.top = tp + 'px'; t.style.width = w + 'px'; t.style.height = ht + 'px';
@@ -437,6 +453,7 @@
   if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
   if (q.get('focus')) { const n = document.getElementById(q.get('focus')); if (n) { const wrap = document.querySelector('.wrap'); wrap.insertBefore(n, document.querySelector('.tabs')); n.style.marginBottom = '18px'; for (const sel of ['h1', '.sub', '.controls', '.tokens', '.tabs']) document.querySelector(sel).hidden = true; document.body.style.paddingBlock = '12px'; } }
   if (q.get('state')) state.appState = q.get('state');
+  if (q.get('mac')) state.macDark = q.get('mac') === 'dark';
   if (q.get('level') != null) { state.manual = parseFloat(q.get('level')); slider.value = state.manual; setSource('manual'); }
 
   applyPal(); applyMac(); applyState(); renderPal();
