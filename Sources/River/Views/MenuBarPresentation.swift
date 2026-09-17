@@ -3,13 +3,28 @@ import Foundation
 /// Pure mapping from cycle state to the menu-bar icon + status label, extracted
 /// so the icon/label contract is unit-tested without standing up SwiftUI.
 enum MenuBarPresentation {
+    // The slat glyph's three cycle states (planning 0028), shipped as template PNGs in
+    // the bundle's Resources under these names.
+    enum Glyph: String, CaseIterable {
+        case ready = "MenuBarReady"
+        case listening = "MenuBarListening"
+        case transcribing = "MenuBarTranscribing"
+    }
+
+    // The cycle states draw River's slat glyph; the warning, downloading, and loading
+    // states keep their SF Symbols.
+    enum Icon: Equatable {
+        case glyph(Glyph)
+        case symbol(String)
+    }
+
     struct Visual: Equatable {
-        let systemImage: String
+        let icon: Icon
         let statusLabel: String
     }
 
-    // core-feature.md item 5: empty mic (.idle) / filled mic (.recording) /
-    // three-dot (.processing); labels "Ready" / "Recording..." / "Processing...".
+    // core-feature.md item 5: the slat glyph's Ready (.idle) / Listening (.recording) /
+    // Transcribing (.processing) states; labels "Ready" / "Recording..." / "Processing...".
     // A pending error overrides the *idle* icon with a warning glyph — errors
     // surface at end-of-cycle, so an active state's icon always wins.
     //
@@ -20,11 +35,11 @@ enum MenuBarPresentation {
     static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState = .ready) -> Visual {
         // Non-idle states are unaffected by model load state.
         guard state == .idle else {
-            let systemImage: String
+            let glyph: Glyph
             switch state {
-            case .idle: systemImage = "mic"  // unreachable (guard above), kept for exhaustiveness
-            case .recording: systemImage = "mic.fill"
-            case .processing: systemImage = "ellipsis"
+            case .idle: glyph = .ready  // unreachable (guard above), kept for exhaustiveness
+            case .recording: glyph = .listening
+            case .processing: glyph = .transcribing
             }
             let statusLabel: String
             switch state {
@@ -32,23 +47,23 @@ enum MenuBarPresentation {
             case .recording: statusLabel = "Recording..."
             case .processing: statusLabel = "Processing..."
             }
-            return Visual(systemImage: systemImage, statusLabel: statusLabel)
+            return Visual(icon: .glyph(glyph), statusLabel: statusLabel)
         }
 
         // Idle + model still loading: show download/load progress instead of "Ready".
         switch modelLoadState {
         case .downloading:
-            return Visual(systemImage: "arrow.down.circle", statusLabel: "Downloading model...")
+            return Visual(icon: .symbol("arrow.down.circle"), statusLabel: "Downloading model...")
         case .loading:
-            return Visual(systemImage: "ellipsis", statusLabel: "Loading...")
+            return Visual(icon: .symbol("ellipsis"), statusLabel: "Loading...")
         case .failed:
             // "Ready" here would be the exact lie 0004 removes — dictation cannot
             // work until relaunch, so the label says so alongside the glyph. (The
             // session also emits a .transcription error if the user tries anyway.)
-            return Visual(systemImage: "exclamationmark.triangle", statusLabel: "Model failed to load")
+            return Visual(icon: .symbol("exclamationmark.triangle"), statusLabel: "Model failed to load")
         case .ready:
-            let icon = hasError ? "exclamationmark.triangle" : "mic"
-            return Visual(systemImage: icon, statusLabel: "Ready")
+            let icon: Icon = hasError ? .symbol("exclamationmark.triangle") : .glyph(.ready)
+            return Visual(icon: icon, statusLabel: "Ready")
         }
     }
 }

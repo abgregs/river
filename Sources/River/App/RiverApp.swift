@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 
 @main
@@ -28,11 +29,42 @@ private struct MenuBarLabel: View {
     let appState: AppState
 
     var body: some View {
-        Image(systemName: MenuBarPresentation.visual(
+        switch MenuBarPresentation.visual(
             state: appState.state,
             hasError: appState.errorMessage != nil,
             modelLoadState: appState.modelLoadState
-        ).systemImage)
+        ).icon {
+        case .glyph(let glyph):
+            // A template PNG has no name of its own, unlike the SF Symbol it replaces.
+            Image(nsImage: MenuBarGlyphImages.image(for: glyph))
+                .accessibilityLabel("River")
+        case .symbol(let name):
+            Image(systemName: name)
+        }
+    }
+}
+
+/// The slat glyph's template images, loaded once from the bundle's Resources, where
+/// `make bundle` copies them and `make verify` asserts they ship.
+@MainActor
+private enum MenuBarGlyphImages {
+    private static let logger = Logger(subsystem: Constants.loggingSubsystem, category: "menu-bar")
+    private static var cache: [MenuBarPresentation.Glyph: NSImage] = [:]
+
+    static func image(for glyph: MenuBarPresentation.Glyph) -> NSImage {
+        if let cached = cache[glyph] { return cached }
+        let image: NSImage
+        if let loaded = Bundle.main.image(forResource: glyph.rawValue) {
+            loaded.isTemplate = true
+            image = loaded
+        } else {
+            // Only an unbundled `swift run` gets here; a bundle without the glyphs fails `make verify`.
+            logger.fault("Menu bar glyph \(glyph.rawValue, privacy: .public) missing from the bundle")
+            image = NSImage(systemSymbolName: "mic", accessibilityDescription: nil) ?? NSImage()
+            image.isTemplate = true
+        }
+        cache[glyph] = image
+        return image
     }
 }
 

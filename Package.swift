@@ -18,7 +18,7 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/River",
-            exclude: ["Resources/Info.plist", "Resources/River.entitlements"]
+            exclude: ["Resources/Info.plist", "Resources/River.entitlements", "Resources/MenuBarGlyphs"]
         ),
         .testTarget(
             name: "RiverTests",
