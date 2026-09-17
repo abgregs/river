@@ -55,7 +55,7 @@ A bundle without `Info.plist` (or with a different `CFBundleIdentifier` than the
 This is non-negotiable and documented in [../conventions/anti-patterns.md](../conventions/anti-patterns.md). Specifically:
 
 - `.app/Contents/Info.plist` must exist and contain `CFBundleIdentifier`, `CFBundleName`, `CFBundleVersion`, `CFBundleShortVersionString`, `LSUIElement`, `NSMicrophoneUsageDescription`.
-- `.app/Contents/Resources/` may be empty but must exist.
+- `.app/Contents/Resources/` must contain `River.icns` (the app icon) and the six menu bar glyph PNGs, all copied by `make bundle`. `make verify` fails if any is missing or if `Info.plist` has no `CFBundleIconFile`. **Why:** SwiftPM has no asset pipeline for a hand-rolled bundle, so nothing but the Makefile puts these files in place — and a bundle missing them shows a blank Finder icon and an empty menu bar slot, with no runtime error (the same build-time-or-never posture as the bundle identifier).
 - `codesign` must be invoked with `--entitlements path/to/River.entitlements --sign "River Dev"` (or Developer ID for releases).
 
 Prefer using `xcodebuild` or `swift build` plus a tightly verified bundle-assembly step over a hand-rolled script. If a hand-rolled script is unavoidable, its first commit must include a check that `codesign -dv` on the output reports the expected bundle ID.

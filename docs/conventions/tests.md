@@ -14,6 +14,9 @@ Tests/
     ├── CapabilityTests.swift        # the capability layer, grouped (see below)
     ├── AppStateTests.swift          # the Combine→Observable UI bridge
     ├── MenuBarPresentationTests.swift  # the pure state→icon/label mapping
+    ├── RiverIndicatorPresentationTests.swift  # the indicator's pure motion functions
+    ├── MenuBarGlyphTests.swift      # renders the glyph PNGs; fails on drift from Constants
+    ├── AppIconTests.swift           # renders River.icns; same pattern
     └── ...
 ```
 
@@ -76,7 +79,9 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `*Capability.map(...)` — the pure status-mapping functions, internal so tests pin the granted/denied/unknown mapping without a real TCC grant
 - `RiverSession.configurationApplyCount` / `configurationDeferCount` — internal counters so tests can assert subscription wiring without reaching into the handler closures
 - `AppState.apply(_:)` — the two update entry points (`RiverState` and `RiverError`), internal so tests drive observation and the redaction-at-the-boundary choke point without standing up SwiftUI or a live session
-- `MenuBarPresentation.visual(state:hasError:)` — pure `state` + error → icon/label mapping, exercised directly so the [core-feature.md](../requirements/core-feature.md) item 5 icon/label contract has a regression guard without a real `MenuBarExtra`
+- `MenuBarPresentation.visual(state:hasError:modelLoadState:)` — pure `state` + error + load state → icon/label mapping, exercised directly so the [core-feature.md](../requirements/core-feature.md) item 5 icon/label contract has a regression guard without a real `MenuBarExtra`. The cycle states return a glyph asset name, which is also the bundle's filename contract (`make verify` asserts those files ship)
+- `RiverIndicatorPresentation` / `RiverIndicatorFrame` — the recording indicator's pure motion (level smoothing, motion floor, ink, clock rate, crest window and travel, strand geometry), ported number for number from the study page (planning 0028). Its expected values were produced by running that page's own JavaScript, so the tests pin the port to the approved reference rather than to itself
+- `RiverMarkRenderer.draw(_:time:reduceMotion:in:)` — the one drawing shared by the live `Canvas` and the snapshot harness, so a held frame rendered for review is the shipped drawing, not a copy of it
 - `ActivationKeyOption.all` / `capsLockHoldWarning(keyCode:mode:)` — the pure activation-key table and the mode-aware Caps Lock/Hold warning predicate, tested so a dropped key or changed warning copy is a failing test, not silent drift (mirrors `MenuBarPresentation`)
 - `TranscriptionManager.evaluateDictionaryPrompt(wavPath:)` — internal seam for the **A/B eval harness** (`DictionaryEvalTests`): decodes one fixed clip with and without the dictionary prompt, bypassing the empty-fallback, so a recorded clip shows whether the prompt biases or degenerates. The harness is **env-gated** (`.enabled(if: RIVER_AB_WAV)`) so the normal suite skips it; it loads the real model and writes its result to `ab-result.txt`. Used to confirm `small.en` biases where `base.en` empties (`requirements/custom-dictionary.md`)
 - `TranscriptionManager.loadAudioSamples(fromPath:)` — internal seam for the **transcription eval harness** (`TranscriptionEvalTests`, planning 0022): wraps WhisperKit's `AudioProcessor.loadAudioAsFloatArray` so WhisperKit stays a single import boundary and the test target need not depend on it. Not used in production (live capture supplies samples directly)
@@ -145,44 +150,12 @@ If a test requires a permission or external resource and can't be made hermetic,
 func endToEndPaste() { ... }
 ```
 
-## Transcription eval harness (0022)
+## Harnesses and generated assets
 
-`TranscriptionEvalTests` measures a WhisperKit model against a fixed local corpus of dictation clips and writes a per-model scorecard (WER per clip + aggregate, per-clip latency, model load time, on-disk model size). It is the instrument behind the [0021 model-picker](../planning/0021_model-picker.md) decisions — the curated list and default are chosen from *our* short-dictation workload, not published long-form benchmarks. Two layers:
-
-- **`WordErrorRate`** (in `Sources`) is the pure, model-free scorer: the normalization rules (lowercase; drop every non-alphanumeric, non-whitespace character so `"don't"` stays one token; split on whitespace) live there and nowhere else, so scorecards are only ever comparable when scored by the same rules. Fully unit-tested (`WordErrorRateTests`) on synthetic string pairs — it runs in the default suite with no model and no corpus.
-- **The harness test** is **env-gated** (`.enabled(if: RIVER_EVAL_CORPUS)`), exactly the `DictionaryEvalTests` shape. The normal `swift test` and CI never download a model and never touch the corpus.
-
-**The corpus is never committed.** Voice recordings are personal data and the repo is public — the same posture that keeps user content out of logs (anti-pattern #4). Recording the corpus is the maintainer's job and out of scope for the harness; the harness fails with an actionable message when the env var is set but the directory or manifest is missing or malformed.
-
-### Corpus directory format
-
-A local directory **outside the repo** (and outside `~/Desktop`|`Documents`|`Downloads`, which TCC blocks — e.g. `~/river-eval-corpus/`) containing the WAV clips and a `manifest.json`:
-
-```json
-{
-  "clips": [
-    { "file": "cmd-01.wav",     "reference": "open the settings panel",        "tags": ["commands"] },
-    { "file": "longform-01.wav", "reference": "the full hand-verified transcript…", "tags": ["long-form"] },
-    { "file": "silence-01.wav",  "reference": "",                                "tags": ["silence-heavy"] }
-  ]
-}
-```
-
-- `file` — clip filename, relative to the corpus directory.
-- `reference` — the hand-verified transcript. Normalization is applied at score time, so casing and punctuation here don't matter.
-- `tags` — any of `commands`, `long-form`, `silence-heavy`. **`silence-heavy` clips are scored pass/fail on emptiness, not WER** (an empty output is the correct answer, which WER can't express); give them an empty `reference`. They are [0023](../planning/0023_silence-decoding-hardening.md)'s regression fixtures — a silence clip that produces text fails the run.
-
-The harness mirrors the production front-end: it trims silence ([0023](../planning/0023_silence-decoding-hardening.md)) before decode, so silence clips are judged on the audio the app actually sees.
-
-### Running
-
-```bash
-RIVER_EVAL_CORPUS="$HOME/river-eval-corpus" swift test --filter TranscriptionEval
-open -e eval-openai_whisper-small.en.txt    # the scorecard, written to the package root
-```
-
-- `RIVER_EVAL_MODEL` — WhisperKit model name (default: `Constants.defaultModel`, i.e. `small.en`). Run once per candidate model; the fixed corpus makes scorecards directly comparable.
-- `RIVER_EVAL_OUT` — override the scorecard path (default: `./eval-<model>.txt`).
+Three test suites do more than assert: they render the shipped art, and they measure real
+models against real audio. Their rules live in [test-harnesses.md](test-harnesses.md) —
+the env-gated writer/checker split, why the assets are generated from `Constants`, and the
+eval corpus format.
 
 ## Related
 
@@ -190,3 +163,4 @@ open -e eval-openai_whisper-small.en.txt    # the scorecard, written to the pack
 - [../architecture/river-session.md](../architecture/river-session.md) — the session is the primary integration test surface
 - [../architecture/capabilities.md](../architecture/capabilities.md) — the capability layer that makes managers testable against fakes
 - [../architecture/threading-invariant.md](../architecture/threading-invariant.md) — why the real event tap is integration-tested via synthetic events, not unit-tested
+- [test-harnesses.md](test-harnesses.md) — the generated-asset checks and the env-gated eval harnesses

@@ -20,10 +20,10 @@ The identity brief for the design phase that follows the naming decision ([../pl
 
 | Surface | Today | Direction |
 |---|---|---|
-| **App icon** | None — `Sources/River/Resources` holds only the plist and entitlements; the bundle shows the generic icon. | Greenfield. A single strong mark: a current or river line inside the macOS squircle, one accent color on a dark or light ground. Must read at Finder and Dock sizes; the menu bar does *not* use it. First deliverable of the phase, because the DMG, the page, and the onboarding window all need it. |
-| **Menu bar glyphs** | SF Symbols chosen per state in `MenuBarPresentation`; the warning glyph overrides only the idle icon. | Keep template-glyph behavior (monochrome, auto-tinted). Decide between a curated SF Symbol set and a custom template family derived from the icon mark. The recording state should be readable at a glance from across the screen. |
-| **Recording HUD** | `RecordingIndicatorView`: `mic.fill`, live level meter (0020), error toasts (0018), fade in/out. | The centerpiece. `.recording` = the level meter rendered as a flowing line driven by real input; `.processing` = a calm current, no spinner; the insert moment = text arriving, once streaming exists. Fix the deferred polish here: the sub-second gate gap at `.loading → .ready`, the lingering menu-bar warning after a gate-declined activation, and the 0017 canceled-notice bleed. |
-| **Sound cues** | System sounds behind `playFeedbackSounds` (0016), with a distinct cancel cue (0017). | Three short custom cues (start, stop, cancel) that share one timbre — crisp, not watery; under 200 ms; identical loudness. Move the sound names into `Constants` when replacing them (open follow-up on PR #31). |
+| **App icon** | **Shipped 2026-09-17** ([0028](../planning/0028_identity-implementation.md)): `River.icns`, the five-slat mark in ink on a charcoal squircle, rendered from the same geometry as the menu bar glyph. | The accent is deliberately *not* on it yet — ink and charcoal keep it consistent with every other River mark. A fuller pass (accent, a mark beyond the slats) stays open. |
+| **Menu bar glyphs** | **Shipped 2026-09-17** ([0028](../planning/0028_identity-implementation.md)): River's five-slat template images for the three cycle states; the warning, downloading, and loading states keep their SF Symbols. | Settled. The glyph is an 18 pt template asset, pixel-snapped per scale, generated from `Constants`. |
+| **Recording HUD** | **Shipped 2026-09-17** ([0028](../planning/0028_identity-implementation.md)): `RiverIndicatorView` — three strands in a charcoal capsule, driven by the live input level, with the ink crest while transcribing; toasts (0018) and the loading label (0004) in their own rectangle below. The 0017 canceled-notice bleed is fixed. | Remaining: the insert moment once streaming exists (0025), the sub-second gate gap at `.loading → .ready`, and the lingering menu-bar warning after a gate-declined activation. |
+| **Sound cues** | System sounds behind `playFeedbackSounds` (0016), **off by default** per principle 5, with a distinct cancel cue (0017). | Three short custom cues (start, stop, cancel) that share one timbre — crisp, not watery; under 200 ms; identical loudness. Move the sound names into `Constants` when replacing them (open follow-up on PR #31). |
 | **Onboarding and Settings** | Functional SwiftUI windows; onboarding is the permissions walkthrough. | Copy and rhythm pass, the icon in the onboarding header, and the 0004 loading-copy refinement ("Preparing model…" instead of "Loading…"). No new chrome. |
 | **README / GitHub page** | Text README with two screenshots. | **Deferred until the in-app identity exists.** Then: color, the icon, a short looping capture of the HUD, and the install command above the fold. Do not design the page before the app. |
 | **DMG background** | Plain. | The icon and an arrow. Last. |
@@ -39,15 +39,15 @@ The identity brief for the design phase that follows the naming decision ([../pl
 
 Settle these in the phase and record the answer here or in the surface's planning item.
 
+- **Motion implementation:** settled 2026-09-17 — SwiftUI throughout. The indicator is a `TimelineView(.animation)` over a `Canvas`, with every number in a pure, unit-tested `RiverIndicatorPresentation`; no Core Animation, no `Timer`, no frame `Task`.
 - **Accent color:** settled 2026-09-16: charcoal plus vivid turquoise (OKLCH hue 196), `#148284` on light and `#31C8CA` on dark grounds; pressed controls take white text on the light value and charcoal text on the dark one. See [identity-studies.md](identity-studies.md).
 - **Glyphs:** a custom template family. The microphone slat glyph is accepted as the working menu bar glyph; see [identity-studies.md](identity-studies.md).
-- **Motion implementation:** SwiftUI animations throughout, or Core Animation for the HUD line?
 - **Cues:** custom recordings, or synthesized in code for zero asset weight?
 - **Streaming preview:** should the HUD hint at continuous insertion before 0025 ships, or stay honest about paste-at-the-end?
 
 ## Sequence
 
-After the first River build has been smoked on-device: icon and menu bar glyphs → HUD motion pass (with the deferred polish) → sound cues → onboarding and Settings pass → README/page → DMG background. Each step is one planning item (`0028` onward) and one PR; none of them blocks a release.
+After the first River build has been smoked on-device: ~~icon and menu bar glyphs → HUD motion pass~~ (both landed 2026-09-17 in [0028](../planning/0028_identity-implementation.md), together with the accent tokens) → sound cues → onboarding and Settings pass → README/page → DMG background. Each step is one planning item (`0028` onward) and one PR; none of them blocks a release. Still deferred from the HUD pass: the sub-second gate gap at `.loading → .ready` and the lingering menu-bar warning after a gate-declined activation.
 
 ## Related
 

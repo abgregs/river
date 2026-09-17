@@ -55,9 +55,11 @@ The rest state now is a calmer 0.5: amplitude and stroke width have a floor at t
 
 The redrawn channel glyph (one channel seen from above, wide at the near bank, one S-bend, tapering to a point; outline when Ready, filled when Listening, dotted banks when Transcribing) never got a read. It stays on the page beside the river indicator. The r-based menu bar glyphs tried on 2026-09-16 (a monoline r and a three-line r from Young Serif centerlines, and a filled Instrument Serif r) were dropped with the icon work; the two line-based ones had briefly been kept as candidates.
 
-### App icon: dropped until an agent can design a mark
+### App icon: the slat mark ships; bespoke letterforms stay dropped
 
-Nine attempts across two sessions, the last six being one subtle one-region flourish each on Besley, Niconne, and Scope One (capital and lowercase) taken point for point from the OFL outlines. The maintainer closed the line on 2026-09-16: "too big of a waste of time given disappointing results". The brief in [direction.md](direction.md) still stands for whoever picks it up; the method that held (take the outline, change one region, overlay the shipped outline, center on the ink box) is recorded in the rejected table and the working rules. The app ships the generic icon until then; nothing else in the identity depends on it.
+Nine attempts across two sessions, the last six being one subtle one-region flourish each on Besley, Niconne, and Scope One (capital and lowercase) taken point for point from the OFL outlines. The maintainer closed the line on 2026-09-16: "too big of a waste of time given disappointing results". The brief in [direction.md](direction.md) still stands for whoever picks it up; the method that held (take the outline, change one region, overlay the shipped outline, center on the ink box) is recorded in the rejected table and the working rules.
+
+**An icon ships anyway, 2026-09-17.** The generic placeholder was unreadable in Finder, so the icon is the *approved slat mark* — ink on a charcoal squircle on Apple's 1024 grid, drawn by the same function as the menu bar glyph at a different size (working rule 8). No letterform, no new mark: the dropped work was inventing one, which this does not do. Ink and charcoal only, no accent, "for now" at the maintainer's call — a fuller accent pass is open. See [../planning/0028_identity-implementation.md](../planning/0028_identity-implementation.md).
 
 ### Accent: measured side by side
 
@@ -128,7 +130,7 @@ An audit of the prototype against the accessibility, color, typography, UI polis
 - **Edge on dark grounds:** a 1 pt inner hairline of white at 7% following each bar's contour, shown only on dark desktops, where the shadow vanishes into windows the bar's own color. Not a high-contrast outline, which would be the decorative chrome the anti-goals name. The page's "Edge check, near-black ground" stages show the worst case for both bars.
 - **Envelope geometry:** embed the outlines computed by [studies/bar-shape.py](studies/bar-shape.py) as point arrays (the four-character and five-character timer variants) drawn by a `Shape`; test by bounding box and point count. No live geometry code.
 - **Menu bar template asset:** snap the 16 px asset's rows to device-pixel centers at 1x and 2x so the slats render crisp; the 48 pt indicator keeps the 2.6-unit pitch.
-- **The shipping HUD's repeating mic pulse ignores Reduce Motion** ([RecordingIndicatorView.swift](../../Sources/River/Views/RecordingIndicatorView.swift)); it is replaced by the new indicator rather than patched.
+- **The shipping HUD's repeating mic pulse ignored Reduce Motion**; it was replaced by the new indicator rather than patched (done 2026-09-17: `RecordingIndicatorView` and its level meter are deleted).
 - **Carry into the implementation:** every timing in `Constants` (0.15 s rise, 0.6 s fall, 0.2 s crossfade, 0.22 s fade with a 6 pt rise, 3.5 s dot drift, thresholds 0.06 / 0.18 / 0.55); the wake filter runs per frame (`TimelineView(.animation)`, paused when idle) because level publishes every 70 ms; `accessibilityLabel` for the state and `accessibilityValue` for the time; `accessibilityReduceMotion` turns the crossfade and fade instant and stills the dots; a pure `SlatPresentation` mapping tested with `@Test(arguments:)`.
 
 ## Impeccable state
