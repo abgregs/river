@@ -115,6 +115,19 @@
   .palcol .link { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
   .palcol .toggle { width: 38px; height: 22px; border-radius: 11px; position: relative; display: inline-block; }
   .palcol .toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 9px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .swatches { grid-template-columns: 1fr; } }
+  .swatch { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .swatch h3 { margin-bottom: 2px; }
+  .swatch .note { margin-bottom: 8px; }
+  .swatch .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .swatch .chip { border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+  .swatch .chip.lt { background: #FFFFFF; color: #1B1D21; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .swatch .chip.dk { background: #23262B; color: #ECEEF1; }
+  .swatch .chip i { display: block; height: 34px; border-radius: 8px; }
+  .swatch .chip .pill { align-self: flex-start; font-weight: 500; padding: 4px 10px; border-radius: 7px; }
+  .swatch .chip .link { text-decoration: underline; text-underline-offset: 3px; }
+  .swatch .chip small { font-variant-numeric: tabular-nums; opacity: .8; }
   .contrast { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; }
   .contrast b { color: var(--fg); font-weight: 500; }
   .contrast .ok { color: #2E8B57; } .contrast .no { color: #C4674A; }
@@ -174,7 +187,9 @@
     </div>
     <div id="sec-c-frames">
     <h2>Every stage, held, at 2&times;</h2>
+    <div class="ctl rctl"><label for="bm-crest">Transcribing beads</label><div class="seg"><button id="bm-crest" type="button" aria-pressed="true" data-bead="crest">Ink crest travels along the beads</button><button id="bm-drift" type="button" aria-pressed="false" data-bead="drift">Beads drift with the current</button></div></div>
     <div class="stages" id="rstages"></div>
+    <p class="construct">Transcribing makes the strands beaded, the same solid-to-dots change the menu bar glyph makes: beads sit every 4.5 px along each strand and ride its wave at the calm transcribing motion. Lead: the beads stay put and a crest of ink travels along them every 2.4 s, the same crest as the microphone indicator's dots. Alternate: the beads themselves drift downstream at 14 px per second, entering and leaving under the end fade so none ever pops. Strokes and beads crossfade over 0.2 s. Under Reduce Motion the beads hold at full ink and do not drift.</p>
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
@@ -182,7 +197,7 @@
       <li>Rising level brightens and widens the water smoothly, with round two's timing; on release the ink dims in step with the motion settling to its floor. No jump, no snap.</li>
       <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
       <li>Both ends fade to nothing inside the capsule. Nothing clips, and the bar never changes size.</li>
-      <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
+      <li>Transcribing beads the strands, the river's version of the slats becoming dots, with a crest of ink along them: unmistakably a different state.</li>
     </ol>
     <div id="sec-c-menubar">
     <h2>Menu bar</h2>
@@ -200,6 +215,11 @@
   <section class="world" id="world-pal" role="tabpanel" aria-labelledby="tab-pal">
     <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses. Dark turquoise was chosen on 2026-09-16; red sand stays here as the record of the comparison.</p>
     <div class="palgrid" id="sec-pal"></div>
+    <div id="sec-pal-variants">
+    <h2>Turquoise variants, more saturated and cyan-leaning</h2>
+    <p class="construct">Nine candidates built in OKLCH so each keeps one hue and only chroma and lightness change. Each has a light-desktop value, the most vivid value at that hue that still carries text at 4.5:1 on white, and a dark-desktop value for charcoal. The light values converge: sRGB cannot hold a cyan that is both vivid and dark enough for text on white, so every text-safe light value lands near chroma 0.095. The variants really differ on charcoal, where they run from the current 5:1 to a 10:1 neon. On the vivid dark values a pressed control needs charcoal text, not white.</p>
+    <div class="swatches" id="swatches"></div>
+    </div>
   </section>
 </div>
 
@@ -218,6 +238,18 @@
   // ---------- Accent comparison ----------
   function lum(hex) { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
   function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+  const TURQ = [{"name":"Current","note":"dark turquoise as chosen","light":"#1F7F86","dark":"#3FA3AA","onWhite":4.73,"onCharcoal":5.08},{"name":"Teal, vivid","note":"hue 190","light":"#02837E","dark":"#2AC3BB","onWhite":4.62,"onCharcoal":6.95},{"name":"Turquoise, vivid","note":"hue 196","light":"#148284","dark":"#31C8CA","onWhite":4.61,"onCharcoal":7.4},{"name":"Cyan","note":"hue 205","light":"#00818C","dark":"#3BCDDC","onWhite":4.65,"onCharcoal":7.92},{"name":"Electric cyan","note":"hue 205, chroma pushed","light":"#00818C","dark":"#00DDEF","onWhite":4.65,"onCharcoal":9.1},{"name":"Aqua","note":"hue 200, bright","light":"#008288","dark":"#3FE4EC","onWhite":4.62,"onCharcoal":9.77},{"name":"Mint cyan","note":"hue 180","light":"#008474","dark":"#40D9C1","onWhite":4.61,"onCharcoal":8.61},{"name":"Sky cyan","note":"hue 215","light":"#0E8095","dark":"#2CCCEB","onWhite":4.63,"onCharcoal":7.91},{"name":"Neon aqua","note":"hue 195, as vivid as sRGB allows","light":"#008283","dark":"#14EEEE","onWhite":4.65,"onCharcoal":10.48}];
+  function renderSwatches() {
+    const host = document.getElementById('swatches'); host.innerHTML = '';
+    for (const v of TURQ) {
+      const card = document.createElement('div'); card.className = 'swatch';
+      const rw = ratio(v.light, '#FFFFFF'), rc = ratio(v.dark, '#23262B'), rInv = ratio('#23262B', v.dark), rWhite = ratio('#FFFFFF', v.light);
+      card.innerHTML = `<h3>${v.name}</h3><div class="note">${v.note}</div><div class="pair">
+        <div class="chip lt"><i style="background:${v.light}"></i><span class="pill" style="background:${v.light};color:#fff">Listening</span><span class="link" style="color:${v.light}">Open Settings</span><small>${v.light} on white ${rw.toFixed(2)}:1 &middot; white on it ${rWhite.toFixed(2)}:1</small></div>
+        <div class="chip dk"><i style="background:${v.dark}"></i><span class="pill" style="background:${v.dark};color:#23262B">Listening</span><span class="link" style="color:${v.dark}">Open Settings</span><small>${v.dark} on charcoal ${rc.toFixed(2)}:1 &middot; charcoal on it ${rInv.toFixed(2)}:1</small></div></div>`;
+      host.appendChild(card);
+    }
+  }
   function renderPal() {
     const host = document.getElementById('sec-pal'); host.innerHTML = '';
     const sets = { turq: { name: 'Charcoal + dark turquoise', accent: '#1F7F86', hi: '#3FA3AA' }, sand: { name: 'Charcoal + red sand', accent: '#C4674A', hi: '#DB8E70' } };
@@ -251,17 +283,22 @@
   const REST_INK = 0.44, REST_BREATH = 0.06, INK_SPAN = 0.5;  // ink at rest (the breath's low point stays above 3:1 on charcoal), breath depth, the level range over which ink follows the level
   const REST_LEVEL = 0.35, REST_SPEED = 0.45;                  // the motion floor: amplitude and width never fall below this level's, and the drift slows to this fraction at rest
   const smoothstep = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
-  function riverPath(s, w, h, level, t) {   // t is the strand's own clock, which slows toward rest
+  function riverY(s, h, u, level, t) {      // the strand's y at fraction u across the mark; t is the strand's own clock
+    const A = 11 * level * s.amp;
+    const meander = Math.sin((u / s.meanderL) * Math.PI * 2 + s.phase + t * s.speed * 0.6);
+    const ripple = Math.sin((u / s.rippleL) * Math.PI * 2 - t * s.speed * 1.9 + s.phase * 1.7) * 0.45;
+    return h * s.base + A * (meander + ripple);
+  }
+  function riverPath(s, w, h, level, t) {
     const pts = []; const steps = 56;
-    const A = 11 * level * s.amp;                               // flat at rest, full water at peak
-    for (let i = 0; i <= steps; i++) {
-      const u = i / steps; const x = u * w;
-      const meander = Math.sin((u / s.meanderL) * Math.PI * 2 + s.phase + t * s.speed * 0.6);
-      const ripple = Math.sin((u / s.rippleL) * Math.PI * 2 - t * s.speed * 1.9 + s.phase * 1.7) * 0.45;
-      pts.push(`${x.toFixed(2)} ${(h * s.base + A * (meander + ripple)).toFixed(2)}`);
-    }
+    for (let i = 0; i <= steps; i++) { const u = i / steps; pts.push(`${(u * w).toFixed(2)} ${riverY(s, h, u, level, t).toFixed(2)}`); }
     return 'M' + pts.join(' L');
   }
+  // Transcribing: the strands become beaded, like the menu bar's slats becoming dots. Beads sit at a fixed
+  // pitch along each strand and ride its wave; a crest of ink travels along them (lead), or the beads
+  // themselves drift with the current, entering and leaving under the end fade (alternate).
+  const BEAD_PITCH = 4.5, BEAD_PERIOD = 2.4, BEAD_DRIFT = 14;   // px between beads; seconds per crest crossing; px per second of drift
+  let beadMode = 'crest';
   let maskSeq = 0;
   function makeRiver(host, hold, w = 108, h = 40) {
     const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', 'aria-label': 'River mark' }, host);
@@ -269,9 +306,12 @@
     const grad = el('linearGradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 }, defs);
     [['0', 0], ['0.14', 1], ['0.86', 1], ['1', 0]].forEach(([o, a]) => el('stop', { offset: o, 'stop-color': '#fff', 'stop-opacity': a }, grad));
     const mask = el('mask', { id: id + 'm' }, defs); el('rect', { x: 0, y: 0, width: w, height: h, fill: `url(#${id})` }, mask);
-    const g = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', mask: `url(#${id}m)` }, svg);
-    const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, g));
-    return { paths, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0 };
+    const g = el('g', { mask: `url(#${id}m)` }, svg);
+    const gP = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+    const gB = el('g', { opacity: 0 }, g);
+    const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, gP));
+    const beads = STRANDS.map(() => { const n = Math.round(w / BEAD_PITCH) + 2; return Array.from({ length: n }, () => el('circle', { r: 1 }, gB)); });
+    return { paths, beads, gP, gB, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0, beadMix: 0, beadPhase: 0, drift: 0 };
   }
   function makeRiverBar(host, hold) {
     const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '132px'; wrap.style.height = '56px'; host.appendChild(wrap);
@@ -293,12 +333,25 @@
     const motion = Math.max(lv, REST_LEVEL);                       // amplitude and width never drop below the rest floor
     m.clock += dt * (REST_SPEED + (1 - REST_SPEED) * k);          // the drift slows toward rest instead of stopping
     const restInk = REST_INK + (reduceMotion ? 0 : REST_BREATH * Math.sin(t * 0.9));    // a slow breath, about seven seconds; still under Reduce Motion
+    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // strokes and beads crossfade in about 0.2 s
+    m.beadMix += ((proc ? 1 : 0) - m.beadMix) * Math.min(1, mixRate * dt);
+    m.gP.setAttribute('opacity', (1 - m.beadMix).toFixed(3)); m.gB.setAttribute('opacity', m.beadMix.toFixed(3));
+    if (proc && !reduceMotion) { m.beadPhase = (m.beadPhase + dt / BEAD_PERIOD) % 1; m.drift = (m.drift + dt * BEAD_DRIFT) % BEAD_PITCH; }
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
+      const width = s.width + 0.8 * motion, alpha = restInk + (s.alpha - restInk) * k;
       p.setAttribute('d', riverPath(s, m.w, m.h, motion, m.clock));
       p.setAttribute('stroke', ink);   // uniform ink on marks; the accent never touches the indicator
-      p.setAttribute('stroke-width', (s.width + 0.8 * motion).toFixed(2));
-      p.setAttribute('opacity', (restInk + (s.alpha - restInk) * k).toFixed(3));
+      p.setAttribute('stroke-width', width.toFixed(2));
+      p.setAttribute('opacity', alpha.toFixed(3));
+      if (m.beadMix > 0.001) m.beads[i].forEach((c, j) => {
+        const x = beadMode === 'drift' ? (j - 1) * BEAD_PITCH + m.drift : (j - 1) * BEAD_PITCH;   // drifting beads enter and leave under the end fade
+        const u = x / m.w;
+        const crest = beadMode === 'crest' && !reduceMotion ? Math.pow(Math.max(0, Math.cos(2 * Math.PI * (u - m.beadPhase))), 1.6) : 1;
+        c.setAttribute('cx', x.toFixed(2)); c.setAttribute('cy', riverY(s, m.h, u, motion, m.clock).toFixed(2));
+        c.setAttribute('r', (width * 0.6).toFixed(2)); c.setAttribute('fill', ink);
+        c.setAttribute('opacity', (alpha * (0.55 + 0.45 * crest)).toFixed(3));
+      });
     });
   }
 
@@ -390,6 +443,7 @@
   }
 
   // ---------- Level engine ----------
+  const q = new URLSearchParams(location.search);
   const state = { src: 'sim', manual: 0, level: 0, appState: 'recording', macDark: false, pal: 'turq', t0: performance.now(), analyser: null, mic: null };
   let simTarget = 0, simHold = 0;
   function simulate(dt) { simHold -= dt; if (simHold <= 0) { const inPhrase = Math.random() > 0.22; simTarget = inPhrase ? 0.35 + Math.random() * 0.6 : 0.02 + Math.random() * 0.05; simHold = inPhrase ? 0.12 + Math.random() * 0.16 : 0.35 + Math.random() * 0.9; } state.level += (simTarget - state.level) * Math.min(1, (simTarget > state.level ? 22 : 9) * dt); }
@@ -440,6 +494,8 @@
   function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); }
 
   document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
+  document.querySelectorAll('[data-bead]').forEach(b => b.addEventListener('click', () => { beadMode = b.dataset.bead; document.querySelectorAll('[data-bead]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+  if (q.get('beads')) { beadMode = q.get('beads'); document.querySelectorAll('[data-bead]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.bead === beadMode))); }
   document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => { state.appState = b.dataset.state; applyState(); }));
   document.querySelectorAll('[data-mac]').forEach(b => b.addEventListener('click', () => { state.macDark = b.dataset.mac === 'dark'; applyMac(); }));
   document.querySelectorAll('button[data-pal]').forEach(b => b.addEventListener('click', () => { state.pal = b.dataset.pal; applyPal(); }));
@@ -447,16 +503,15 @@
   slider.addEventListener('input', () => { state.manual = parseFloat(slider.value); if (state.src !== 'manual') setSource('manual'); });
   document.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => { document.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === t))); document.querySelectorAll('.world').forEach(w => w.classList.toggle('active', w.id === `world-${t.dataset.world}`)); }));
 
-  // Deep links for review: ?tab=m|c|a|icon|pal  ?level=0.5 (switches to manual)  ?state=recording|processing|idle
+  // Deep links for review: ?tab=m|c|a|pal  ?level=0.5 (switches to manual)  ?state=recording|processing|idle  ?mac=dark  ?beads=crest|drift  ?elapsed=650
   // ?focus=<id> lifts one block to the top of the page, above the tabs, so a first-viewport screenshot sees it.
-  const q = new URLSearchParams(location.search);
   if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
   if (q.get('focus')) { const n = document.getElementById(q.get('focus')); if (n) { const wrap = document.querySelector('.wrap'); wrap.insertBefore(n, document.querySelector('.tabs')); n.style.marginBottom = '18px'; for (const sel of ['h1', '.sub', '.controls', '.tokens', '.tabs']) document.querySelector(sel).hidden = true; document.body.style.paddingBlock = '12px'; } }
   if (q.get('state')) state.appState = q.get('state');
   if (q.get('mac')) state.macDark = q.get('mac') === 'dark';
   if (q.get('level') != null) { state.manual = parseFloat(q.get('level')); slider.value = state.manual; setSource('manual'); }
 
-  applyPal(); applyMac(); applyState(); renderPal();
+  applyPal(); applyMac(); applyState(); renderPal(); renderSwatches();
   if (q.get('elapsed')) state.t0 = performance.now() - parseFloat(q.get('elapsed')) * 1000;   // review a long recording's timer; after applyState, which resets the clock
 
   let last = performance.now();
