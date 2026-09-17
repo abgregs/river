@@ -190,6 +190,8 @@ enum Constants {
     static let riverBreathRate: Double = 0.9
     // The level the strands settle to while transcribing.
     static let riverTranscribingLevel: Double = 0.4
+    // Longest frame interval the engine advances by, so a resumed timeline does not leap.
+    static let riverMaxFrameInterval: Double = 0.05
 
     // Strand shape: y = base + amplitudeScale * motion * amp * (meander + rippleWeight * ripple).
     static let riverAmplitudeScale: Double = 11
