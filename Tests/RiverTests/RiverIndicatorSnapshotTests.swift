@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import Testing
 @testable import River
@@ -39,6 +40,45 @@ struct RiverIndicatorSnapshotTests {
                 let image = try #require(renderer.cgImage)
                 let data = try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
                 try data.write(to: directory.appendingPathComponent("river-\(held.name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+    }
+
+    // The whole panel content from a real `AppState`, for the stacking and message checks.
+    @Test("write the full indicator with its message rectangle, 2x, on light and dark appearance")
+    func writeStackSnapshots() throws {
+        let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))
+        struct Failure: Error {}
+        let scenarios: [(name: String, configure: (AppState) -> Void)] = [
+            ("recording-notice", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(notice: "Activation key changed. Tap Right Command to stop this recording.")
+            }),
+            ("processing-toast", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(RiverError.textInsertion(underlying: Failure()))
+                state.apply(.processing)
+            }),
+            ("idle-toast", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(RiverError.transcription(underlying: Failure()))
+            }),
+            ("idle-loading", { state in state.apply(modelLoadState: .loading) }),
+        ]
+        for scenario in scenarios {
+            let appState = AppState(scheduleToastDismiss: { _, _ in AnyCancellable {} })
+            scenario.configure(appState)
+            for scheme in [ColorScheme.light, .dark] {
+                let view = RiverIndicatorView(appState: appState)
+                    .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
+                    .environment(\.colorScheme, scheme)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                let image = try #require(renderer.cgImage)
+                let data = try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                try data.write(to: directory.appendingPathComponent("stack-\(scenario.name)-\(scheme == .dark ? "dark" : "light").png"))
             }
         }
     }

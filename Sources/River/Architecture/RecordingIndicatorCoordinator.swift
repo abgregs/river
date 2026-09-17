@@ -31,6 +31,8 @@ final class RecordingIndicatorCoordinator {
     }
 
     func start() {
+        // Built up front so the first recording fades in instead of appearing already drawn.
+        panel = makePanel()
         observeAppState()
         updateVisibility()
     }
@@ -38,12 +40,14 @@ final class RecordingIndicatorCoordinator {
     // The HUD's single source of truth is `AppState`. Re-arm the observation on each
     // change (Observation's `onChange` is one-shot) and recompute visibility, so a
     // state transition *or* the toast's own auto-dismiss both flow through the same
-    // decision — no timer racing between the two.
+    // decision — no timer racing between the two. A notice is observed too: it grows
+    // the content mid-recording, and `showPanel` refits the panel to it.
     private func observeAppState() {
         withObservationTracking {
             _ = appState.state
             _ = appState.toast
             _ = appState.modelLoadState
+            _ = appState.notice
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -96,7 +100,7 @@ final class RecordingIndicatorCoordinator {
 
     private func makePanel() -> NSPanel {
         let panel = NonActivatingPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 80),
+            contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -111,18 +115,21 @@ final class RecordingIndicatorCoordinator {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
-        panel.contentView = NSHostingView(rootView: RecordingIndicatorView(appState: appState))
+        panel.contentView = NSHostingView(rootView: RiverIndicatorView(appState: appState))
         return panel
     }
 
     // Fixed position (no caret anchoring, so no AX dependency): bottom-center of the
     // active screen's visible frame (planning 0002 "fixed-position, not caret-anchored").
+    // The capsule's bottom edge is the anchor, so a message rectangle appearing below
+    // it never moves the capsule; the panel's transparent shadow margin is discounted.
     private func positionPanel(_ panel: NSPanel) {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let size = panel.frame.size
         let x = visible.midX - size.width / 2
-        let y = visible.minY + CGFloat(Constants.hudBottomMargin)
+        let capsuleBottomInPanel = size.height - Constants.hudShadowMargin - Constants.riverCapsuleHeight
+        let y = visible.minY + CGFloat(Constants.hudBottomMargin) - capsuleBottomInPanel
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

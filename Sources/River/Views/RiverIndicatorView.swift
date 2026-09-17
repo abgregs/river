@@ -197,22 +197,18 @@ private struct HUDFade: ViewModifier {
     }
 }
 
-/// The transient error toast: headline and recovery hint (planning 0018), content unchanged.
+/// The transient error toast: headline and recovery hint (planning 0018), as plain prose.
+/// Warning graphics are deliberately left for a later pass (maintainer, 2026-09-17).
 private struct ToastRow: View {
     let toast: ErrorToast
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(toast.headline).font(.callout.weight(.semibold))
-                Text(toast.hint)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(toast.headline).font(.callout.weight(.semibold))
+            Text(toast.hint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
