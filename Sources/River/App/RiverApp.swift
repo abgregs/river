@@ -21,6 +21,7 @@ struct RiverApp: App {
 
         SwiftUI.Settings {
             SettingsView()
+                .tint(Color(nsColor: Palette.accent))
         }
     }
 }
