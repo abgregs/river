@@ -39,7 +39,7 @@ The identity brief for the design phase that follows the naming decision ([../pl
 
 Settle these in the phase and record the answer here or in the surface's planning item.
 
-- **Accent color:** settled 2026-09-16: charcoal plus dark turquoise, `#1F7F86` on light and `#3FA3AA` on dark grounds. See [identity-studies.md](identity-studies.md).
+- **Accent color:** settled 2026-09-16: charcoal plus vivid turquoise (OKLCH hue 196), `#148284` on light and `#31C8CA` on dark grounds; pressed controls take white text on the light value and charcoal text on the dark one. See [identity-studies.md](identity-studies.md).
 - **Glyphs:** a custom template family. The microphone slat glyph is accepted as the working menu bar glyph; see [identity-studies.md](identity-studies.md).
 - **Motion implementation:** SwiftUI animations throughout, or Core Animation for the HUD line?
 - **Cues:** custom recordings, or synthesized in code for zero asset weight?

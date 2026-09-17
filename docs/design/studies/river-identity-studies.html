@@ -1,9 +1,9 @@
 <title>River Identity Studies</title>
 <style>
   :root {
-    --bg: #F3F4F6; --fg: #1B1D21; --muted: #666B74; --line: #D8DBE1; --panel: #FFFFFF; --focus: #1F7F86;
+    --bg: #F3F4F6; --fg: #1B1D21; --muted: #666B74; --line: #D8DBE1; --panel: #FFFFFF; --focus: #148284;
     --charcoal: #23262B; --charcoal-2: #2E3238; --ink: #ECEEF1;
-    --accent: #1F7F86; --accent-hi: #3FA3AA;
+    --accent: #148284; --accent-hi: #31C8CA;   /* vivid turquoise, hue 196, chosen 2026-09-16 */
   }
   :root[data-pal="sand"] { --accent: #C4674A; --accent-hi: #DB8E70; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141518; --fg: #ECEEF1; --muted: #9AA0A9; --line: #2A2D33; --panel: #1C1E22; } }
@@ -136,10 +136,10 @@
 
 <div class="wrap">
   <h1>River Identity Studies</h1>
-  <p class="sub">Round nine. The recording bar now envelops the 48 pt glyph with a constant gap and hugs the time; the word is gone, the slats gained breathing room, and the motion is lighter. The icon and the r-based menu bar glyphs are dropped until an agent can design a mark; the slat glyph stays as the approved menu bar mark. The accent is settled on dark turquoise. The river indicator now uses uniform ink like every other mark; its shape and timing are untouched.</p>
+  <p class="sub">Round nine. The recording bar now envelops the 48 pt glyph with a constant gap and hugs the time; the word is gone, the slats gained breathing room, and the motion is lighter. The icon and the r-based menu bar glyphs are dropped until an agent can design a mark; the slat glyph stays as the approved menu bar mark. The accent is settled on the vivid turquoise. The river indicator now uses uniform ink like every other mark; its shape and timing are untouched.</p>
 
   <div class="controls" role="group" aria-label="Preview controls">
-    <div class="ctl"><label for="pal-turq">Palette</label><div class="seg"><button id="pal-turq" type="button" aria-pressed="true" data-pal="turq">Charcoal + dark turquoise</button><button id="pal-sand" type="button" aria-pressed="false" data-pal="sand">Charcoal + red sand (not chosen)</button></div></div>
+    <div class="ctl"><label for="pal-turq">Palette</label><div class="seg"><button id="pal-turq" type="button" aria-pressed="true" data-pal="turq">Charcoal + vivid turquoise</button><button id="pal-sand" type="button" aria-pressed="false" data-pal="sand">Charcoal + red sand (not chosen)</button></div></div>
     <div class="ctl"><label for="src-sim">Level source</label><div class="seg"><button id="src-sim" type="button" aria-pressed="true" data-src="sim">Simulated speech</button><button id="src-mic" type="button" aria-pressed="false" data-src="mic">My microphone</button><button id="src-manual" type="button" aria-pressed="false" data-src="manual">Manual</button></div></div>
     <div class="ctl"><label for="level-slider">Level <span class="level-read" id="level-read">0.00</span></label><input id="level-slider" type="range" min="0" max="1" step="0.01" value="0" aria-label="Manual level"></div>
     <div class="ctl"><label for="st-listen">State</label><div class="seg"><button id="st-listen" type="button" aria-pressed="true" data-state="recording">Listening</button><button id="st-proc" type="button" aria-pressed="false" data-state="processing">Transcribing</button><button id="st-idle" type="button" aria-pressed="false" data-state="idle">Idle</button></div></div>
@@ -212,7 +212,7 @@
   </section>
 
   <section class="world" id="world-pal" role="tabpanel" aria-labelledby="tab-pal">
-    <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses. Dark turquoise was chosen on 2026-09-16; red sand stays here as the record of the comparison.</p>
+    <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses. Dark turquoise was chosen over red sand on 2026-09-16, then swapped the same day for the vivid turquoise at hue 196 from the variants below; red sand stays here as the record of the comparison. On the vivid dark value a pressed control takes charcoal text.</p>
     <div class="palgrid" id="sec-pal"></div>
     <div id="sec-pal-variants">
     <h2>Turquoise variants, more saturated and cyan-leaning</h2>
@@ -229,7 +229,7 @@
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   const PALETTES = {
-    turq: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['dark turquoise', '#1F7F86'], ['turquoise, on dark', '#3FA3AA']],
+    turq: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['vivid turquoise', '#148284'], ['turquoise, on dark', '#31C8CA']],
     sand: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['red sand', '#C4674A'], ['red sand, on dark', '#DB8E70']],
   };
   function renderTokens(pal) { const host = document.getElementById('tokens'); host.innerHTML = ''; for (const [n, hex] of PALETTES[pal]) { const t = document.createElement('div'); t.className = 'tok'; const sw = document.createElement('i'); sw.style.background = hex; t.appendChild(sw); const l = document.createElement('span'); l.textContent = `${n} ${hex}`; t.appendChild(l); host.appendChild(t); } }
@@ -237,7 +237,7 @@
   // ---------- Accent comparison ----------
   function lum(hex) { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
   function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
-  const TURQ = [{"name":"Current","note":"dark turquoise as chosen","light":"#1F7F86","dark":"#3FA3AA","onWhite":4.73,"onCharcoal":5.08},{"name":"Teal, vivid","note":"hue 190","light":"#02837E","dark":"#2AC3BB","onWhite":4.62,"onCharcoal":6.95},{"name":"Turquoise, vivid","note":"hue 196","light":"#148284","dark":"#31C8CA","onWhite":4.61,"onCharcoal":7.4},{"name":"Cyan","note":"hue 205","light":"#00818C","dark":"#3BCDDC","onWhite":4.65,"onCharcoal":7.92},{"name":"Electric cyan","note":"hue 205, chroma pushed","light":"#00818C","dark":"#00DDEF","onWhite":4.65,"onCharcoal":9.1},{"name":"Aqua","note":"hue 200, bright","light":"#008288","dark":"#3FE4EC","onWhite":4.62,"onCharcoal":9.77},{"name":"Mint cyan","note":"hue 180","light":"#008474","dark":"#40D9C1","onWhite":4.61,"onCharcoal":8.61},{"name":"Sky cyan","note":"hue 215","light":"#0E8095","dark":"#2CCCEB","onWhite":4.63,"onCharcoal":7.91},{"name":"Neon aqua","note":"hue 195, as vivid as sRGB allows","light":"#008283","dark":"#14EEEE","onWhite":4.65,"onCharcoal":10.48}];
+  const TURQ = [{"name":"Dark turquoise","note":"the earlier choice, replaced","light":"#1F7F86","dark":"#3FA3AA","onWhite":4.73,"onCharcoal":5.08},{"name":"Teal, vivid","note":"hue 190","light":"#02837E","dark":"#2AC3BB","onWhite":4.62,"onCharcoal":6.95},{"name":"Turquoise, vivid","note":"hue 196. Chosen 2026-09-16","light":"#148284","dark":"#31C8CA","onWhite":4.61,"onCharcoal":7.4},{"name":"Cyan","note":"hue 205","light":"#00818C","dark":"#3BCDDC","onWhite":4.65,"onCharcoal":7.92},{"name":"Electric cyan","note":"hue 205, chroma pushed","light":"#00818C","dark":"#00DDEF","onWhite":4.65,"onCharcoal":9.1},{"name":"Aqua","note":"hue 200, bright","light":"#008288","dark":"#3FE4EC","onWhite":4.62,"onCharcoal":9.77},{"name":"Mint cyan","note":"hue 180","light":"#008474","dark":"#40D9C1","onWhite":4.61,"onCharcoal":8.61},{"name":"Sky cyan","note":"hue 215","light":"#0E8095","dark":"#2CCCEB","onWhite":4.63,"onCharcoal":7.91},{"name":"Neon aqua","note":"hue 195, as vivid as sRGB allows","light":"#008283","dark":"#14EEEE","onWhite":4.65,"onCharcoal":10.48}];
   function renderSwatches() {
     const host = document.getElementById('swatches'); host.innerHTML = '';
     for (const v of TURQ) {
@@ -251,7 +251,7 @@
   }
   function renderPal() {
     const host = document.getElementById('sec-pal'); host.innerHTML = '';
-    const sets = { turq: { name: 'Charcoal + dark turquoise', accent: '#1F7F86', hi: '#3FA3AA' }, sand: { name: 'Charcoal + red sand', accent: '#C4674A', hi: '#DB8E70' } };
+    const sets = { turq: { name: 'Charcoal + vivid turquoise', accent: '#148284', hi: '#31C8CA' }, sand: { name: 'Charcoal + red sand', accent: '#C4674A', hi: '#DB8E70' } };
     for (const key in sets) {
       const s = sets[key]; const col = document.createElement('div'); col.className = 'palcol'; col.style.setProperty('--accent', s.accent); col.style.setProperty('--accent-hi', s.hi);
       col.innerHTML = `<h3>${s.name}</h3><div class="tokens"><div class="tok"><i style="background:${s.accent}"></i><span>${s.accent} on light</span></div><div class="tok"><i style="background:${s.hi}"></i><span>${s.hi} on dark</span></div></div>`;
@@ -259,11 +259,11 @@
         const g = document.createElement('div'); g.className = 'ground ' + ground; const row = document.createElement('div'); row.className = 'row';
         const acc = ground === 'light' ? s.accent : s.hi;
         const ctl = document.createElement('div'); ctl.className = 'ctlrow';
-        ctl.innerHTML = `<span class="pill" style="background:${acc}">Listening</span><span class="toggle" style="background:${acc}" aria-hidden="true"></span><span class="link" style="color:${acc}">Open Settings</span>`;
+        ctl.innerHTML = `<span class="pill" style="background:${acc};color:${ground === 'dark' ? '#23262B' : '#fff'}">Listening</span><span class="toggle" style="background:${acc}" aria-hidden="true"></span><span class="link" style="color:${acc}">Open Settings</span>`;
         row.appendChild(ctl); g.appendChild(row); col.appendChild(g);
       }
       const ul = document.createElement('ul'); ul.className = 'contrast';
-      const rows = [['Accent text on white', s.accent, '#FFFFFF', 4.5], ['Accent text on charcoal', s.hi, '#23262B', 4.5], ['White on accent, pressed control', '#FFFFFF', s.accent, 4.5]];
+      const rows = [['Accent text on white', s.accent, '#FFFFFF', 4.5], ['Accent text on charcoal', s.hi, '#23262B', 4.5], ['White on accent, pressed control on light', '#FFFFFF', s.accent, 4.5], ['Charcoal on accent, pressed control on dark', '#23262B', s.hi, 4.5]];
       for (const [label, fg, bg, need] of rows) { const r = ratio(fg, bg); ul.innerHTML += `<li><b>${label}</b></li><li>${r.toFixed(2)}:1</li><li class="${r >= need ? 'ok' : 'no'}">${r >= need ? 'passes' : 'fails'} ${need}:1</li>`; }
       col.appendChild(ul); host.appendChild(col);
     }
