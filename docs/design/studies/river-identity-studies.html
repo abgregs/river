@@ -162,7 +162,7 @@
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
-    <p class="lead"><b>River, parked.</b> Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state is new: the amplitude is exactly zero, so the strands are three perfectly flat lines centered on pixel rows, dimmed to 44% ink with a slow breath. Round eight's rest state looked grainy because its sub-pixel wobble on hairlines was split between pixel rows by antialiasing and then drifted; flat lines on pixel rows cannot do that. Rising level blends width, ink, and amplitude into the motion with round two's timing.</p>
+    <p class="lead"><b>River, parked.</b> Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state is new: the amplitude is exactly zero, so the strands are three perfectly flat lines centered on pixel rows, dimmed to 44% ink with a slow breath. Round eight's rest state looked grainy because its sub-pixel wobble on hairlines was split between pixel rows by antialiasing and then drifted; flat lines on pixel rows cannot do that. Ink, width, and amplitude all follow the level, ink through a smoothstep over the first half of the range, so on release they settle together rather than the ink dropping in a late step.</p>
     <h2>Live</h2>
     <div class="hudstage light live" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
     <div id="sec-c-frames">
@@ -176,7 +176,7 @@
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
       <li>At rest, three perfectly flat lines on pixel rows at 44% ink, breathing slowly. No drift, no wobble, nothing sub-pixel.</li>
-      <li>Rising level brightens and widens the water smoothly, with round two's timing. No jump, no snap.</li>
+      <li>Rising level brightens and widens the water smoothly, with round two's timing; on release, ink and motion come to rest together. No jump, no snap.</li>
       <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
       <li>Both ends fade to nothing. Nothing clips.</li>
       <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
@@ -245,7 +245,8 @@
     { base: 20 / 40, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, restWidth: 2, alpha: 1.0 },
     { base: 28.5 / 40, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, restWidth: 1, alpha: 0.55 },
   ];
-  const REST_INK = 0.44, REST_BREATH = 0.06, WAKE = 0.15;  // ink at rest (the breath's low point stays above 3:1 on charcoal), breath depth, level at which the strands are fully awake
+  const REST_INK = 0.44, REST_BREATH = 0.06, INK_SPAN = 0.5;  // ink at rest (the breath's low point stays above 3:1 on charcoal), breath depth, the level range over which ink and width follow the amplitude
+  const smoothstep = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
   function riverPath(s, w, h, level, t) {
     const pts = []; const steps = 56;
     const A = 11 * level * s.amp;                               // flat at rest, full water at peak
@@ -276,7 +277,7 @@
       m.smooth += (target - m.smooth) * Math.min(1, (target > m.smooth ? 10 : 5) * dt);   // round-two timing
     }
     const lv = m.hold == null ? m.smooth : m.hold;
-    const k = Math.min(1, lv / WAKE);                              // 0 at rest, 1 once awake
+    const k = smoothstep(lv / INK_SPAN);                           // ink and width ride the same decay as the amplitude, so they settle together; no kink at a threshold
     const restInk = REST_INK + (reduceMotion ? 0 : REST_BREATH * Math.sin(t * 0.9));    // a slow breath, about seven seconds; still under Reduce Motion
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
