@@ -70,23 +70,10 @@
   .hudstage { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); height: 210px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 28px; }
   .hudstage.light { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d8e0ec'/><stop offset='.55' stop-color='%23efdfcf'/><stop offset='1' stop-color='%23d5e3d2'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23ffffff' fill-opacity='.7'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%23cfd3da'/></svg>") center/cover; }
   .hudstage.dark { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231a2333'/><stop offset='.55' stop-color='%233a2b3f'/><stop offset='1' stop-color='%231e2f2b'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23202227' fill-opacity='.85'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%233a3d45'/></svg>") center/cover; }
-  .hud { width: 260px; height: 56px; border-radius: 16px; padding: 0 12px; display: grid; grid-template-columns: 70px 1fr 36px; align-items: center; gap: 6px; backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); transition: opacity .22s cubic-bezier(0.2, 0, 0, 1); }
-  .hudstage.light .hud { background: rgba(35,38,43,.86); color: #ECEEF1; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 10px 28px rgba(0,0,0,.22); }
-  .hudstage.dark .hud { background: rgba(35,38,43,.78); color: #ECEEF1; box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06); }
-  .hud .word { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap; }
-  .hud .time { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; opacity: .65; }
-  .hud .mark { display: flex; justify-content: center; align-items: center; height: 44px; border-radius: 4px; overflow: hidden; }
-  .hud .mark svg { width: 108px; height: 40px; }   /* the river's viewBox is 108 x 40: rendered 1:1 so rest lines sit on pixel rows */
-  .frames .ground { min-height: 230px; justify-content: center; align-items: center; }
-  .hud[data-state="idle"] { opacity: 0; }
   .construct { color: var(--muted); font-size: 12.5px; max-width: 68ch; margin-top: 8px; }
   .parked { background: var(--panel); border: 1px dashed var(--line); border-radius: 14px; padding: 14px 16px; color: var(--muted); max-width: 68ch; }
   .goal { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; max-width: 68ch; }
   .goal li { margin: 2px 0; }
-  .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 760px) { .frames { grid-template-columns: 1fr; } }
-  .frames .hudstage { height: 150px; padding-bottom: 20px; }
-  .frames h3 { margin-bottom: 6px; }
   .options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
   @media (max-width: 760px) { .options { grid-template-columns: 1fr; } }
   .options .hudstage { height: 190px; padding-bottom: 22px; }
@@ -97,6 +84,9 @@
   .bar .barfill { position: absolute; inset: 0; background: rgba(35,38,43,.96); }   /* no backdrop blur: browsers blur the unclipped box, which showed as rectangles behind the shape */
   .hudstage.dark .bar .barfill { background: rgba(35,38,43,.94); }
   .bar .barglyph { position: absolute; width: 48px; height: 48px; }
+  .rbar .barfill, .rbar .barshadow { border-radius: 28px; }   /* capsule: the 108 x 40 band plus 8 pt on every side */
+  .rbar .barmark { position: absolute; left: 8px; top: 8px; width: 108px; height: 40px; }
+  .rbar .barmark svg { display: block; width: 108px; height: 40px; }
   .bar .barglyph svg { display: block; width: 48px; height: 48px; }
   .bar .time { position: absolute; color: #ECEEF1; font-size: 12px; line-height: 14px; font-variant-numeric: tabular-nums; text-align: center; opacity: .8; }
   .x2 { transform: scale(2); transform-origin: center; }
@@ -123,7 +113,7 @@
   .contrast { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; }
   .contrast b { color: var(--fg); font-weight: 500; }
   .contrast .ok { color: #2E8B57; } .contrast .no { color: #C4674A; }
-  @media (prefers-reduced-motion: reduce) { .hud, .live .bar { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .live .bar { transition: none; } }
 </style>
 
 <div class="wrap">
@@ -162,23 +152,22 @@
   </section>
 
   <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
-    <p class="lead"><b>River, parked.</b> Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state stays alive: a calmer version of the 0.5 shape, its amplitude at 70% of that level's, its drift at 45% speed, its stroke just under the 0.5 width, and its ink dimmed to 44% with a slow breath. Ink is what says resting; the water never stops. The amplitude floor keeps the strands out of the sub-pixel band that made round eight's rest state look grainy. Ink follows the level through a smoothstep over the first half of the range, so on release it settles in step with the motion.</p>
+    <p class="lead"><b>River, now a strong candidate.</b> Lines only, in a snug capsule with even padding; the word and the timer are gone. Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state stays alive: a calmer version of the 0.5 shape, its amplitude at 70% of that level's, its drift at 45% speed, its stroke just under the 0.5 width, and its ink dimmed to 44% with a slow breath. Ink is what says resting; the water never stops. The amplitude floor keeps the strands out of the sub-pixel band that made round eight's rest state look grainy. Ink follows the level through a smoothstep over the first half of the range, so on release it settles in step with the motion.</p>
+    <div id="sec-c-live">
     <h2>Live</h2>
-    <div class="hudstage light live" id="c-stage"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div>
-    <div id="sec-c-frames">
-    <h2>Held frames</h2>
-    <div class="frames">
-      <div><h3>At rest &middot; level 0.00</h3><div class="hudstage light" data-hold="0"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:00</div></div></div></div>
-      <div><h3>Speaking &middot; level 0.50</h3><div class="hudstage light" data-hold="0.5"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:04</div></div></div></div>
-      <div><h3>Peak &middot; level 1.00</h3><div class="hudstage light" data-hold="1"><div class="hud" data-state="recording"><div class="word">Listening</div><div class="mark"></div><div class="time">0:04</div></div></div></div>
+    <div class="hudstage light live" id="c-stage"><div class="bar rbar" data-rbar="live"></div></div>
+    <p class="spec">The bar is a capsule: the 108 by 40 band the strands move in, plus 8 pt on every side, so it holds the full range of motion without ever changing size, and its rounded ends follow the fade at the strands' ends. No word, no timer. Same fill, shadow, and enter and exit as the microphone bar.</p>
     </div>
+    <div id="sec-c-frames">
+    <h2>Every stage, held, at 2&times;</h2>
+    <div class="stages" id="rstages"></div>
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
       <li>At rest, three living strands: the 0.5 shape slightly compressed, drifting at under half speed, at 44% ink breathing slowly. Never flat, never sub-pixel.</li>
       <li>Rising level brightens and widens the water smoothly, with round two's timing; on release the ink dims in step with the motion settling to its floor. No jump, no snap.</li>
       <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
-      <li>Both ends fade to nothing. Nothing clips.</li>
+      <li>Both ends fade to nothing inside the capsule. Nothing clips, and the bar never changes size.</li>
       <li>Transcribing holds a small steady motion, distinct from both rest and speech.</li>
     </ol>
     <div id="sec-c-menubar">
@@ -270,14 +259,21 @@
     const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, g));
     return { paths, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0 };
   }
+  function makeRiverBar(host, hold) {
+    const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '124px'; wrap.style.height = '56px'; host.appendChild(wrap);
+    const sw = document.createElement('div'); sw.className = 'barshadowwrap'; wrap.appendChild(sw); const sh = document.createElement('div'); sh.className = 'barshadow'; sw.appendChild(sh);
+    const fill = document.createElement('div'); fill.className = 'barfill'; wrap.appendChild(fill);
+    const mk = document.createElement('div'); mk.className = 'barmark'; wrap.appendChild(mk);
+    const m = makeRiver(mk, hold); m.bar = wrap; return m;
+  }
   function drawRiver(m, level, state, dt, t) {
     const ink = css('--ink');
-    const proc = state === 'processing';
+    const proc = m.hold === 'proc' || (m.hold == null && state === 'processing');
     if (m.hold == null) {
       const target = proc ? 0.4 : level;                          // Transcribing: a touch more motion than rest, brighter ink
       m.smooth += (target - m.smooth) * Math.min(1, (target > m.smooth ? 10 : 5) * dt);   // round-two timing
     }
-    const lv = m.hold == null ? m.smooth : m.hold;
+    const lv = m.hold == null ? m.smooth : (m.hold === 'proc' ? 0.4 : m.hold);
     const k = smoothstep(lv / INK_SPAN);                           // ink follows the level through a smoothstep, so it settles in step with the motion; no kink at a threshold
     const motion = Math.max(lv, REST_LEVEL);                       // amplitude and width never drop below the rest floor
     m.clock += dt * (REST_SPEED + (1 - REST_SPEED) * k);          // the drift slows toward rest instead of stopping
@@ -387,7 +383,9 @@
   function setSource(src) { state.src = src; document.querySelectorAll('[data-src]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === src))); if (src === 'mic') startMic(); else { stopMic(); document.getElementById('mic-note').textContent = ''; } }
 
   // ---------- Build ----------
-  const marks = [makeRiver(document.querySelector('#c-stage .mark'), null)];
+  const marks = [];
+  document.querySelectorAll('.bar[data-rbar]').forEach(b => { const host = b.parentNode; host.removeChild(b); marks.push(makeRiverBar(host, null)); });
+  for (const [hold, name, sub] of [[0, 'At rest', 'level 0.00'], [0.5, 'Speaking', 'level 0.50'], [1, 'Peak', 'level 1.00'], ['proc', 'Transcribing', 'level held at 0.40']]) { const g = document.createElement('div'); g.className = 'ground dark'; const sc = document.createElement('div'); sc.className = 'x2'; g.appendChild(sc); marks.push(makeRiverBar(sc, hold)); const cap = document.createElement('span'); cap.innerHTML = `${name}<br>${sub}`; g.appendChild(cap); document.getElementById('rstages').appendChild(g); }
   document.querySelectorAll('.bar[data-bar]').forEach(b => { const host = b.parentNode; const key = b.dataset.bar; host.removeChild(b); const m = makeBar(host, key, null); m.host = host; m.key = key; marks.push(m); });
   // Past 10:00 the timer is five characters, so the live bar switches to the shape computed for that width (the bar is fluid in width, never in height).
   let wide = false;
@@ -407,7 +405,6 @@
     }
   }
   buildStages();
-  document.querySelectorAll('[data-hold]').forEach(stage => marks.push(makeRiver(stage.querySelector('.mark'), parseFloat(stage.dataset.hold))));
   function buildMenubars() {
     for (const wld of GLYPH_WORLDS) {
       const bar = document.getElementById(`${wld}-menubar`); bar.innerHTML = '';
@@ -422,7 +419,7 @@
   const GLYPH_WORLDS = ['a', 'c'];
   function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of GLYPH_WORLDS) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
   function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
-  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); document.querySelectorAll('.live .hud').forEach(h => { h.dataset.state = state.appState; const w = h.querySelector('.word'); if (w) w.textContent = state.appState === 'processing' ? 'Transcribing…' : 'Listening'; }); applyBarState(); updateLiveGlyphs(); state.t0 = performance.now(); }
+  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); applyBarState(); updateLiveGlyphs(); state.t0 = performance.now(); }
   function applyBarState() { document.querySelectorAll('.live .bar').forEach(b => { const idle = state.appState === 'idle'; b.style.opacity = idle ? 0 : 1; b.style.transform = idle ? 'translateY(6px)' : 'none'; b.setAttribute('role', 'status'); b.setAttribute('aria-label', idle ? '' : state.appState === 'processing' ? 'Transcribing' : 'Listening'); }); }
   function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); }
 

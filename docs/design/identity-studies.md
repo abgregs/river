@@ -10,6 +10,7 @@ The studies themselves are [studies/river-identity-studies.html](studies/river-i
 - **Uniform ink on marks.** No selective accent color on individual strokes, "for now".
 - **Rounded corners with concentric radii.** Outer radius equals inner radius plus padding, per `better-ui`. The studies use a 16 pt panel radius, 12 pt padding, 4 pt inner radius.
 - **Presence while recording: small but unmistakable.**
+- **Neither recording indicator carries a word.** "Listening" was dropped from the microphone bar and then from the river bar as redundant; the river bar also drops the timer, so it is lines only.
 - **Untouched by this identity pass:** the menu bar dropdown, the Settings window layout, and the onboarding structure.
 - **Anti-goals:** cute or mascot-like; the generic AI aesthetic (purple-blue gradients, sparkles, glowing orbs); heavy or decorative chrome. Literal water imagery was offered as an anti-goal and deliberately *not* chosen.
 - **An indicator's empty and filled states are the same size.** State changes by ink, never by the shape growing or shrinking.
@@ -39,13 +40,15 @@ At 48 pt with "0:00" at 12 pt the joined bar measures about 84 by 51 pt. The tim
 
 **Open:** whether the 8 pt gap and 6 pt column gap are right, and whether the motion is now subtle enough; the maintainer accepted the construction without adjustments to either, so they stand until a live check says otherwise. Motion has only been judged in stills by the agent.
 
-### Recording indicator: river (parked, still of interest)
+### Recording indicator: river (a strong candidate since 2026-09-16)
 
 Three strands, each a slow meander with a faster ripple at an irrational ratio, at their own amplitude, phase, and drift; both ends fade through a gradient mask; uniform ink. Motion above rest is round two's (attack rate 10, release rate 5), which the maintainer called "really fluid, really nice" at levels 0.5 and 1.0 and in the live transitions.
 
 **Rest state, rebuilt twice on 2026-09-16.** Round eight's rest state read as "grainy, pixelly, glitchy, rough". Diagnosis, confirmed in a full-scale capture: its amplitude at level 0 was 0.6 to 0.9 px on strokes of 1.3 to 2.6 px, so near-horizontal hairlines crossed pixel rows at very shallow angles and antialiasing split their coverage between two rows; the slow drift then moved that pattern along the line. The first fix made the rest state three flat, pixel-aligned lines, which was crisp but which the maintainer then found too dead: "retain the aliveness and undulating waves that we have at the 0.50 level", slower and slightly compressed, not thin and straight.
 
 The rest state now is a calmer 0.5: amplitude and stroke width have a floor at the level-0.35 values (70% of 0.5's amplitude, stroke just under 0.5's width), the drift runs at 45% speed at rest and speeds up smoothly with level, and the ink dims to 44% with a slow breath of plus or minus 6% over about seven seconds (the breath's low point measures about 3.15:1 on charcoal; it holds still under Reduce Motion). Ink is the only thing that says "resting"; the water never stops. The amplitude floor is about 2.7 px on the thinnest strand, which keeps every strand out of the sub-pixel band that caused the grain. Ink follows the level through a smoothstep over the first half of the range, so on release it settles in step with the motion (the first build blended ink only below level 0.15, which the maintainer saw as a late, abrupt opacity step). Transcribing holds the level at 0.4: a touch more motion than rest, brighter ink. The mark renders 1:1 at 108 by 40.
+
+**Its own bar, 2026-09-16.** After the living rest state the maintainer called the river "a strong candidate" and asked for the same treatment as the microphone: a snug bar enclosing only the space the three lines need, no "Listening", and no timer at all. Because the strands move and a bar never changes size, the enclosure is the strands' full range of motion, the 108 by 40 band, plus 8 pt on every side: a capsule 124 by 56 with 28 pt ends that follow the fade at the strands' ends. Same near-opaque fill, shadow, and 0.22 s fade with a 6 pt rise as the microphone bar. The page holds every stage at 2x (rest, 0.50, 1.00, transcribing) beside the live panel.
 
 ### Menu bar glyph: river (parked, no verdict)
 
