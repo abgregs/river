@@ -217,20 +217,23 @@ enum Constants {
     static let riverCrestBlendRate: Double = 12
 
     // Menu bar slat glyph (planning 0028): five slats in a 16 pt template image. The
+    // group was widened and its pitch opened from 2.5 to 3 (maintainer's smoke,
+    // 2026-09-17): at the studies' size the mark read optically smaller than the
+    // neighboring status items. The indicator keeps the study page's own geometry. The
     // left x of each row (mirrored on the right); the row y centers are snapped per
     // scale so stroke edges land on device pixels: on pixel centers at 1x, on pixel
     // boundaries at 2x.
     static let menuBarGlyphSize: Double = 16
-    static let menuBarGlyphRowInsets: [Double] = [5.5, 4, 3.5, 4, 5.5]
+    static let menuBarGlyphRowInsets: [Double] = [4.25, 2, 1.5, 2, 4.25]
     static let menuBarGlyphRowCenters1x: [Double] = [2.5, 5.5, 8.5, 11.5, 14.5]
-    static let menuBarGlyphRowCenters2x: [Double] = [4, 6.5, 9, 11.5, 14]
-    static let menuBarGlyphReadyStroke: Double = 1.1
-    static let menuBarGlyphListeningStroke: Double = 1.3
+    static let menuBarGlyphRowCenters2x: [Double] = [3, 6, 9, 12, 15]
+    static let menuBarGlyphReadyStroke: Double = 1.4
+    static let menuBarGlyphListeningStroke: Double = 1.7
     // Ready: the middle slat at full ink, the others dimmed.
     static let menuBarGlyphReadySideInk: Double = 0.55
     // Transcribing: dots per row, the first and last centered on the slat's endpoints.
     static let menuBarGlyphDotCounts: [Int] = [3, 4, 5, 4, 3]
-    static let menuBarGlyphDotRadius: Double = 0.55
+    static let menuBarGlyphDotRadius: Double = 0.7
 
     // How long an error toast stays on the HUD before auto-dismissing (planning
     // 0018 acceptance criterion 1). Long enough to read a headline + hint, short
