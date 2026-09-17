@@ -188,7 +188,7 @@
     <div id="sec-c-frames">
     <h2>Every stage, held, at 2&times;</h2>
     <div class="stages" id="rstages"></div>
-    <p class="construct">Transcribing leaves the lines untouched and moves the ink: the base dims to the rest level (44%) over the 0.2 s crossfade, and a soft crest of full ink, 54 px wide, travels left to right along each strand once every 2.4 s, the same crest the microphone indicator's dots carry. Each strand's crest is offset by 0.18 of the period, so the three read as water rather than a wipe. The crest is a gradient stroke drawn over the base line and slid in mark coordinates, so nothing pops and nothing structural changes. Under Reduce Motion transcribing is the calm lines at full ink.</p>
+    <p class="construct">Transcribing leaves the lines untouched and moves the ink, as a property of the one stroke: each strand is a single path whose stroke is a gradient in mark coordinates, a raised-cosine window 70 px wide sampled at 17 stops, padded to the base ink beyond it and slid left to right once every 2.0 s, each strand offset by 0.18 of the period. Only the stop opacities change with state, from all-full while listening to a 55% base with a full-ink crest while transcribing, blended over 0.2 s; there is no overlay stroke, no composite, and no second shape, so nothing but the color moves. Under Reduce Motion transcribing is the calm lines at full ink.</p>
     </div>
     <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
     <ol class="goal">
@@ -293,12 +293,13 @@
     for (let i = 0; i <= steps; i++) { const u = i / steps; pts.push(`${(u * w).toFixed(2)} ${riverY(s, h, u, level, t).toFixed(2)}`); }
     return 'M' + pts.join(' L');
   }
-  // Transcribing: the lines are untouched; the ink moves. The base ink drops to the rest level over the
-  // crossfade and a soft crest of full ink travels left to right along each strand, the same crest the
-  // microphone indicator's dots carry. Each strand's crest is offset by a fraction of the period so the
-  // three read as water rather than a wipe. Nothing structural changes, and nothing pops: the crest is a
-  // gradient stroke drawn over the base line, sliding in mark coordinates.
-  const CREST_PERIOD = 2.4, CREST_BAND = 54, CREST_STAGGER = 0.18, CREST_BASE = 0.44;   // seconds per crossing; px width of the crest; per-strand phase offset; base ink under the crest
+  // Transcribing: the lines are untouched; only the ink moves, and it moves as a property of the one stroke.
+  // Each strand is a single path stroked with a gradient in mark coordinates: a raised-cosine window (smooth
+  // to the first derivative, so no corners read as edges) sampled at 17 stops, padded to the base ink beyond
+  // the band, and slid left to right. Only the stop opacities change with state, so listening and
+  // transcribing are the same stroke with a different opacity profile: no overlay, no composite, no crossfade
+  // of two shapes. Each strand's crest is offset by a fraction of the period so the three read as water.
+  const CREST_PERIOD = 2.0, CREST_BAND = 70, CREST_STAGGER = 0.18, CREST_BASE = 0.55, CREST_STOPS = 17;   // seconds per crossing; px width; per-strand phase offset; base ink under the crest; stops in the window
   let maskSeq = 0;
   function makeRiver(host, hold, w = 108, h = 40) {
     const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', 'aria-label': 'River mark' }, host);
@@ -306,14 +307,11 @@
     const grad = el('linearGradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 }, defs);
     [['0', 0], ['0.14', 1], ['0.86', 1], ['1', 0]].forEach(([o, a]) => el('stop', { offset: o, 'stop-color': '#fff', 'stop-opacity': a }, grad));
     const mask = el('mask', { id: id + 'm' }, defs); el('rect', { x: 0, y: 0, width: w, height: h, fill: `url(#${id})` }, mask);
-    const g = el('g', { mask: `url(#${id}m)` }, svg);
-    const gP = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
-    const gB = el('g', { opacity: 0 }, g);
-    const paths = STRANDS.map(s => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width }, gP));
-    gB.setAttribute('fill', 'none'); gB.setAttribute('stroke-linecap', 'round'); gB.setAttribute('stroke-linejoin', 'round');
-    const grads = STRANDS.map((s, i) => { const gr = el('linearGradient', { id: `${id}c${i}`, gradientUnits: 'userSpaceOnUse', x1: 0, y1: 0, x2: CREST_BAND, y2: 0 }, defs); [[0, 0], [0.25, 0.5], [0.5, 1], [0.75, 0.5], [1, 0]].forEach(([o, a]) => el('stop', { offset: o, 'stop-color': '#fff', 'stop-opacity': a }, gr)); return gr; });
-    const crests = STRANDS.map((s, i) => el('path', { stroke: `url(#${id}c${i})` }, gB));
-    return { paths, crests, grads, gP, gB, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0, crestMix: 0 };
+    const g = el('g', { mask: `url(#${id}m)`, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const ink = css('--ink');
+    const grads = STRANDS.map((s, i) => { const gr = el('linearGradient', { id: `${id}c${i}`, gradientUnits: 'userSpaceOnUse', spreadMethod: 'pad', x1: 0, y1: 0, x2: CREST_BAND, y2: 0 }, defs); for (let k = 0; k < CREST_STOPS; k++) el('stop', { offset: (k / (CREST_STOPS - 1)).toFixed(4), 'stop-color': ink, 'stop-opacity': 1 }, gr); return gr; });
+    const paths = STRANDS.map((s, i) => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width, stroke: `url(#${id}c${i})` }, g));
+    return { paths, grads, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0, crestMix: 0 };
   }
   function makeRiverBar(host, hold) {
     const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '132px'; wrap.style.height = '56px'; host.appendChild(wrap);
@@ -335,23 +333,20 @@
     const motion = Math.max(lv, REST_LEVEL);                       // amplitude and width never drop below the rest floor
     m.clock += dt * (REST_SPEED + (1 - REST_SPEED) * k);          // the drift slows toward rest instead of stopping
     const restInk = REST_INK + (reduceMotion ? 0 : REST_BREATH * Math.sin(t * 0.9));    // a slow breath, about seven seconds; still under Reduce Motion
-    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // the base dims and the crest fades in over about 0.2 s
+    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // the crest profile blends in over about 0.2 s
     m.crestMix += ((proc && !reduceMotion ? 1 : 0) - m.crestMix) * Math.min(1, mixRate * dt);   // under Reduce Motion transcribing is the calm lines at full ink
-    m.gB.setAttribute('opacity', m.crestMix.toFixed(3));
     m.paths.forEach((p, i) => {
       const s = STRANDS[i];
       const width = s.width + 0.8 * motion, alpha = restInk + (s.alpha - restInk) * k;
-      p.setAttribute('d', riverPath(s, m.w, m.h, motion, m.clock));
-      p.setAttribute('stroke', ink);   // uniform ink on marks; the accent never touches the indicator
+      p.setAttribute('d', riverPath(s, m.w, m.h, motion, m.clock));   // uniform ink on marks; the accent never touches the indicator
       p.setAttribute('stroke-width', width.toFixed(2));
-      p.setAttribute('opacity', (alpha * (1 - (1 - CREST_BASE) * m.crestMix)).toFixed(3));   // the base dims toward the rest ink while transcribing
-      if (m.crestMix > 0.001) {
-        const c = m.crests[i]; c.setAttribute('d', p.getAttribute('d')); c.setAttribute('stroke-width', width.toFixed(2)); c.setAttribute('opacity', alpha.toFixed(3));
-        const phase = ((t / CREST_PERIOD) + i * CREST_STAGGER) % 1;                                   // the crest crosses the mark once per period, each strand offset
-        const x = -CREST_BAND + phase * (m.w + 2 * CREST_BAND);
-        m.grads[i].setAttribute('gradientTransform', `translate(${x.toFixed(2)} 0)`);
-        m.grads[i].querySelectorAll('stop').forEach(st => st.setAttribute('stop-color', ink));
-      }
+      p.setAttribute('opacity', alpha.toFixed(3));
+      // the stroke's own opacity profile: a raised-cosine crest of full ink over a dimmed base, blended in by crestMix
+      const base = 1 - (1 - CREST_BASE) * m.crestMix;
+      const stops = m.grads[i].childNodes;
+      for (let k = 0; k < stops.length; k++) { const win = 0.5 - 0.5 * Math.cos(2 * Math.PI * k / (stops.length - 1)); stops[k].setAttribute('stop-opacity', (base + (1 - base) * win).toFixed(3)); }
+      const phase = ((t / CREST_PERIOD) + i * CREST_STAGGER) % 1;                                   // the crest crosses the mark once per period, each strand offset
+      m.grads[i].setAttribute('gradientTransform', `translate(${(-CREST_BAND + phase * (m.w + 2 * CREST_BAND)).toFixed(2)} 0)`);
     });
   }
 
