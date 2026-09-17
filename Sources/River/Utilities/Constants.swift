@@ -157,15 +157,15 @@ enum Constants {
     static let hudFillOpacityDark: Double = 0.94
     static let hudHairlineOpacity: Double = 0.07
     static let hudHairlineWidth: Double = 1
-    // The CSS shadows `0 1 2` at 20% and `0 10 24` at 24%; SwiftUI's radius is half a CSS blur.
+    // The CSS shadows `0 1 2` at 20% and `0 10 24` at 24%; the radius equals the CSS blur, matched side by side.
     static let hudNearShadowOffset: Double = 1
-    static let hudNearShadowRadius: Double = 1
+    static let hudNearShadowRadius: Double = 2
     static let hudNearShadowOpacity: Double = 0.20
     static let hudFarShadowOffset: Double = 10
-    static let hudFarShadowRadius: Double = 12
+    static let hudFarShadowRadius: Double = 24
     static let hudFarShadowOpacity: Double = 0.24
     // Transparent margin around the HUD content so the far shadow is not clipped by the panel.
-    static let hudShadowMargin: Double = 32
+    static let hudShadowMargin: Double = 48
     // Enter rises and exit drops by this much over `hudFadeSeconds`; Reduce Motion drops the rise.
     static let hudFadeRise: Double = 6
 
