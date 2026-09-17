@@ -249,8 +249,17 @@ enum Constants {
 
     // Mic level (planning 0020). The publish interval throttles the level publisher
     // to ~14 Hz (the indicator smooths per display frame, far below the ~43
-    // buffers/sec the tap delivers); the reference RMS is the linear amplitude mapped
-    // to a full level of 1 (a ~0.2 RMS speech peak).
-    static let levelMeterPublishInterval: Double = 0.07
-    static let levelMeterReferenceRMS: Float = 0.2
+    // buffers/sec the tap delivers); the reference RMS is the linear amplitude that
+    // maps to a full level of 1.
+    //
+    // The reference was 0.2 (about -14 dBFS) to match the study page's `rms / 0.2`.
+    // On-device that mapping left loud speech below level 0.3 and full scale
+    // unreachable: a browser applies automatic gain control to its mic, while
+    // `AVAudioEngine` delivers the raw signal, so the same voice lands far lower here
+    // (maintainer's smoke, 2026-09-17). Lowering the reference scales every level
+    // threshold down together and leaves the indicator's own tuned numbers untouched.
+    // Conservative first value: room tone has been measured near 0.02 RMS in places
+    // (see `silenceTrimEnergyThreshold`), which must stay well below the waking range.
+    static let inputLevelPublishInterval: Double = 0.07
+    static let inputLevelReferenceRMS: Float = 0.08
 }

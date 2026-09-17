@@ -130,11 +130,11 @@ final class MicrophoneCapability: Capability {
     // internal for testability — the throttled level emission, split from the tap
     // callback so the ~14 Hz throttle is tested with an injected clock without a
     // real engine (planning 0020 AC3). Emits the normalized level on the main actor;
-    // buffers arriving inside `levelMeterPublishInterval` of the last emission are
+    // buffers arriving inside `inputLevelPublishInterval` of the last emission are
     // dropped (the meter doesn't need every buffer).
     func emitLevel(rms: Float) {
         let t = now()
-        if let last = lastLevelEmit, t - last < Constants.levelMeterPublishInterval { return }
+        if let last = lastLevelEmit, t - last < Constants.inputLevelPublishInterval { return }
         lastLevelEmit = t
         levelSubject.send(Self.normalizedLevel(rms: rms))
     }
@@ -153,11 +153,11 @@ final class MicrophoneCapability: Capability {
     }
 
     // internal for testability — maps a linear RMS to a 0...1 meter level. A speech
-    // peak near `levelMeterReferenceRMS` lights the full meter; silence is 0; quiet
+    // peak near `inputLevelReferenceRMS` lights the full meter; silence is 0; quiet
     // speech sits proportionally low. Clamped so a loud transient can't exceed 1.
     static func normalizedLevel(rms: Float) -> Float {
         guard rms > 0 else { return 0 }
-        return min(1, rms / Constants.levelMeterReferenceRMS)
+        return min(1, rms / Constants.inputLevelReferenceRMS)
     }
 
     private func updateStatus(_ next: CapabilityStatus) {

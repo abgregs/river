@@ -177,7 +177,7 @@ struct AppStateTests {
         let appState = AppState()
         appState.apply(.recording)
         appState.bind(microphone: mic)
-        mic.emitLevel(rms: Constants.levelMeterReferenceRMS)  // → normalized 1.0
+        mic.emitLevel(rms: Constants.inputLevelReferenceRMS)  // → normalized 1.0
         #expect(appState.inputLevel == 1.0)
     }
 
