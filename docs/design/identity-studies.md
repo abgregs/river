@@ -106,6 +106,16 @@ Red sand `#C4674A` fails as text and as a control ground on white and would have
 12. **Check the timer at real lengths.** A five-character time is 28% wider than a four-character one; a capsule sized for "0:00" loses its right padding at 10:00. Every fixed-width text box in a mark needs its longest value tried.
 13. **Compute envelopes, don't draw them.** A bar that must hug a mark with a constant gap is the mark's offset (Minkowski sum with a disk), joined and closed with a fillet radius; `shapely` does this in a few lines and the result is exact.
 
+## Implementation decisions (audit of 2026-09-16)
+
+An audit of the prototype against the accessibility, color, typography, UI polish, Apple design, and animation lenses fixed four things on the page (five-character timer shape past 10:00; river rest ink 44% so the breath clears 3:1; breath still under Reduce Motion; ease-out on every fade) and settled these for the native build:
+
+- **Bar surface:** near-opaque charcoal (96% on light desktops, 94% on dark), not a system material. The mark reads identically on any desktop.
+- **Envelope geometry:** embed the outlines computed by [studies/bar-shape.py](studies/bar-shape.py) as point arrays (the four-character and five-character timer variants) drawn by a `Shape`; test by bounding box and point count. No live geometry code.
+- **Menu bar template asset:** snap the 16 px asset's rows to device-pixel centers at 1x and 2x so the slats render crisp; the 48 pt indicator keeps the 2.6-unit pitch.
+- **The shipping HUD's repeating mic pulse ignores Reduce Motion** ([RecordingIndicatorView.swift](../../Sources/River/Views/RecordingIndicatorView.swift)); it is replaced by the new indicator rather than patched.
+- **Carry into the implementation:** every timing in `Constants` (0.15 s rise, 0.6 s fall, 0.2 s crossfade, 0.22 s fade with a 6 pt rise, 3.5 s dot drift, thresholds 0.06 / 0.18 / 0.55); the wake filter runs per frame (`TimelineView(.animation)`, paused when idle) because level publishes every 70 ms; `accessibilityLabel` for the state and `accessibilityValue` for the time; `accessibilityReduceMotion` turns the crossfade and fade instant and stills the dots; a pure `SlatPresentation` mapping tested with `@Test(arguments:)`.
+
 ## Impeccable state
 
 `PRODUCT.md` exists (written 2026-09-16). The direction contract lives in the surface brief under `.impeccable/surfaces/`. DESIGN.md is deliberately not written yet: the `impeccable` flow writes it at the finish, from the built world. The direction round's seed key was `dd02b7c1`; the maintainer pinned their own direction over the roll. The mechanical detector was run once over the round-nine page; its only finding is the dark-appearance muted text token paired against the light panel, which is a token pairing older than this round and not part of any mark.
