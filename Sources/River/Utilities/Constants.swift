@@ -135,6 +135,101 @@ enum Constants {
     // Gap between the HUD panel and the bottom of the active screen's visible frame.
     static let hudBottomMargin: Double = 120
 
+    // The river indicator (planning 0028). Every number was measured or tuned on the
+    // study page (docs/design/studies/river-identity-studies.html) and is ported as is.
+
+    // Geometry: the 108 x 40 mark is the strands' full range of motion; the capsule
+    // adds side and vertical padding and never changes size.
+    static let riverMarkWidth: Double = 108
+    static let riverMarkHeight: Double = 40
+    static let riverCapsuleHorizontalPadding: Double = 12
+    static let riverCapsuleVerticalPadding: Double = 8
+    static let riverCapsuleWidth: Double = riverMarkWidth + 2 * riverCapsuleHorizontalPadding
+    static let riverCapsuleHeight: Double = riverMarkHeight + 2 * riverCapsuleVerticalPadding
+    static let riverCapsuleCornerRadius: Double = riverCapsuleHeight / 2
+    // Strand samples across the width, and the fraction at each end faded to nothing.
+    static let riverSampleCount: Int = 57
+    static let riverEndFadeFraction: Double = 0.14
+
+    // The HUD surface: near-opaque charcoal, no material (a material flips the palette
+    // per desktop). Dark appearance adds a hairline where the shadow vanishes.
+    static let hudFillOpacityLight: Double = 0.96
+    static let hudFillOpacityDark: Double = 0.94
+    static let hudHairlineOpacity: Double = 0.07
+    static let hudHairlineWidth: Double = 1
+    // The CSS shadows `0 1 2` at 20% and `0 10 24` at 24%; SwiftUI's radius is half a CSS blur.
+    static let hudNearShadowOffset: Double = 1
+    static let hudNearShadowRadius: Double = 1
+    static let hudNearShadowOpacity: Double = 0.20
+    static let hudFarShadowOffset: Double = 10
+    static let hudFarShadowRadius: Double = 12
+    static let hudFarShadowOpacity: Double = 0.24
+    // Transparent margin around the HUD content so the far shadow is not clipped by the panel.
+    static let hudShadowMargin: Double = 32
+    // Enter rises and exit drops by this much over `hudFadeSeconds`; Reduce Motion drops the rise.
+    static let hudFadeRise: Double = 6
+
+    // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
+    static let hudMessageCornerRadius: Double = 16
+    static let hudMessagePadding: Double = 12
+    static let hudMessageWidth: Double = 260
+    static let hudStackSpacing: Double = 8
+
+    // Level engine, per display frame: attack and release rates per second (round two's timing).
+    static let riverAttackRate: Double = 10
+    static let riverReleaseRate: Double = 5
+    // Motion floor: amplitude and width never fall below this level's shape.
+    static let riverRestLevel: Double = 0.35
+    // The strand clock runs at this fraction of real time at rest, rising to full speed with ink.
+    static let riverRestSpeed: Double = 0.45
+    // Ink and speed follow the level through a smoothstep over this span.
+    static let riverInkSpan: Double = 0.5
+    // Ink at rest, breathing by this depth at this angular rate (about seven seconds); still under Reduce Motion.
+    static let riverRestInk: Double = 0.44
+    static let riverBreathDepth: Double = 0.06
+    static let riverBreathRate: Double = 0.9
+    // The level the strands settle to while transcribing.
+    static let riverTranscribingLevel: Double = 0.4
+
+    // Strand shape: y = base + amplitudeScale * motion * amp * (meander + rippleWeight * ripple).
+    static let riverAmplitudeScale: Double = 11
+    static let riverWidthGain: Double = 0.8
+    static let riverMeanderDrift: Double = 0.6
+    static let riverRippleDrift: Double = 1.9
+    static let riverRippleWeight: Double = 0.45
+    static let riverRipplePhaseGain: Double = 1.7
+    static let riverStrands: [RiverStrand] = [
+        RiverStrand(baseY: 11.5, amplitude: 0.7, meanderLength: 1.9, rippleLength: 0.62, phase: 0.4, speed: 0.55, width: 1.6, ink: 0.70),
+        RiverStrand(baseY: 20, amplitude: 1.0, meanderLength: 1.45, rippleLength: 0.41, phase: 2.1, speed: 0.72, width: 2.6, ink: 1.00),
+        RiverStrand(baseY: 28.5, amplitude: 0.8, meanderLength: 2.3, rippleLength: 0.53, phase: 4.0, speed: 0.61, width: 1.4, ink: 0.55),
+    ]
+
+    // Transcribing: a raised-cosine crest of full ink slides along each stroke once per
+    // period over a dimmed base, each strand offset by a fraction of the period.
+    static let riverCrestPeriod: Double = 2.0
+    static let riverCrestWidth: Double = 70
+    static let riverCrestStopCount: Int = 17
+    static let riverCrestStagger: Double = 0.18
+    static let riverCrestBase: Double = 0.55
+    // The crest profile blends in and out at this rate per second (about 0.2 s).
+    static let riverCrestBlendRate: Double = 12
+
+    // Menu bar slat glyph (planning 0028): five slats in a 16 pt template image. The
+    // left x of each row (mirrored on the right); the row y centers are snapped per
+    // scale so stroke edges land on device pixels: on pixel centers at 1x, on pixel
+    // boundaries at 2x.
+    static let menuBarGlyphSize: Double = 16
+    static let menuBarGlyphRowInsets: [Double] = [5.5, 4, 3.5, 4, 5.5]
+    static let menuBarGlyphRowCenters1x: [Double] = [2.5, 5.5, 8.5, 11.5, 14.5]
+    static let menuBarGlyphRowCenters2x: [Double] = [4, 6.5, 9, 11.5, 14]
+    static let menuBarGlyphReadyStroke: Double = 1.1
+    static let menuBarGlyphListeningStroke: Double = 1.3
+    // Ready: the middle slat at full ink, the others dimmed.
+    static let menuBarGlyphReadySideInk: Double = 0.55
+    // Transcribing: dots per row, the first and last centered on the slat's endpoints.
+    static let menuBarGlyphDotCounts: [Int] = [3, 4, 5, 4, 3]
+    static let menuBarGlyphDotRadius: Double = 0.55
+
     // How long an error toast stays on the HUD before auto-dismissing (planning
     // 0018 acceptance criterion 1). Long enough to read a headline + hint, short
     // enough to "get out of the way."
