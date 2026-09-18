@@ -145,6 +145,27 @@ spctl -a -vvv -t install River-0.0.1-rc1.dmg   # should report "accepted / Notar
 stapler validate River-0.0.1-rc1.dmg
 ```
 
+## Troubleshooting
+
+### `notarytool` fails with HTTP 403 "a required agreement is missing or has expired"
+
+The message names agreements, but it is also what a **stale or wrong-team App Store Connect API key** produces. Seen on `v0.1.0-rc1` (2026-09-18): accepting the current Apple Developer Program License Agreement did **not** clear it; **rotating the API key did**, and the same tag then passed on a re-run.
+
+Rotate first, investigate Apple's console second — it is the cheaper half:
+
+1. App Store Connect → Users and Access → Integrations → App Store Connect API → **Team Keys** (a Team key has an Issuer ID; an Individual key does not, and the workflow needs one that does). Generate a key with the **Developer** role and download the `.p8` — one download only.
+2. Update all three secrets: `base64 -i AuthKey_<id>.p8 | gh secret set NOTARY_API_KEY_BASE64`, then `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER_ID` (pipe them in with `echo -n` — a trailing newline inside either value fails authentication in a way that reads as unrelated).
+3. Keep the old key active until a run succeeds, then revoke it.
+4. Re-run the failed run (`gh run rerun <id> --failed`). The tag is the workflow's only input, and notarization happens before anything is published, so a failure leaves no partial release to clean up.
+
+If a fresh key still 403s, it is genuinely account-side: the **Account Holder** (not an Admin) must accept the license agreement at developer.apple.com, membership must be unexpired, and acceptance can take time to propagate. `xcrun notarytool history --key … --key-id … --issuer …` answers the same question locally in seconds instead of a two-minute CI run.
+
+**Why this is worth recording:** the error text sends you to Apple's agreements page, which is the slow path and, at least once, the wrong one.
+
+### A pre-release tag does not bump the tap
+
+By design (planning 0013) — the tap-bump step runs on releases only, and `SUFeedURL` resolves to the latest non-pre-release, so Sparkle never sees an rc either. To test `brew install` you need a real release tag, or the manual cask copy in [../../packaging/homebrew/README.md](../../packaging/homebrew/README.md).
+
 ## Related
 
 - [distribution.md](distribution.md) — the three channels and signing identities
