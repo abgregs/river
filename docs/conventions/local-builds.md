@@ -52,6 +52,22 @@ If the Homebrew cask is installed, `/Applications/River.app` belongs to it. Remo
 
 Each `make install` re-signs with the self-signed "River Dev" identity. The Accessibility row survives a same-identity rebuild, and the app should launch reading `.granted`. The Grant → Refresh round-trip that earlier builds needed on every launch came from the app's own delivery probe racing an asynchronous event post, not from TCC; the probe is removed (planning 0012 section 6). If a rebuild launches reading not granted now, treat it as a real finding and check the logs before pressing Refresh.
 
+### Switching between a dev build and a release build costs the Accessibility grant
+
+A `make install` build is signed with the self-signed "River Dev" identity; a build installed from the release DMG is signed with Developer ID. Same bundle identifier, different code signature — and TCC keys each grant to the identifier **plus** the signature's designated requirement, so it treats them as two different apps.
+
+What that looks like in practice (measured while smoking `v0.1.0-rc1`, 2026-09-18):
+
+- **Microphone** re-prompts on the first recording and re-grants in one click.
+- **Input Monitoring** carried over. The log line `CGEventTap started` is the proof, since `CGEvent.tapCreate` returns nil without the grant.
+- **Accessibility** did not. The old row has to be removed with **−** and `/Applications/River.app` re-added with **+**; the toggle alone does not rebind it.
+
+So: **unmount the DMG before touching System Settings** (`hdiutil detach /Volumes/River`). While it is mounted there are two `River.app` bundles on disk, and a grant added for the disk image's copy will never apply to the installed one.
+
+Quit River before editing the rows — a running app holds its TCC row, and edits often do not take effect until relaunch. Reach for `tccutil reset` only as a last resort: it clears the grant globally for the bundle ID, and the app has no in-app path to re-request Accessibility (it opens System Settings instead), so the recovery is longer than the problem.
+
+Preferences and the model cache both survive the swap, which is convenient and misleading: a `selectedModel` left on `base.en` from dev testing follows you into the release build, where a new user would get `small.en`. Reset it before judging transcription quality or load time.
+
 ## "Loading model…" is not downloading
 
 **This is the single most misread signal in local builds.** The indicator covers both operations, and they have completely different causes and costs.
