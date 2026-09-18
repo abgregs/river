@@ -31,9 +31,9 @@ Option 3 (possibly plus the menu item as a discoverable fallback) preserves the 
 4. Session transitions are unit-tested (cancel-from-recording, no-op states, deferral interaction); the gesture interpretation is unit-tested in `HotkeyManager`/`TapStateMachine` per the chosen trigger.
 5. The event tap's privacy posture is explicitly recorded: either unchanged (options 2/3) or the mask widening is documented as a revision of the 0006 decision.
 
-## Known issue, deliberately deferred: the canceled notice bleeds into the next recording
+## Fixed 2026-09-17: the canceled notice bled into the next recording
 
-**Observed on-device 2026-09-11, in all three activation modes** (Hold, Single Tap, Double Tap). After canceling a recording, the *next* recording displays "Recording canceled." in the HUD — alongside the live level meter, while the user is actively speaking into a perfectly healthy new recording. Confusing: the message describes the previous cycle but appears to describe the current one.
+**Observed on-device 2026-09-11 and again in the 0028 smoke, in all three activation modes** (Hold, Single Tap, Double Tap). After canceling a recording, the *next* recording displayed "Recording canceled." in the indicator, while the user was actively speaking into a perfectly healthy new recording. Confusing: the message described the previous cycle but appeared to describe the current one.
 
 **Root cause.** `AppState.apply(_ newState:)` treats the three user-facing surfaces inconsistently:
 
@@ -49,7 +49,7 @@ if newState != .recording {
 
 `notice` is the only one not cleared on entering `.recording`. That was correct before this spec: a recording-context notice was always *set* during `.recording`, so clearing it on end was sufficient. This spec breaks that invariant deliberately — `handleCancel` emits its notice **after** the `.idle` transition, precisely so the clear-on-end rule doesn't wipe it before the user reads it. That ordering is load-bearing and correct, but it makes `notice` the first notice that can outlive a recording, and nothing then clears it when the next one begins.
 
-**Fix when taken:** add `notice = nil` to the `newState == .recording` branch, mirroring `errorMessage`. One line, plus a test asserting a notice set while `.idle` does not survive into the next `.recording`.
+**Fixed in [0028](0028_identity-implementation.md)** exactly as predicted: `notice = nil` in the `newState == .recording` branch, mirroring `errorMessage`, with a regression test asserting a notice set while `.idle` does not survive into the next `.recording` (`AppStateTests.canceledNoticeClearedByNextRecording`). The indicator also renders a notice only *while* recording, so a cancel message can no longer appear under a capsule that is fading out; the menu row remains its lingering home.
 
 **Why deferred** (maintainer decision, 2026-09-11): purely cosmetic — the new recording captures, transcribes, and pastes normally; only the stale copy is wrong. It is grouped with the other deferred HUD-polish items and will be picked up after the project rename and the UI/identity pass, since notice lifecycle and HUD copy are both in scope for that work. Deferring a one-line fix is a deliberate batching choice, not an oversight.
 

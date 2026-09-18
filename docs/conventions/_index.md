@@ -6,6 +6,7 @@ How code is written in River. Read what's relevant before changing code in that 
 - [logging.md](logging.md) — `os.Logger` usage; user content protected by omission, error strings path-redacted via `LogRedaction`
 - [persistence.md](persistence.md) — `UserDefaults` keys, defaults, observation
 - [tests.md](tests.md) — `swift-testing` framework, test patterns, what's exercised and what isn't
+- [test-harnesses.md](test-harnesses.md) — suites that render the shipped glyphs and app icon from `Constants` (and fail on drift), plus the env-gated dictionary and transcription eval harnesses
 - [git.md](git.md) — branches, conventional commits, stacked PRs, what touches `main`
 - [doc-maintenance.md](doc-maintenance.md) — the automated doc-sync routine's spec: how `docs/` stays synced with the code, the confidence rubric, and the PR lifecycle
 - [versioning-and-releases.md](versioning-and-releases.md) — tag-driven release protocol, SemVer rules, the two macOS version fields, per-channel update behavior

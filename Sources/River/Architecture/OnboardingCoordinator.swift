@@ -85,6 +85,7 @@ final class OnboardingCoordinator {
             rootView: OnboardingView(capabilities: capabilities) { [weak self] in
                 self?.dismiss()
             }
+            .tint(Color(nsColor: Palette.accent))
         )
         newWindow.center()
         newWindow.isReleasedWhenClosed = false

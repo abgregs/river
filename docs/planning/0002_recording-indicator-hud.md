@@ -51,7 +51,7 @@ The Menu-bar visual state milestone ships a minimal, path-redacted error *row* i
 - Exact placement and multi-display handling (active screen vs. main).
 - Processing visual (morph dots → spinner vs. swap label).
 - Fade timing, and whether a minimum on-screen duration prevents flicker on very short taps.
-- Whether to graduate the error toast ([0018](0018_transient-error-toasts.md)) and the level meter ([0020](0020_mic-level-meter.md)) into this panel in the same PR or a later pass.
+- ~~Whether to graduate the error toast ([0018](0018_transient-error-toasts.md)) and the level meter ([0020](0020_mic-level-meter.md)) into this panel~~ — both shipped into the panel, and the panel itself was rebuilt as the river indicator in [0028](0028_identity-implementation.md): the level drives the strands, and the toast renders in its own rectangle below the capsule.
 
 ## Related
 

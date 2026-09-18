@@ -400,7 +400,7 @@ struct MicrophoneLevelTests {
     @MainActor
     @Test("emitLevel publishes on the level publisher and throttles within the interval")
     func emitLevelThrottles() {
-        // Samples arriving inside `levelMeterPublishInterval` of the last emission
+        // Samples arriving inside `inputLevelPublishInterval` of the last emission
         // are dropped; a sample past the interval emits again. The injected clock
         // makes this deterministic — no wall-clock waiting, no real engine.
         let clock = MutableClock()
@@ -412,9 +412,9 @@ struct MicrophoneLevelTests {
         clock.now = 100
         mic.emitLevel(rms: 0.2)                                          // first: always emits
         mic.emitLevel(rms: 0.2)                                          // same instant: throttled
-        clock.now = 100 + Constants.levelMeterPublishInterval / 2
+        clock.now = 100 + Constants.inputLevelPublishInterval / 2
         mic.emitLevel(rms: 0.2)                                          // within interval: throttled
-        clock.now = 100 + Constants.levelMeterPublishInterval * 2
+        clock.now = 100 + Constants.inputLevelPublishInterval * 2
         mic.emitLevel(rms: 0.2)                                          // past interval: emits
 
         #expect(received.count == 2)

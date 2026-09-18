@@ -29,7 +29,8 @@ Some entries below are marked **structurally impossible** — the architecture m
 1. Copy `Info.plist` into `Contents/Info.plist`.
 2. Verify with `codesign -dv` that the resulting bundle reports the expected `Identifier=com.river.app`.
 3. Sign with `--entitlements <path>` so disabled-sandbox + audio-input capabilities are applied.
-4. Fail loudly if any of the above is missing.
+4. Copy the generated assets — `River.icns` and the menu bar glyph PNGs — into `Contents/Resources`, and assert they arrived (planning 0028; SwiftPM has no asset pipeline for a hand-rolled bundle, so only the Makefile puts them there).
+5. Fail loudly if any of the above is missing.
 
 **Why:** a bundle without a valid `CFBundleIdentifier` is unidentifiable to TCC. macOS may accept it for *reading* events (Input Monitoring) but silently refuse to let it *post* events (Accessibility). The failure mode is invisible at runtime — no error, no log, no user feedback — so it is stopped at build time: the identifier assertion in step 2 is what enforces this item. A runtime round-trip detector in [`AccessibilityCapability`](../architecture/capabilities.md) was tried and removed: its read-back raced the asynchronous event post and reported a correctly granted permission as denied on most launches ([../planning/0012_onboarding-permissions-polish.md](../planning/0012_onboarding-permissions-polish.md)). See [../architecture/distribution.md](../architecture/distribution.md).
 

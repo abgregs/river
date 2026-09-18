@@ -9,17 +9,17 @@ struct MenuBarPresentationTests {
     @Test("icon and label reflect each cycle state when model is ready")
     func visualPerState() {
         #expect(MenuBarPresentation.visual(state: .idle, hasError: false, modelLoadState: .ready)
-            == .init(systemImage: "mic", statusLabel: "Ready"))
+            == .init(icon: .glyph(.ready), statusLabel: "Ready"))
         #expect(MenuBarPresentation.visual(state: .recording, hasError: false, modelLoadState: .ready)
-            == .init(systemImage: "mic.fill", statusLabel: "Recording..."))
+            == .init(icon: .glyph(.listening), statusLabel: "Recording..."))
         #expect(MenuBarPresentation.visual(state: .processing, hasError: false, modelLoadState: .ready)
-            == .init(systemImage: "ellipsis", statusLabel: "Processing..."))
+            == .init(icon: .glyph(.transcribing), statusLabel: "Processing..."))
     }
 
     @Test("a pending error overrides the idle icon but keeps the status label")
     func errorOverridesIdleIcon() {
         let visual = MenuBarPresentation.visual(state: .idle, hasError: true, modelLoadState: .ready)
-        #expect(visual.systemImage == "exclamationmark.triangle")
+        #expect(visual.icon == .symbol("exclamationmark.triangle"))
         #expect(visual.statusLabel == "Ready")
     }
 
@@ -27,8 +27,8 @@ struct MenuBarPresentationTests {
     func activeStateIconWinsOverError() {
         // Errors surface at end-of-cycle; a recording/processing icon must not
         // be masked by a stale error from the previous cycle.
-        #expect(MenuBarPresentation.visual(state: .recording, hasError: true, modelLoadState: .ready).systemImage == "mic.fill")
-        #expect(MenuBarPresentation.visual(state: .processing, hasError: true, modelLoadState: .ready).systemImage == "ellipsis")
+        #expect(MenuBarPresentation.visual(state: .recording, hasError: true, modelLoadState: .ready).icon == .glyph(.listening))
+        #expect(MenuBarPresentation.visual(state: .processing, hasError: true, modelLoadState: .ready).icon == .glyph(.transcribing))
     }
 
     // MARK: - Load state mapping (planning 0004 AC4)
@@ -38,7 +38,7 @@ struct MenuBarPresentationTests {
         // Cold launch: model files not yet on disk. The menu must show progress,
         // not "Ready" — "Ready" while the model is still downloading is a lie.
         let visual = MenuBarPresentation.visual(state: .idle, hasError: false, modelLoadState: .downloading)
-        #expect(visual.systemImage == "arrow.down.circle")
+        #expect(visual.icon == .symbol("arrow.down.circle"))
         #expect(visual.statusLabel == "Downloading model...")
     }
 
@@ -46,7 +46,7 @@ struct MenuBarPresentationTests {
     func loadingState() {
         // Warm launch: files on disk, CoreML loading into memory. Still not "Ready".
         let visual = MenuBarPresentation.visual(state: .idle, hasError: false, modelLoadState: .loading)
-        #expect(visual.systemImage == "ellipsis")
+        #expect(visual.icon == .symbol("ellipsis"))
         #expect(visual.statusLabel == "Loading...")
     }
 
@@ -55,7 +55,7 @@ struct MenuBarPresentationTests {
         // "Ready" after a failed load would be the exact menu-bar lie 0004 removes:
         // dictation cannot work until relaunch, so the label must say so.
         let visual = MenuBarPresentation.visual(state: .idle, hasError: false, modelLoadState: .failed)
-        #expect(visual.systemImage == "exclamationmark.triangle")
+        #expect(visual.icon == .symbol("exclamationmark.triangle"))
         #expect(visual.statusLabel == "Model failed to load")
     }
 
@@ -64,9 +64,20 @@ struct MenuBarPresentationTests {
         // Active states are visible feedback during a live recording/paste cycle.
         // They must never be masked by the model load state (which is satisfied
         // before recording is permitted — the session gates on .ready).
-        #expect(MenuBarPresentation.visual(state: .recording, hasError: false, modelLoadState: .loading).systemImage == "mic.fill")
-        #expect(MenuBarPresentation.visual(state: .processing, hasError: false, modelLoadState: .loading).systemImage == "ellipsis")
-        #expect(MenuBarPresentation.visual(state: .recording, hasError: false, modelLoadState: .downloading).systemImage == "mic.fill")
+        #expect(MenuBarPresentation.visual(state: .recording, hasError: false, modelLoadState: .loading).icon == .glyph(.listening))
+        #expect(MenuBarPresentation.visual(state: .processing, hasError: false, modelLoadState: .loading).icon == .glyph(.transcribing))
+        #expect(MenuBarPresentation.visual(state: .recording, hasError: false, modelLoadState: .downloading).icon == .glyph(.listening))
+    }
+
+    // The asset names are the contract with the bundle: `make verify` checks these files
+    // ship, so a renamed case must fail here before it silently blanks the menu bar.
+    @Test("each slat glyph state maps to its shipped asset name", arguments: [
+        (MenuBarPresentation.Glyph.ready, "MenuBarReady"),
+        (.listening, "MenuBarListening"),
+        (.transcribing, "MenuBarTranscribing"),
+    ])
+    func glyphAssetNames(glyph: MenuBarPresentation.Glyph, name: String) {
+        #expect(glyph.rawValue == name)
     }
 
     @Test("default modelLoadState is .ready (backward-compatible call sites)")
@@ -74,6 +85,6 @@ struct MenuBarPresentationTests {
         // `visual(state:hasError:)` callers that don't pass modelLoadState must
         // continue to work correctly after adding the parameter.
         #expect(MenuBarPresentation.visual(state: .idle, hasError: false)
-            == .init(systemImage: "mic", statusLabel: "Ready"))
+            == .init(icon: .glyph(.ready), statusLabel: "Ready"))
     }
 }

@@ -28,10 +28,12 @@ enum Settings {
         defaultValue: Constants.defaultModel
     )
     // Play a short system sound on recording start and stop (planning 0016).
-    // Default on — matches the macOS built-in dictation affordance.
+    // Default off: "quiet by default" in design/direction.md is a whole-app principle,
+    // and the recording indicator already shows every event a cue would announce. A menu
+    // bar utility that makes noise on first launch is a surprise, not an affordance.
     static let playFeedbackSounds = SettingKey<Bool>(
         name: "playFeedbackSounds",
-        defaultValue: true
+        defaultValue: false
     )
 }
 

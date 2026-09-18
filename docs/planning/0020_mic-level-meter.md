@@ -1,5 +1,7 @@
 # Planning: Mic Level Meter in the HUD (roadmap 0020)
 
+**Landed, then re-rendered.** The bar meter shipped and was replaced on 2026-09-17 by the river indicator ([0028](0028_identity-implementation.md)): `LevelMeterPresentation` and the bar view are deleted, while everything below about *computing* the level inside `MicrophoneCapability` still stands — the indicator consumes the same published level, smoothing it per display frame. The reference RMS moved from 0.2 to 0.08 (`Constants.inputLevelReferenceRMS`) because `AVAudioEngine` delivers a raw signal where a browser applies gain control.
+
 A queued backlog item from the 2026-07-06 UX review. Show a live input-level indicator (pulsing bars / simple waveform) in the recording HUD, so the user can see *during* the recording that audio is actually being captured. **Depends on [0002_recording-indicator-hud.md](0002_recording-indicator-hud.md)** (the HUD is the rendering surface); part of the feedback-layer grouping in [_index.md](_index.md).
 
 ## Problem
@@ -15,7 +17,7 @@ A muted mic, a dead headset, or the wrong input device produces silence — and 
 
 ## Acceptance criteria
 
-1. While `.recording`, the HUD shows a level indicator that visibly responds to speech and sits at rest in silence.
+1. While `.recording`, the HUD shows a level indicator that visibly responds to speech and sits at rest in silence. (Met by the river indicator's strands since 0028.)
 2. Level computation is unit-tested against synthetic buffers (loud / quiet / silent — the `AudioCaptureManagerTests` fake-buffer pattern); no real mic needed.
 3. Publish throttling is unit-tested with an injectable clock; the publisher emits on the main actor.
 4. The level → visual mapping is a pure, unit-tested function.

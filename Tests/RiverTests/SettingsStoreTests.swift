@@ -42,6 +42,13 @@ struct SettingsStoreTests {
         #expect(store.value(for: Settings.launchAtLogin) == true)
     }
 
+    // A shipping default the user meets before they open Settings: "quiet by default"
+    // (design/direction.md principle 5) means a fresh install makes no sound.
+    @Test("feedback sounds are off until the user opts in")
+    func feedbackSoundsDefaultOff() {
+        #expect(Settings.playFeedbackSounds.defaultValue == false)
+    }
+
     @MainActor
     @Test("round-trips selectedModel with default")
     func roundTripsSelectedModel() async throws {

@@ -1,0 +1,530 @@
+<title>River Identity Studies</title>
+<style>
+  :root {
+    --bg: #F3F4F6; --fg: #1B1D21; --muted: #666B74; --line: #D8DBE1; --panel: #FFFFFF; --focus: #148284;
+    --charcoal: #23262B; --charcoal-2: #2E3238; --ink: #ECEEF1;
+    --accent: #148284; --accent-hi: #31C8CA;   /* vivid turquoise, hue 196, chosen 2026-09-16 */
+  }
+  :root[data-pal="sand"] { --accent: #C4674A; --accent-hi: #DB8E70; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141518; --fg: #ECEEF1; --muted: #9AA0A9; --line: #2A2D33; --panel: #1C1E22; } }
+  :root[data-theme="dark"] { --bg: #141518; --fg: #ECEEF1; --muted: #9AA0A9; --line: #2A2D33; --panel: #1C1E22; }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; padding-block: 28px 64px; padding-inline: 20px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; max-width: 64ch; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 26px 0 10px; }
+  h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  p.lead { max-width: 68ch; margin: 0 0 14px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: end; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; }
+  .ctl { display: flex; flex-direction: column; gap: 6px; }
+  .ctl label { font-size: 12px; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; transition: background-color 120ms, color 120ms; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button:focus-visible, input:focus-visible, .tabs button:focus-visible, .pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  input[type=range] { width: 150px; accent-color: var(--accent); }
+  .level-read { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .note { color: var(--muted); font-size: 12px; }
+  .tokens { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
+  .tok { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tok i { width: 22px; height: 22px; border-radius: 7px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+
+  .tabs { display: flex; gap: 6px; margin: 18px 0; flex-wrap: wrap; }
+  .tabs button { appearance: none; font: inherit; font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .world { display: none; } .world.active { display: block; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .ground { border-radius: 16px; padding: 22px; display: flex; align-items: end; gap: 26px; flex-wrap: wrap; min-height: 200px; border: 1px solid var(--line); }
+  .ground.light { background: linear-gradient(160deg, #EEF0F4, #DCE1E8); }
+  .ground.dark { background: linear-gradient(160deg, #2A2C33, #15161A); }
+  .iconbox { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .iconbox span { font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ground.dark .iconbox span { color: rgba(200,200,205,.75); }
+  .ground.light .iconbox span { color: rgba(60,60,70,.75); }
+  .icon { filter: drop-shadow(0 6px 10px rgba(0,0,0,.18)); }
+
+
+  .menubar { height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 12px; font-size: 12.5px; font-weight: 500; }
+  .menubar.light { background: rgba(236,237,240,.92); color: #1d1d1f; }
+  .menubar.dark { background: rgba(38,39,43,.9); color: #f5f5f7; }
+  .menubar .glyph { display: inline-flex; align-items: center; height: 24px; }
+  .menubar svg.sys { width: 16px; height: 16px; }
+  .desk { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  .desk .wall { height: 74px; }
+  .desk.light .wall { background: linear-gradient(135deg, #cfd8e6, #e9d9c9 60%, #d7e2d3); }
+  .desk.dark .wall { background: linear-gradient(135deg, #1a2333, #3a2b3f 60%, #1e2f2b); }
+  .statesrow { display: flex; gap: 18px; align-items: center; padding: 10px 12px; font-size: 12px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+  .statesrow .cell { display: inline-flex; align-items: center; gap: 8px; }
+  .statesrow svg.big { width: 48px; height: 48px; }
+  .desk.short .wall { height: 40px; }
+  .desk.short .statesrow { flex-wrap: wrap; gap: 10px 14px; }
+  .desk.short .statesrow svg.big { width: 40px; height: 40px; }
+
+  .hudstage { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); height: 210px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 28px; }
+  .hudstage.light { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d8e0ec'/><stop offset='.55' stop-color='%23efdfcf'/><stop offset='1' stop-color='%23d5e3d2'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23ffffff' fill-opacity='.7'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%23cfd3da'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%23cfd3da'/></svg>") center/cover; }
+  .hudstage.dark { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231a2333'/><stop offset='.55' stop-color='%233a2b3f'/><stop offset='1' stop-color='%231e2f2b'/></linearGradient></defs><rect width='600' height='210' fill='url(%23g)'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%23202227' fill-opacity='.85'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%233a3d45'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%233a3d45'/></svg>") center/cover; }
+  .construct { color: var(--muted); font-size: 12.5px; max-width: 68ch; margin-top: 8px; }
+  .parked { background: var(--panel); border: 1px dashed var(--line); border-radius: 14px; padding: 14px 16px; color: var(--muted); max-width: 68ch; }
+  .goal { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; max-width: 68ch; }
+  .goal li { margin: 2px 0; }
+  .options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .options { grid-template-columns: 1fr; } }
+  .options .hudstage { height: 190px; padding-bottom: 22px; }
+  .bar { position: relative; flex: none; }
+  .live .bar { transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1), transform 220ms cubic-bezier(0.2, 0, 0, 1); }   /* enter and exit: fade with a 6 px rise, both ease-out */
+  .bar .barshadowwrap { position: absolute; inset: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.2)) drop-shadow(0 10px 24px rgba(0,0,0,.24)); }
+  .bar .barshadow { position: absolute; inset: 0; background: #23262B; }
+  .bar .barfill { position: absolute; inset: 0; background: rgba(35,38,43,.96); }   /* no backdrop blur: browsers blur the unclipped box, which showed as rectangles behind the shape */
+  .hudstage.dark .bar .barfill { background: rgba(35,38,43,.94); }
+  .bar .barglyph { position: absolute; width: 48px; height: 48px; }
+  .rbar .barfill, .rbar .barshadow, .rbar .barline { border-radius: 28px; }   /* capsule: the 108 x 40 band plus 12 pt at the sides and 8 pt above and below */
+  .rbar .barmark { position: absolute; left: 12px; top: 8px; width: 108px; height: 40px; }
+  .bar .barline { position: absolute; inset: 0; pointer-events: none; opacity: 0; }   /* 1 pt inner hairline, white at 7%: the edge catching light. Dark grounds only */
+  .rbar .barline { box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+  .hudstage.dark .bar .barline, .hudstage.black .bar .barline, .ground.dark .bar .barline { opacity: 1; }
+  .hudstage.black { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='210'><rect width='600' height='210' fill='%23141416'/><rect x='40' y='30' width='520' height='150' rx='8' fill='%231a1b1e'/><rect x='64' y='58' width='300' height='9' rx='4' fill='%23292b30'/><rect x='64' y='80' width='420' height='9' rx='4' fill='%23292b30'/><rect x='64' y='102' width='260' height='9' rx='4' fill='%23292b30'/><rect x='64' y='124' width='380' height='9' rx='4' fill='%23292b30'/></svg>") center/cover; }   /* a near-black editor window: the worst case for the bar's edge */
+  .hudstage.black .bar .barfill { background: rgba(35,38,43,.94); }
+  .rbar .barmark svg { display: block; width: 108px; height: 40px; }
+  .bar .barglyph svg { display: block; width: 48px; height: 48px; }
+  .bar .time { position: absolute; color: #ECEEF1; font-size: 12px; line-height: 14px; font-variant-numeric: tabular-nums; text-align: center; opacity: .8; }
+  .x2 { transform: scale(2); transform-origin: center; }
+  .stages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 900px) { .stages { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .stages { grid-template-columns: 1fr 1fr; } }
+  .stages .ground { min-height: 0; padding: 44px 10px 18px; justify-content: center; align-items: center; flex-direction: column; gap: 40px; }
+  .stages .ground span { font-size: 11px; color: rgba(200,200,205,.75); font-variant-numeric: tabular-nums; text-align: center; }
+  .stages .pair { display: flex; align-items: center; gap: 12px; }
+  .stages .pair .cell16 { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(38,39,43,.9); }
+  .options h3 { margin-bottom: 6px; }
+  .options .spec { margin: 6px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .palgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .palgrid { grid-template-columns: 1fr; } }
+  .palcol { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .palcol h3 { font-size: 14px; margin-bottom: 10px; }
+  .palcol .ground { min-height: 0; padding: 16px; margin-top: 12px; border-radius: 12px; align-items: center; }
+  .palcol .ground .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .palcol .ctlrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .palcol .pill { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 8px; color: #fff; }
+  .palcol .link { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+  .palcol .toggle { width: 38px; height: 22px; border-radius: 11px; position: relative; display: inline-block; }
+  .palcol .toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 9px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .swatches { grid-template-columns: 1fr; } }
+  .swatch { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .swatch h3 { margin-bottom: 2px; }
+  .swatch .note { margin-bottom: 8px; }
+  .swatch .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .swatch .chip { border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+  .swatch .chip.lt { background: #FFFFFF; color: #1B1D21; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .swatch .chip.dk { background: #23262B; color: #ECEEF1; }
+  .swatch .chip i { display: block; height: 34px; border-radius: 8px; }
+  .swatch .chip .pill { align-self: flex-start; font-weight: 500; padding: 4px 10px; border-radius: 7px; }
+  .swatch .chip .link { text-decoration: underline; text-underline-offset: 3px; }
+  .swatch .chip small { font-variant-numeric: tabular-nums; opacity: .8; }
+  .contrast { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; }
+  .contrast b { color: var(--fg); font-weight: 500; }
+  .contrast .ok { color: #2E8B57; } .contrast .no { color: #C4674A; }
+  @media (prefers-reduced-motion: reduce) { .live .bar { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>River Identity Studies</h1>
+  <p class="sub">Round nine. The recording bar now envelops the 48 pt glyph with a constant gap and hugs the time; the word is gone, the slats gained breathing room, and the motion is lighter. The icon and the r-based menu bar glyphs are dropped until an agent can design a mark; the slat glyph stays as the approved menu bar mark. The accent is settled on the vivid turquoise. The river indicator now uses uniform ink like every other mark; its shape and timing are untouched.</p>
+
+  <div class="controls" role="group" aria-label="Preview controls">
+    <div class="ctl"><label for="pal-turq">Palette</label><div class="seg"><button id="pal-turq" type="button" aria-pressed="true" data-pal="turq">Charcoal + vivid turquoise</button><button id="pal-sand" type="button" aria-pressed="false" data-pal="sand">Charcoal + red sand (not chosen)</button></div></div>
+    <div class="ctl"><label for="src-sim">Level source</label><div class="seg"><button id="src-sim" type="button" aria-pressed="true" data-src="sim">Simulated speech</button><button id="src-mic" type="button" aria-pressed="false" data-src="mic">My microphone</button><button id="src-manual" type="button" aria-pressed="false" data-src="manual">Manual</button></div></div>
+    <div class="ctl"><label for="level-slider">Level <span class="level-read" id="level-read">0.00</span></label><input id="level-slider" type="range" min="0" max="1" step="0.01" value="0" aria-label="Manual level"></div>
+    <div class="ctl"><label for="st-listen">State</label><div class="seg"><button id="st-listen" type="button" aria-pressed="true" data-state="recording">Listening</button><button id="st-proc" type="button" aria-pressed="false" data-state="processing">Transcribing</button><button id="st-idle" type="button" aria-pressed="false" data-state="idle">Idle</button></div></div>
+    <div class="ctl"><label for="th-light">macOS appearance</label><div class="seg"><button id="th-light" type="button" aria-pressed="true" data-mac="light">Light</button><button id="th-dark" type="button" aria-pressed="false" data-mac="dark">Dark</button></div></div>
+    <div class="note" id="mic-note" aria-live="polite"></div>
+  </div>
+  <div class="tokens" id="tokens"></div>
+
+  <div class="tabs" role="tablist" aria-label="Studies">
+    <button role="tab" aria-selected="true" data-world="m" id="tab-m">Indicator &middot; the menu bar glyph, enlarged</button>
+    <button role="tab" aria-selected="false" data-world="c" id="tab-c">Indicator &middot; river</button>
+    <button role="tab" aria-selected="false" data-world="a" id="tab-a">Menu bar &middot; microphone glyph</button>
+    <button role="tab" aria-selected="false" data-world="pal" id="tab-pal">Accent &middot; side by side</button>
+  </div>
+
+  <section class="world active" id="world-m" role="tabpanel" aria-labelledby="tab-m">
+    <p class="lead"><b>A bar that envelops the glyph.</b> The panel is no longer a rounded rectangle. Its outline is the glyph's own silhouette offset outward by a constant 8 pt gap, so it wraps the five slats with the same spacing everywhere, then hugs the time in a second column with the same 8 pt padding and a 6 pt gap between the columns; the concave junctions are rounded at 5 pt. The word "Listening" is gone. The mark is 48 pt and sets the height; width follows the content. The construction is the offset of the group's outline, chosen over a per-slat silhouette offset and a split pair. The glyph is one drawing shared with the menu bar; this round opens its row pitch slightly and lightens the stroke, so the slats keep a visible gap while listening.</p>
+    <div id="sec-m-live">
+    <h2>Live</h2>
+    <div class="hudstage light live" id="m-live"><div class="bar" data-bar="hull"></div></div>
+    <p class="spec">The chosen construction: the offset of the slat group's outline, one smooth contour, joined to the time capsule. The bar is filled with near-opaque charcoal and no backdrop blur, so its edge is the clipped shape and nothing else. On dark grounds a 1 pt inner hairline of white at 7% catches the edge.</p>
+    </div>
+    <div id="sec-m-black">
+    <h2>Edge check, near-black ground</h2>
+    <div class="hudstage black live"><div class="bar" data-bar="hull"></div></div>
+    <p class="spec">A near-black editor window, the worst case for the bar's edge: the shadow vanishes into the ground and the hairline alone separates the bar.</p>
+    </div>
+    <div id="sec-m-stages">
+    <h2>Every stage, held, at 2&times;</h2>
+    <div class="stages" id="stages"></div>
+    <p class="construct">Ready is the menu bar glyph at 48 pt: middle slat at full ink, the others at 55%, stroke 1.1 units. Listening changes ink only: a slat rises from 55% to full ink over about 0.15 s and settles back over 0.6 s, its stroke going from 1.1 to 1.3 units so the gaps between slats stay open; the middle slat leads above level 0.06, the inner pair above 0.18, the outer pair above 0.55. Transcribing is the dotted glyph: each slat becomes a row of dots whose first and last sit exactly on the slat's endpoints, so the outline is the same as Ready and Listening; a soft crest of full ink travels across the dots every 2.4 s over a 55% base, and no dot ever moves, appears, or disappears. Solid and dotted crossfade over about 0.2 s rather than cutting. The bar itself fades in and out over 0.22 s with a 6 pt rise, ease-out both ways. Under Reduce Motion the dots hold at full ink and the crossfade and fade become instant. Nothing changes size. The 16 px cell beside the Ready frame is the menu bar glyph from the same function. Motion has only been judged in stills by the agent.</p>
+    </div>
+  </section>
+
+  <section class="world" id="world-c" role="tabpanel" aria-labelledby="tab-c">
+    <p class="lead"><b>River, now a strong candidate.</b> Lines only, in a snug capsule with even padding; the word and the timer are gone. Uniform ink on all three strands. Motion above the rest state is exactly round two's: the same drift, easing, and amplitude curve, which read as fluid at 0.5 and 1.0. The rest state stays alive: a calmer version of the 0.5 shape, its amplitude at 70% of that level's, its drift at 45% speed, its stroke just under the 0.5 width, and its ink dimmed to 44% with a slow breath. Ink is what says resting; the water never stops. The amplitude floor keeps the strands out of the sub-pixel band that made round eight's rest state look grainy. Ink follows the level through a smoothstep over the first half of the range, so on release it settles in step with the motion.</p>
+    <div id="sec-c-live">
+    <h2>Live</h2>
+    <div class="hudstage light live" id="c-stage"><div class="bar rbar" data-rbar="live"></div></div>
+    <p class="spec">The bar is a capsule: the 108 by 40 band the strands move in, plus 12 pt at the sides and 8 pt above and below, so it holds the full range of motion without ever changing size, and its rounded ends follow the fade at the strands' ends. No word, no timer. Same fill, shadow, hairline, and enter and exit as the microphone bar.</p>
+    </div>
+    <div id="sec-c-black">
+    <h2>Edge check, near-black ground</h2>
+    <div class="hudstage black live"><div class="bar rbar" data-rbar="live"></div></div>
+    </div>
+    <div id="sec-c-frames">
+    <h2>Every stage, held, at 2&times;</h2>
+    <div class="stages" id="rstages"></div>
+    <p class="construct">Transcribing leaves the lines untouched and moves the ink, as a property of the one stroke: each strand is a single path whose stroke is a gradient in mark coordinates, a raised-cosine window 70 px wide sampled at 17 stops, padded to the base ink beyond it and slid left to right once every 2.0 s, each strand offset by 0.18 of the period. Only the stop opacities change with state, from all-full while listening to a 55% base with a full-ink crest while transcribing, blended over 0.2 s; there is no overlay stroke, no composite, and no second shape, so nothing but the color moves. Under Reduce Motion transcribing is the calm lines at full ink.</p>
+    </div>
+    <p class="construct">Goal for this indicator, checked against the held frames and the live panel:</p>
+    <ol class="goal">
+      <li>At rest, three living strands: the 0.5 shape slightly compressed, drifting at under half speed, at 44% ink breathing slowly. Never flat, never sub-pixel.</li>
+      <li>Rising level brightens and widens the water smoothly, with round two's timing; on release the ink dims in step with the motion settling to its floor. No jump, no snap.</li>
+      <li>At peak, full meander; strands may cross but never weave symmetrically.</li>
+      <li>Both ends fade to nothing inside the capsule. Nothing clips, and the bar never changes size.</li>
+      <li>Transcribing keeps the lines and moves the ink: a crest of full ink flowing along each strand over a dimmed base. Distinct from rest (dim, no crest) and from listening (full ink that follows the voice), without color.</li>
+    </ol>
+    <div id="sec-c-menubar">
+    <h2>Menu bar</h2>
+    <div class="desk light" id="c-desk"><div class="menubar light" id="c-menubar"></div><div class="wall"></div><div class="statesrow" id="c-states"></div></div>
+    <p class="construct">Parked without a verdict. Redrawn from the reference: a single river seen from above, wide at the near bank, winding in one S and tapering to a point on the horizon at the upper right. Ready is the outline; Listening fills the water; Transcribing keeps the fill and dots the banks.</p>
+    </div>
+  </section>
+
+  <section class="world" id="world-a" role="tabpanel" aria-labelledby="tab-a">
+    <div class="parked"><b>Accepted as is.</b> Five slats, shortened toward the top and bottom, with distinct Ready, Listening, and Transcribing states. Parked as the working menu bar glyph; shown here unchanged for reference beside the river glyph.</div>
+    <h2>Menu bar</h2>
+    <div class="desk light" id="a-desk"><div class="menubar light" id="a-menubar"></div><div class="wall"></div><div class="statesrow" id="a-states"></div></div>
+  </section>
+
+  <section class="world" id="world-pal" role="tabpanel" aria-labelledby="tab-pal">
+    <p class="lead"><b>The two accents, side by side.</b> The marks are uniform ink, so the accent never touches the indicator or the menu bar. It lives on pressed controls and toggles in Settings, and on links. Each candidate is shown in every place it would appear, on both appearances, with its contrast measured against the ground it sits on. The page-wide palette switch at the top only changes which one the rest of the page uses. Dark turquoise was chosen over red sand on 2026-09-16, then swapped the same day for the vivid turquoise at hue 196 from the variants below; red sand stays here as the record of the comparison. On the vivid dark value a pressed control takes charcoal text.</p>
+    <div class="palgrid" id="sec-pal"></div>
+    <div id="sec-pal-variants">
+    <h2>Turquoise variants, more saturated and cyan-leaning</h2>
+    <p class="construct">Nine candidates built in OKLCH so each keeps one hue and only chroma and lightness change. Each has a light-desktop value, the most vivid value at that hue that still carries text at 4.5:1 on white, and a dark-desktop value for charcoal. The light values converge: sRGB cannot hold a cyan that is both vivid and dark enough for text on white, so every text-safe light value lands near chroma 0.095. The variants really differ on charcoal, where they run from the current 5:1 to a 10:1 neon. On the vivid dark values a pressed control needs charcoal text, not white.</p>
+    <div class="swatches" id="swatches"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (name, attrs = {}, parent) => { const n = document.createElementNS(NS, name); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  const PALETTES = {
+    turq: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['vivid turquoise', '#148284'], ['turquoise, on dark', '#31C8CA']],
+    sand: [['charcoal', '#23262B'], ['charcoal 2', '#2E3238'], ['ink', '#ECEEF1'], ['red sand', '#C4674A'], ['red sand, on dark', '#DB8E70']],
+  };
+  function renderTokens(pal) { const host = document.getElementById('tokens'); host.innerHTML = ''; for (const [n, hex] of PALETTES[pal]) { const t = document.createElement('div'); t.className = 'tok'; const sw = document.createElement('i'); sw.style.background = hex; t.appendChild(sw); const l = document.createElement('span'); l.textContent = `${n} ${hex}`; t.appendChild(l); host.appendChild(t); } }
+
+  // ---------- Accent comparison ----------
+  function lum(hex) { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+  const TURQ = [{"name":"Dark turquoise","note":"the earlier choice, replaced","light":"#1F7F86","dark":"#3FA3AA","onWhite":4.73,"onCharcoal":5.08},{"name":"Teal, vivid","note":"hue 190","light":"#02837E","dark":"#2AC3BB","onWhite":4.62,"onCharcoal":6.95},{"name":"Turquoise, vivid","note":"hue 196. Chosen 2026-09-16","light":"#148284","dark":"#31C8CA","onWhite":4.61,"onCharcoal":7.4},{"name":"Cyan","note":"hue 205","light":"#00818C","dark":"#3BCDDC","onWhite":4.65,"onCharcoal":7.92},{"name":"Electric cyan","note":"hue 205, chroma pushed","light":"#00818C","dark":"#00DDEF","onWhite":4.65,"onCharcoal":9.1},{"name":"Aqua","note":"hue 200, bright","light":"#008288","dark":"#3FE4EC","onWhite":4.62,"onCharcoal":9.77},{"name":"Mint cyan","note":"hue 180","light":"#008474","dark":"#40D9C1","onWhite":4.61,"onCharcoal":8.61},{"name":"Sky cyan","note":"hue 215","light":"#0E8095","dark":"#2CCCEB","onWhite":4.63,"onCharcoal":7.91},{"name":"Neon aqua","note":"hue 195, as vivid as sRGB allows","light":"#008283","dark":"#14EEEE","onWhite":4.65,"onCharcoal":10.48}];
+  function renderSwatches() {
+    const host = document.getElementById('swatches'); host.innerHTML = '';
+    for (const v of TURQ) {
+      const card = document.createElement('div'); card.className = 'swatch';
+      const rw = ratio(v.light, '#FFFFFF'), rc = ratio(v.dark, '#23262B'), rInv = ratio('#23262B', v.dark), rWhite = ratio('#FFFFFF', v.light);
+      card.innerHTML = `<h3>${v.name}</h3><div class="note">${v.note}</div><div class="pair">
+        <div class="chip lt"><i style="background:${v.light}"></i><span class="pill" style="background:${v.light};color:#fff">Listening</span><span class="link" style="color:${v.light}">Open Settings</span><small>${v.light} on white ${rw.toFixed(2)}:1 &middot; white on it ${rWhite.toFixed(2)}:1</small></div>
+        <div class="chip dk"><i style="background:${v.dark}"></i><span class="pill" style="background:${v.dark};color:#23262B">Listening</span><span class="link" style="color:${v.dark}">Open Settings</span><small>${v.dark} on charcoal ${rc.toFixed(2)}:1 &middot; charcoal on it ${rInv.toFixed(2)}:1</small></div></div>`;
+      host.appendChild(card);
+    }
+  }
+  function renderPal() {
+    const host = document.getElementById('sec-pal'); host.innerHTML = '';
+    const sets = { turq: { name: 'Charcoal + vivid turquoise', accent: '#148284', hi: '#31C8CA' }, sand: { name: 'Charcoal + red sand', accent: '#C4674A', hi: '#DB8E70' } };
+    for (const key in sets) {
+      const s = sets[key]; const col = document.createElement('div'); col.className = 'palcol'; col.style.setProperty('--accent', s.accent); col.style.setProperty('--accent-hi', s.hi);
+      col.innerHTML = `<h3>${s.name}</h3><div class="tokens"><div class="tok"><i style="background:${s.accent}"></i><span>${s.accent} on light</span></div><div class="tok"><i style="background:${s.hi}"></i><span>${s.hi} on dark</span></div></div>`;
+      for (const ground of ['light', 'dark']) {
+        const g = document.createElement('div'); g.className = 'ground ' + ground; const row = document.createElement('div'); row.className = 'row';
+        const acc = ground === 'light' ? s.accent : s.hi;
+        const ctl = document.createElement('div'); ctl.className = 'ctlrow';
+        ctl.innerHTML = `<span class="pill" style="background:${acc};color:${ground === 'dark' ? '#23262B' : '#fff'}">Listening</span><span class="toggle" style="background:${acc}" aria-hidden="true"></span><span class="link" style="color:${acc}">Open Settings</span>`;
+        row.appendChild(ctl); g.appendChild(row); col.appendChild(g);
+      }
+      const ul = document.createElement('ul'); ul.className = 'contrast';
+      const rows = [['Accent text on white', s.accent, '#FFFFFF', 4.5], ['Accent text on charcoal', s.hi, '#23262B', 4.5], ['White on accent, pressed control on light', '#FFFFFF', s.accent, 4.5], ['Charcoal on accent, pressed control on dark', '#23262B', s.hi, 4.5]];
+      for (const [label, fg, bg, need] of rows) { const r = ratio(fg, bg); ul.innerHTML += `<li><b>${label}</b></li><li>${r.toFixed(2)}:1</li><li class="${r >= need ? 'ok' : 'no'}">${r >= need ? 'passes' : 'fails'} ${need}:1</li>`; }
+      col.appendChild(ul); host.appendChild(col);
+    }
+  }
+
+  // ---------- River indicator (108 x 40, rendered 1:1): round-two motion, a living rest state ----------
+  // At rest the strands keep undulating: the amplitude has a floor at 70% of the level-0.5 shape, the drift
+  // runs at 45% speed, the stroke sits just under its level-0.5 width, and the ink dims to 44% with a slow
+  // breath. Ink is what says "resting"; motion never stops. The amplitude floor (about 2.7 px on the thinnest
+  // strand) keeps the strands out of the sub-pixel band that made round eight's rest state look grainy.
+  const STRANDS = [
+    { base: 11.5 / 40, amp: 0.7, meanderL: 1.9, rippleL: 0.62, phase: 0.4, speed: 0.55, width: 1.6, alpha: 0.7 },
+    { base: 20 / 40, amp: 1.0, meanderL: 1.45, rippleL: 0.41, phase: 2.1, speed: 0.72, width: 2.6, alpha: 1.0 },
+    { base: 28.5 / 40, amp: 0.8, meanderL: 2.3, rippleL: 0.53, phase: 4.0, speed: 0.61, width: 1.4, alpha: 0.55 },
+  ];
+  const REST_INK = 0.44, REST_BREATH = 0.06, INK_SPAN = 0.5;  // ink at rest (the breath's low point stays above 3:1 on charcoal), breath depth, the level range over which ink follows the level
+  const REST_LEVEL = 0.35, REST_SPEED = 0.45;                  // the motion floor: amplitude and width never fall below this level's, and the drift slows to this fraction at rest
+  const smoothstep = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  function riverY(s, h, u, level, t) {      // the strand's y at fraction u across the mark; t is the strand's own clock
+    const A = 11 * level * s.amp;
+    const meander = Math.sin((u / s.meanderL) * Math.PI * 2 + s.phase + t * s.speed * 0.6);
+    const ripple = Math.sin((u / s.rippleL) * Math.PI * 2 - t * s.speed * 1.9 + s.phase * 1.7) * 0.45;
+    return h * s.base + A * (meander + ripple);
+  }
+  function riverPath(s, w, h, level, t) {
+    const pts = []; const steps = 56;
+    for (let i = 0; i <= steps; i++) { const u = i / steps; pts.push(`${(u * w).toFixed(2)} ${riverY(s, h, u, level, t).toFixed(2)}`); }
+    return 'M' + pts.join(' L');
+  }
+  // Transcribing: the lines are untouched; only the ink moves, and it moves as a property of the one stroke.
+  // Each strand is a single path stroked with a gradient in mark coordinates: a raised-cosine window (smooth
+  // to the first derivative, so no corners read as edges) sampled at 17 stops, padded to the base ink beyond
+  // the band, and slid left to right. Only the stop opacities change with state, so listening and
+  // transcribing are the same stroke with a different opacity profile: no overlay, no composite, no crossfade
+  // of two shapes. Each strand's crest is offset by a fraction of the period so the three read as water.
+  const CREST_PERIOD = 2.0, CREST_BAND = 70, CREST_STAGGER = 0.18, CREST_BASE = 0.55, CREST_STOPS = 17;   // seconds per crossing; px width; per-strand phase offset; base ink under the crest; stops in the window
+  let maskSeq = 0;
+  function makeRiver(host, hold, w = 108, h = 40) {
+    const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: 'img', 'aria-label': 'River mark' }, host);
+    const id = 'fade' + (maskSeq++); const defs = el('defs', {}, svg);
+    const grad = el('linearGradient', { id, x1: 0, x2: 1, y1: 0, y2: 0 }, defs);
+    [['0', 0], ['0.14', 1], ['0.86', 1], ['1', 0]].forEach(([o, a]) => el('stop', { offset: o, 'stop-color': '#fff', 'stop-opacity': a }, grad));
+    const mask = el('mask', { id: id + 'm' }, defs); el('rect', { x: 0, y: 0, width: w, height: h, fill: `url(#${id})` }, mask);
+    const g = el('g', { mask: `url(#${id}m)`, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const ink = css('--ink');
+    const grads = STRANDS.map((s, i) => { const gr = el('linearGradient', { id: `${id}c${i}`, gradientUnits: 'userSpaceOnUse', spreadMethod: 'pad', x1: 0, y1: 0, x2: CREST_BAND, y2: 0 }, defs); for (let k = 0; k < CREST_STOPS; k++) el('stop', { offset: (k / (CREST_STOPS - 1)).toFixed(4), 'stop-color': ink, 'stop-opacity': 1 }, gr); return gr; });
+    const paths = STRANDS.map((s, i) => el('path', { d: riverPath(s, w, h, 0, 0), 'stroke-width': s.width, stroke: `url(#${id}c${i})` }, g));
+    return { paths, grads, w, h, smooth: hold == null ? 0 : hold, hold, clock: 0, crestMix: 0 };
+  }
+  function makeRiverBar(host, hold) {
+    const wrap = document.createElement('div'); wrap.className = 'bar rbar'; wrap.style.width = '132px'; wrap.style.height = '56px'; host.appendChild(wrap);
+    const sw = document.createElement('div'); sw.className = 'barshadowwrap'; wrap.appendChild(sw); const sh = document.createElement('div'); sh.className = 'barshadow'; sw.appendChild(sh);
+    const fill = document.createElement('div'); fill.className = 'barfill'; wrap.appendChild(fill);
+    const line = document.createElement('div'); line.className = 'barline'; wrap.appendChild(line);
+    const mk = document.createElement('div'); mk.className = 'barmark'; wrap.appendChild(mk);
+    const m = makeRiver(mk, hold); m.bar = wrap; return m;
+  }
+  function drawRiver(m, level, state, dt, t) {
+    const ink = css('--ink');
+    const proc = m.hold === 'proc' || (m.hold == null && state === 'processing');
+    if (m.hold == null) {
+      const target = proc ? 0.4 : level;                          // Transcribing: a touch more motion than rest, brighter ink
+      m.smooth += (target - m.smooth) * Math.min(1, (target > m.smooth ? 10 : 5) * dt);   // round-two timing
+    }
+    const lv = m.hold == null ? m.smooth : (m.hold === 'proc' ? 0.4 : m.hold);
+    const k = smoothstep(lv / INK_SPAN);                           // ink follows the level through a smoothstep, so it settles in step with the motion; no kink at a threshold
+    const motion = Math.max(lv, REST_LEVEL);                       // amplitude and width never drop below the rest floor
+    m.clock += dt * (REST_SPEED + (1 - REST_SPEED) * k);          // the drift slows toward rest instead of stopping
+    const restInk = REST_INK + (reduceMotion ? 0 : REST_BREATH * Math.sin(t * 0.9));    // a slow breath, about seven seconds; still under Reduce Motion
+    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // the crest profile blends in over about 0.2 s
+    m.crestMix += ((proc && !reduceMotion ? 1 : 0) - m.crestMix) * Math.min(1, mixRate * dt);   // under Reduce Motion transcribing is the calm lines at full ink
+    m.paths.forEach((p, i) => {
+      const s = STRANDS[i];
+      const width = s.width + 0.8 * motion, alpha = restInk + (s.alpha - restInk) * k;
+      p.setAttribute('d', riverPath(s, m.w, m.h, motion, m.clock));   // uniform ink on marks; the accent never touches the indicator
+      p.setAttribute('stroke-width', width.toFixed(2));
+      p.setAttribute('opacity', alpha.toFixed(3));
+      // the stroke's own opacity profile: a raised-cosine crest of full ink over a dimmed base, blended in by crestMix
+      const base = 1 - (1 - CREST_BASE) * m.crestMix;
+      const stops = m.grads[i].childNodes;
+      for (let k = 0; k < stops.length; k++) { const win = 0.5 - 0.5 * Math.cos(2 * Math.PI * k / (stops.length - 1)); stops[k].setAttribute('stop-opacity', (base + (1 - base) * win).toFixed(3)); }
+      const phase = ((t / CREST_PERIOD) + i * CREST_STAGGER) % 1;                                   // the crest crosses the mark once per period, each strand offset
+      m.grads[i].setAttribute('gradientTransform', `translate(${(-CREST_BAND + phase * (m.w + 2 * CREST_BAND)).toFixed(2)} 0)`);
+    });
+  }
+
+  // ---------- Slat mark: the accepted menu bar glyph, one drawing for every size ----------
+  // Five slats in a 16-unit box, shortened toward the top and bottom. The menu bar and the indicator
+  // call the same two functions; the indicator is simply the glyph rendered larger and driven by level.
+  const SLAT_ROWS = [[5.5, 3.8], [4, 6.4], [3.5, 9], [4, 11.6], [5.5, 14.2]];   // pitch 2.6, opened from 2.5 in round nine
+  const SLAT_THRESH = [0.55, 0.18, 0.06, 0.18, 0.55];    // by row: the middle wakes first, then the inner pair, then the outer pair
+  const DOT_PITCH = 2.5, DOT_R = 0.55, WAVE_PERIOD = 2.4;   // dots per row from the row length at about this pitch; dot radius equals the Ready stroke's half width; seconds for one brightness wave to cross
+  function makeSlats(host, hold, px, color) {
+    const svg = el('svg', { viewBox: '0 0 16 16', width: px, height: px, class: 'slats', role: 'img', 'aria-label': 'River mark' }, host || undefined);
+    // Two layers, solid and dotted, crossfaded by opacity so Listening and Transcribing never cut hard.
+    // The dots are real circles: each row's first and last dot sit exactly on the slat's endpoints, so the
+    // dotted outline is the solid outline. (A dash pattern had started every row flush left and left the
+    // right edge ragged, and dashes pop at path ends when they drift.)
+    const gSolid = el('g', { fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const gDots = el('g', { opacity: 0 }, svg);
+    const rows = SLAT_ROWS.map(([x, y]) => { const p = el('path', { d: `M${x} ${y} L${16 - x} ${y}` }, gSolid); p.__wake = 0; return p; });
+    const dots = [];
+    SLAT_ROWS.forEach(([x, y]) => { const len = 16 - 2 * x, n = Math.round(len / DOT_PITCH) + 1; for (let i = 0; i < n; i++) { const cx = x + len * i / (n - 1); const c = el('circle', { cx: cx.toFixed(3), cy: y, r: DOT_R }, gDots); c.__u = (cx - 3.5) / 9; dots.push(c); } });
+    return { kind: 's', svg, rows, dots, gSolid, gDots, hold, color, offset: 0, mix: 0 };
+  }
+  function drawSlats(m, level, state, dt, t) {
+    const ink = m.color || css('--ink');
+    const st = m.hold === 'ready' ? 'idle' : m.hold === 'proc' ? 'processing' : m.hold != null ? 'recording' : state;
+    const lv = typeof m.hold === 'number' ? m.hold : st === 'recording' ? level : 0;
+    const proc = st === 'processing';
+    if (proc && !reduceMotion) m.offset = (m.offset + dt / WAVE_PERIOD) % 1;                   // one brightness wave crosses the glyph per period; nothing moves
+    const mixRate = m.hold != null || reduceMotion ? 1e9 : 12;                                 // solid and dotted crossfade in about 0.2 s
+    m.mix += ((proc ? 1 : 0) - m.mix) * Math.min(1, mixRate * dt);
+    m.gSolid.setAttribute('opacity', (1 - m.mix).toFixed(3)); m.gDots.setAttribute('opacity', m.mix.toFixed(3));
+    const live = proc && m.hold == null && !reduceMotion;
+    m.dots.forEach(c => {
+      c.setAttribute('fill', ink);
+      // a soft crest of full ink travels left to right over dots resting at 55%; cosine-shaped, so it eases in and out
+      const crest = live ? Math.pow(Math.max(0, Math.cos(2 * Math.PI * (c.__u - m.offset))), 1.6) : 1;
+      c.setAttribute('opacity', (0.55 + 0.45 * crest).toFixed(3));
+    });
+    m.rows.forEach((p, i) => {
+      const target = proc ? 1 : (lv >= SLAT_THRESH[i] ? 1 : 0);
+      const rate = m.hold != null ? 1e9 : (target > p.__wake ? 7 : 1.7);   // about 0.15 s up, 0.6 s down
+      p.__wake += (target - p.__wake) * Math.min(1, rate * dt);
+      const w = p.__wake;
+      p.setAttribute('stroke', ink);
+      p.setAttribute('opacity', i === 2 ? '1' : (0.55 + 0.45 * w).toFixed(3));
+      p.setAttribute('stroke-width', (1.1 + 0.2 * w).toFixed(2));   // 1.1 at Ready, 1.3 awake: the gaps stay open
+    });
+  }
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- The bar: the glyph's envelope, computed offline (docs/design/studies/bar-shape.py) ----------
+  const BAR = {"unit":3.0,"glyph":48,"pad":8.0,"gap":6.0,"variants":{"sil":{"w":84.3,"h":50.5,"path":"M1.54 18.34 L1.51 19.29 L1.39 19.96 L0.61 21.86 L0.23 23.15 L0.04 24.32 L0.00 25.55 L0.12 26.81 L0.39 27.96 L1.29 30.20 L1.45 30.83 L1.55 31.81 L1.50 33.27 L1.55 34.09 L1.75 35.25 L2.12 36.46 L2.63 37.59 L3.29 38.66 L4.09 39.64 L5.07 40.61 L5.64 41.39 L6.04 42.26 L6.42 43.66 L6.86 44.84 L7.46 45.96 L8.25 47.04 L9.45 48.25 L10.63 49.09 L12.26 49.89 L13.98 50.35 L15.63 50.50 L30.89 50.50 L32.31 50.35 L34.06 49.88 L35.21 49.35 L36.28 48.69 L37.25 47.88 L38.16 46.90 L38.85 45.93 L39.44 44.82 L40.47 41.73 L40.79 41.17 L41.39 40.42 L42.26 39.59 L43.08 39.01 L44.00 38.61 L44.65 38.44 L45.65 38.36 L46.65 38.48 L47.60 38.80 L48.83 39.46 L49.80 39.85 L50.82 40.11 L51.85 40.24 L76.25 40.25 L77.26 40.19 L78.29 40.00 L79.28 39.67 L80.37 39.13 L81.51 38.32 L82.25 37.58 L82.99 36.63 L83.50 35.71 L83.89 34.74 L84.16 33.73 L84.30 32.21 L84.30 18.29 L84.21 17.13 L83.84 15.60 L83.50 14.79 L82.99 13.87 L82.01 12.65 L80.67 11.56 L79.76 11.04 L78.79 10.65 L77.78 10.39 L76.74 10.26 L52.34 10.25 L51.17 10.33 L49.80 10.65 L48.83 11.04 L47.60 11.70 L46.65 12.02 L45.31 12.14 L44.32 11.99 L43.68 11.78 L42.79 11.31 L42.01 10.68 L41.01 9.64 L40.37 8.54 L39.71 6.34 L39.16 5.11 L38.43 3.95 L37.31 2.67 L36.28 1.81 L35.11 1.10 L33.54 0.45 L32.31 0.15 L30.63 0.00 L15.24 0.01 L14.06 0.13 L12.86 0.41 L11.68 0.86 L10.63 1.41 L9.06 2.60 L7.79 4.04 L6.82 5.75 L6.42 6.84 L6.06 8.18 L5.67 9.06 L5.12 9.84 L3.63 11.40 L2.64 12.89 L2.11 14.06 L1.73 15.35 L1.51 17.04 Z","glyph":[-0.85,-1.75],"text":[52.3,18.25,24.0,14.0]},"hull":{"w":84.3,"h":50.5,"path":"M15.40 0.00 L14.09 0.13 L12.94 0.39 L11.75 0.82 L11.01 1.19 L10.01 1.81 L9.04 2.62 L8.18 3.54 L7.46 4.54 L2.78 12.64 L2.11 14.06 L1.67 15.64 L0.04 24.32 L0.00 25.58 L0.17 27.07 L1.73 35.16 L2.35 37.02 L7.79 46.46 L8.59 47.44 L9.45 48.25 L11.11 49.37 L12.23 49.88 L13.36 50.22 L15.32 50.49 L30.67 50.50 L32.31 50.35 L33.54 50.05 L35.11 49.40 L36.26 48.70 L37.25 47.88 L38.10 46.98 L38.79 46.03 L41.99 40.57 L42.41 40.09 L43.15 39.47 L43.99 39.01 L44.60 38.80 L45.86 38.61 L46.82 38.68 L47.74 38.93 L49.80 39.85 L50.82 40.11 L51.85 40.24 L76.90 40.22 L77.94 40.08 L78.94 39.80 L79.76 39.46 L80.67 38.94 L81.51 38.32 L82.25 37.58 L82.90 36.76 L83.43 35.86 L84.00 34.40 L84.28 32.69 L84.30 18.29 L84.21 17.13 L84.04 16.26 L83.72 15.27 L82.90 13.74 L82.25 12.92 L81.51 12.18 L80.67 11.56 L79.91 11.11 L78.29 10.50 L77.26 10.31 L76.34 10.25 L52.25 10.25 L51.17 10.33 L50.15 10.55 L49.16 10.89 L47.74 11.57 L47.13 11.76 L46.18 11.89 L45.22 11.84 L44.29 11.61 L43.70 11.35 L42.89 10.84 L42.41 10.41 L41.81 9.67 L38.88 4.62 L38.04 3.46 L37.23 2.60 L36.28 1.81 L35.21 1.15 L34.13 0.65 L32.74 0.23 L30.97 0.01 Z","glyph":[-0.85,-1.75],"text":[52.3,18.25,24.0,14.0]},"hull5":{"w":90.3,"h":50.5,"path":"M15.40 0.00 L14.09 0.13 L12.94 0.39 L11.75 0.82 L11.01 1.19 L10.01 1.81 L9.04 2.62 L8.18 3.54 L7.46 4.54 L2.78 12.64 L2.11 14.06 L1.67 15.64 L0.04 24.40 L0.01 25.66 L0.17 27.07 L1.73 35.16 L2.36 37.04 L7.81 46.48 L8.61 47.46 L9.51 48.30 L10.54 49.04 L11.58 49.60 L13.44 50.24 L15.40 50.50 L30.89 50.50 L32.23 50.37 L33.54 50.05 L34.62 49.64 L35.66 49.09 L36.69 48.37 L37.31 47.83 L38.11 46.96 L38.79 46.03 L41.64 41.11 L42.20 40.32 L42.89 39.66 L43.42 39.30 L44.29 38.89 L45.22 38.66 L46.18 38.61 L47.13 38.74 L47.74 38.93 L49.80 39.85 L50.82 40.11 L51.85 40.24 L82.90 40.22 L83.94 40.08 L84.94 39.80 L85.91 39.39 L86.81 38.85 L87.63 38.21 L88.36 37.46 L88.99 36.63 L89.50 35.71 L90.04 34.24 L90.28 32.69 L90.30 18.29 L90.21 17.13 L90.04 16.26 L89.72 15.27 L89.26 14.32 L88.69 13.45 L87.51 12.18 L86.67 11.56 L85.76 11.04 L84.79 10.65 L83.94 10.42 L82.34 10.25 L52.25 10.25 L51.17 10.33 L50.15 10.55 L49.16 10.89 L47.74 11.57 L47.13 11.76 L46.18 11.89 L45.22 11.84 L44.29 11.61 L43.70 11.35 L42.89 10.84 L42.41 10.41 L41.81 9.67 L38.88 4.62 L38.04 3.46 L37.23 2.60 L36.28 1.81 L35.21 1.15 L34.13 0.65 L32.74 0.23 L30.97 0.01 Z","glyph":[-0.85,-1.75],"text":[52.3,18.25,30.0,14.0]},"split":{"w":92.29,"h":50.5,"path":"M1.76 19.69 L0.88 21.22 L0.40 22.50 L0.12 23.73 L0.00 25.51 L0.13 26.88 L0.43 28.10 L0.88 29.28 L1.76 30.81 L1.54 32.16 L1.50 33.42 L1.74 35.19 L2.10 36.40 L2.66 37.65 L3.65 39.13 L4.59 40.13 L6.00 41.21 L6.13 42.48 L6.60 44.20 L7.11 45.35 L7.83 46.51 L8.64 47.49 L9.98 48.66 L11.05 49.33 L12.20 49.86 L13.51 50.26 L15.28 50.49 L30.65 50.50 L31.65 50.45 L32.78 50.26 L34.58 49.66 L35.70 49.07 L36.73 48.34 L37.65 47.49 L38.46 46.51 L39.13 45.45 L39.70 44.20 L40.16 42.48 L40.29 41.21 L41.70 40.13 L42.64 39.13 L43.63 37.65 L44.16 36.50 L44.53 35.29 L44.75 33.94 L44.75 32.16 L44.53 30.81 L45.41 29.28 L45.86 28.10 L46.17 26.77 L46.29 25.51 L46.24 24.25 L45.90 22.50 L45.41 21.22 L44.53 19.69 L44.74 18.45 L44.79 17.19 L44.67 15.93 L44.40 14.70 L43.68 12.95 L42.96 11.79 L41.78 10.44 L40.29 9.29 L40.16 8.02 L39.70 6.30 L39.13 5.05 L38.46 3.99 L37.28 2.64 L36.31 1.84 L35.24 1.17 L34.10 0.64 L32.78 0.24 L31.02 0.01 L15.28 0.01 L14.02 0.14 L12.79 0.43 L11.61 0.88 L10.60 1.43 L9.09 2.57 L7.77 4.07 L6.88 5.62 L6.43 6.80 L6.13 8.02 L6.00 9.29 L4.59 10.37 L3.72 11.29 L2.98 12.31 L2.38 13.42 L1.90 14.70 L1.55 16.45 L1.50 17.82 Z","glyph":[-0.85,-1.75],"text":[60.29,18.25,24.0,14.0],"tab":"M84.29 10.25 L59.77 10.27 L58.73 10.40 L57.23 10.86 L56.29 11.32 L55.02 12.24 L53.94 13.38 L53.36 14.25 L52.90 15.19 L52.45 16.69 L52.29 18.25 L52.29 32.25 L52.36 33.29 L52.56 34.32 L52.90 35.31 L53.36 36.25 L54.28 37.52 L55.42 38.60 L56.75 39.42 L58.22 39.98 L59.25 40.18 L60.29 40.25 L84.81 40.23 L85.85 40.10 L87.35 39.64 L88.74 38.90 L89.57 38.26 L90.31 37.52 L91.22 36.25 L91.87 34.82 L92.22 33.29 L92.29 32.25 L92.29 18.25 L92.14 16.69 L91.87 15.68 L91.22 14.25 L90.31 12.98 L89.16 11.90 L87.83 11.08 L86.86 10.67 L85.34 10.32 Z"}}};
+  function makeBar(host, key, hold) {
+    const v = BAR.variants[key];
+    const wrap = document.createElement('div'); wrap.className = 'bar'; wrap.style.width = v.w + 'px'; wrap.style.height = v.h + 'px'; host.appendChild(wrap);
+    const shapes = v.tab ? [v.path, v.tab] : [v.path];
+    const sw = document.createElement('div'); sw.className = 'barshadowwrap'; wrap.appendChild(sw);
+    for (const d of shapes) { const s = document.createElement('div'); s.className = 'barshadow'; s.style.clipPath = `path('${d}')`; sw.appendChild(s); }
+    for (const d of shapes) { const s = document.createElement('div'); s.className = 'barfill'; s.style.clipPath = `path('${d}')`; wrap.appendChild(s); }
+    for (const d of shapes) { const svg = el('svg', { class: 'barline', viewBox: `0 0 ${v.w} ${v.h}`, width: v.w, height: v.h, style: `clip-path:path('${d}')` }); el('path', { d, fill: 'none', stroke: 'rgba(255,255,255,.07)', 'stroke-width': 2 }, svg); wrap.appendChild(svg); }
+    const gh = document.createElement('div'); gh.className = 'barglyph'; gh.style.left = v.glyph[0] + 'px'; gh.style.top = v.glyph[1] + 'px'; wrap.appendChild(gh);
+    const m = makeSlats(gh, hold, BAR.glyph);
+    const t = document.createElement('div'); t.className = 'time'; const [l, tp, w, ht] = v.text; t.style.left = l + 'px'; t.style.top = tp + 'px'; t.style.width = w + 'px'; t.style.height = ht + 'px';
+    t.textContent = hold == null || hold === 'ready' || hold === 0 ? '0:00' : '0:04'; wrap.appendChild(t);
+    return m;
+  }
+
+  // ---------- Menu bar glyphs (16 x 16 template) ----------
+  // River: one channel from above, wide at the near bank, one S-bend, tapering to a point on the horizon.
+  const RIVER_GLYPH = 'M2.6 15.4 C 1.2 12.2, 6.6 10.8, 6.1 8.3 C 5.7 6.1, 8.6 4.6, 13.4 1.6 C 11.2 4.9, 8.9 6.2, 9.6 8.4 C 10.4 10.9, 6.6 12.3, 9.4 15.4 Z';
+  function glyph(world, state, color) {
+    const svg = el('svg', { viewBox: '0 0 16 16', width: 16, height: 16, class: 'sys', role: 'img', 'aria-label': `${world} glyph, ${state}` });
+    const g = el('g', { fill: 'none', stroke: color, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+    const dotted = state === 'processing' ? { 'stroke-dasharray': '0.1 2.4' } : {};
+    if (world === 'a') {
+      const m = makeSlats(null, state === 'idle' ? 'ready' : state === 'processing' ? 'proc' : 1, 16, color);
+      drawSlats(m, 0, state, 1, 0); m.svg.setAttribute('class', 'sys'); m.svg.setAttribute('aria-label', `${world} glyph, ${state}`);
+      return m.svg;
+    } else {
+      if (state !== 'idle') el('path', { d: RIVER_GLYPH, fill: color, stroke: 'none', opacity: state === 'processing' ? .45 : .95 }, g);
+      el('path', { d: RIVER_GLYPH, 'stroke-width': 1.25, ...dotted }, g);
+    }
+    return svg;
+  }
+  function sysGlyphs(color) {
+    const wifi = el('svg', { viewBox: '0 0 16 16', class: 'sys' }); el('path', { d: 'M1.5 6 C 5 2.6, 11 2.6, 14.5 6 M4 8.5 C 6.3 6.4, 9.7 6.4, 12 8.5 M6.5 11 C 7.4 10.2, 8.6 10.2, 9.5 11', fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-linecap': 'round' }, wifi);
+    const batt = el('svg', { viewBox: '0 0 22 12', class: 'sys', width: 22 }); el('rect', { x: 1, y: 1.5, width: 17, height: 9, rx: 2.5, fill: 'none', stroke: color, 'stroke-width': 1.2 }, batt); el('rect', { x: 2.6, y: 3.1, width: 11, height: 5.8, rx: 1.2, fill: color }, batt); el('path', { d: 'M19.5 4.5 v3', stroke: color, 'stroke-width': 1.4, 'stroke-linecap': 'round' }, batt);
+    return [wifi, batt];
+  }
+
+  // ---------- Level engine ----------
+  const q = new URLSearchParams(location.search);
+  const state = { src: 'sim', manual: 0, level: 0, appState: 'recording', macDark: false, pal: 'turq', t0: performance.now(), analyser: null, mic: null };
+  let simTarget = 0, simHold = 0;
+  function simulate(dt) { simHold -= dt; if (simHold <= 0) { const inPhrase = Math.random() > 0.22; simTarget = inPhrase ? 0.35 + Math.random() * 0.6 : 0.02 + Math.random() * 0.05; simHold = inPhrase ? 0.12 + Math.random() * 0.16 : 0.35 + Math.random() * 0.9; } state.level += (simTarget - state.level) * Math.min(1, (simTarget > state.level ? 22 : 9) * dt); }
+  function readMic() { const a = state.analyser; if (!a) return; const buf = new Float32Array(a.fftSize); a.getFloatTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; const target = Math.min(1, Math.sqrt(s / buf.length) / 0.2); state.level += (target - state.level) * (target > state.level ? 0.6 : 0.25); }
+  async function startMic() { const note = document.getElementById('mic-note'); try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const ctx = new (window.AudioContext || window.webkitAudioContext)(); const an = ctx.createAnalyser(); an.fftSize = 1024; ctx.createMediaStreamSource(stream).connect(an); state.analyser = an; state.mic = stream; note.textContent = 'Microphone live. Speak to drive the marks.'; } catch (e) { note.textContent = 'Microphone unavailable here (' + (e && e.name ? e.name : 'blocked') + '). Falling back to simulated speech.'; setSource('sim'); } }
+  function stopMic() { if (state.mic) { state.mic.getTracks().forEach(t => t.stop()); state.mic = null; state.analyser = null; } }
+  function setSource(src) { state.src = src; document.querySelectorAll('[data-src]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === src))); if (src === 'mic') startMic(); else { stopMic(); document.getElementById('mic-note').textContent = ''; } }
+
+  // ---------- Build ----------
+  const marks = [];
+  document.querySelectorAll('.bar[data-rbar]').forEach(b => { const host = b.parentNode; host.removeChild(b); marks.push(makeRiverBar(host, null)); });
+  for (const [hold, name, sub] of [[0, 'At rest', 'level 0.00'], [0.5, 'Speaking', 'level 0.50'], [1, 'Peak', 'level 1.00'], ['proc', 'Transcribing', 'level held at 0.40']]) { const g = document.createElement('div'); g.className = 'ground dark'; const sc = document.createElement('div'); sc.className = 'x2'; g.appendChild(sc); marks.push(makeRiverBar(sc, hold)); const cap = document.createElement('span'); cap.innerHTML = `${name}<br>${sub}`; g.appendChild(cap); document.getElementById('rstages').appendChild(g); }
+  document.querySelectorAll('.bar[data-bar]').forEach(b => { const host = b.parentNode; const key = b.dataset.bar; host.removeChild(b); const m = makeBar(host, key, null); m.host = host; m.key = key; marks.push(m); });
+  // Past 10:00 the timer is five characters, so the live bar switches to the shape computed for that width (the bar is fluid in width, never in height).
+  let wide = false;
+  function setWide(on) { if (on === wide) return; wide = on; for (let i = marks.length - 1; i >= 0; i--) { const m = marks[i]; if (m.host && m.key === 'hull') { m.host.innerHTML = ''; const n = makeBar(m.host, on ? 'hull5' : 'hull', null); n.host = m.host; n.key = 'hull'; marks[i] = n; } } applyBarState(); }   // never applyState here: it would restart the clock
+  let heldKey = 'hull';
+  function buildStages() {
+    const host = document.getElementById('stages'); host.innerHTML = '';
+    for (let i = marks.length - 1; i >= 0; i--) if (marks[i].held) marks.splice(i, 1);
+    const frames = [['ready', 'Ready', 'the menu bar glyph at 48 pt', 'idle'], [0.5, 'Listening', 'level 0.50', null], [1, 'Listening', 'level 1.00', 'recording'], ['proc', 'Transcribing', 'held: the crest travels only live', 'processing']];
+    for (const [hold, name, sub, ref] of frames) {
+      const g = document.createElement('div'); g.className = 'ground dark';
+      const sc = document.createElement('div'); sc.className = 'x2'; g.appendChild(sc);
+      const m = makeBar(sc, heldKey, hold); m.held = true; marks.push(m);
+      const cap = document.createElement('span'); cap.innerHTML = `${name}<br>${sub}`;
+      if (ref) { const c = document.createElement('span'); c.className = 'cell16'; c.style.marginRight = '8px'; c.appendChild(glyph('a', ref, '#f5f5f7')); const row = document.createElement('span'); row.style.display = 'inline-flex'; row.style.alignItems = 'center'; row.appendChild(c); row.appendChild(cap); g.appendChild(row); } else g.appendChild(cap);
+      host.appendChild(g);
+    }
+  }
+  buildStages();
+  function buildMenubars() {
+    for (const wld of GLYPH_WORLDS) {
+      const bar = document.getElementById(`${wld}-menubar`); bar.innerHTML = '';
+      const color = state.macDark ? '#f5f5f7' : '#1d1d1f';
+      const live = document.createElement('span'); live.className = 'glyph'; live.id = `${wld}-live-glyph`; bar.appendChild(live);
+      for (const s of sysGlyphs(color)) { const sp = document.createElement('span'); sp.className = 'glyph'; sp.appendChild(s); bar.appendChild(sp); }
+      const clock = document.createElement('span'); clock.textContent = 'Tue 9:41 AM'; bar.appendChild(clock);
+      const row = document.getElementById(`${wld}-states`); row.innerHTML = '';
+      for (const s of ['idle', 'recording', 'processing']) { const c = document.createElement('span'); c.className = 'cell'; const big = glyph(wld, s, 'currentColor'); big.setAttribute('class', 'big'); c.appendChild(big); const label = document.createElement('span'); label.textContent = s === 'idle' ? 'Ready' : (s === 'recording' ? 'Listening' : 'Transcribing'); c.appendChild(label); row.appendChild(c); }
+    }
+  }
+  const GLYPH_WORLDS = ['a', 'c'];
+  function updateLiveGlyphs() { const color = state.macDark ? '#f5f5f7' : '#1d1d1f'; for (const wld of GLYPH_WORLDS) { const host = document.getElementById(`${wld}-live-glyph`); if (host) { host.innerHTML = ''; host.appendChild(glyph(wld, state.appState, color)); } } }
+  function applyMac() { document.querySelectorAll('.menubar, .desk, .hudstage').forEach(n => { n.classList.toggle('dark', state.macDark); n.classList.toggle('light', !state.macDark); }); document.querySelectorAll('[data-mac]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.mac === 'dark') === state.macDark))); buildMenubars(); updateLiveGlyphs(); }
+  function applyState() { document.querySelectorAll('button[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === state.appState))); applyBarState(); updateLiveGlyphs(); state.t0 = performance.now(); }
+  function applyBarState() { document.querySelectorAll('.live .bar').forEach(b => { const idle = state.appState === 'idle'; b.style.opacity = idle ? 0 : 1; b.style.transform = idle ? 'translateY(6px)' : 'none'; b.setAttribute('role', 'status'); b.setAttribute('aria-label', idle ? '' : state.appState === 'processing' ? 'Transcribing' : 'Listening'); }); }
+  function applyPal() { document.documentElement.setAttribute('data-pal', state.pal); document.querySelectorAll('button[data-pal]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === state.pal))); renderTokens(state.pal); }
+
+  document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => setSource(b.dataset.src)));
+  document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => { state.appState = b.dataset.state; applyState(); }));
+  document.querySelectorAll('[data-mac]').forEach(b => b.addEventListener('click', () => { state.macDark = b.dataset.mac === 'dark'; applyMac(); }));
+  document.querySelectorAll('button[data-pal]').forEach(b => b.addEventListener('click', () => { state.pal = b.dataset.pal; applyPal(); }));
+  const slider = document.getElementById('level-slider');
+  slider.addEventListener('input', () => { state.manual = parseFloat(slider.value); if (state.src !== 'manual') setSource('manual'); });
+  document.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => { document.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === t))); document.querySelectorAll('.world').forEach(w => w.classList.toggle('active', w.id === `world-${t.dataset.world}`)); }));
+
+  // Deep links for review: ?tab=m|c|a|pal  ?level=0.5 (switches to manual)  ?state=recording|processing|idle  ?mac=dark  ?elapsed=650
+  // ?focus=<id> lifts one block to the top of the page, above the tabs, so a first-viewport screenshot sees it.
+  if (q.get('tab')) document.getElementById(`tab-${q.get('tab')}`)?.click();
+  if (q.get('focus')) { const n = document.getElementById(q.get('focus')); if (n) { const wrap = document.querySelector('.wrap'); wrap.insertBefore(n, document.querySelector('.tabs')); n.style.marginBottom = '18px'; for (const sel of ['h1', '.sub', '.controls', '.tokens', '.tabs']) document.querySelector(sel).hidden = true; document.body.style.paddingBlock = '12px'; } }
+  if (q.get('state')) state.appState = q.get('state');
+  if (q.get('mac')) state.macDark = q.get('mac') === 'dark';
+  if (q.get('level') != null) { state.manual = parseFloat(q.get('level')); slider.value = state.manual; setSource('manual'); }
+
+  applyPal(); applyMac(); applyState(); renderPal(); renderSwatches();
+  if (q.get('elapsed')) state.t0 = performance.now() - parseFloat(q.get('elapsed')) * 1000;   // review a long recording's timer; after applyState, which resets the clock
+
+  let last = performance.now();
+  const readout = document.getElementById('level-read');
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (state.appState !== 'recording') state.level += (0 - state.level) * Math.min(1, 8 * dt);
+    else if (state.src === 'sim') simulate(dt);
+    else if (state.src === 'mic') readMic();
+    else state.level += (state.manual - state.level) * Math.min(1, 14 * dt);
+    const t = now / 1000;
+    for (const m of marks) (m.kind === 's' ? drawSlats : drawRiver)(m, state.level, m.hold == null ? state.appState : 'recording', dt, t);
+    const elapsed = state.appState === 'idle' ? 0 : (now - state.t0) / 1000;
+    setWide(elapsed >= 600);
+    const mm = Math.floor(elapsed / 60), ss = Math.floor(elapsed % 60).toString().padStart(2, '0');
+    document.querySelectorAll('.live .time').forEach(n => n.textContent = `${mm}:${ss}`);
+    readout.textContent = state.level.toFixed(2);
+    if (state.src !== 'manual') slider.value = state.level.toFixed(2);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
