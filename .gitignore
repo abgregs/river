@@ -7,6 +7,7 @@ build/
 xcuserdata/
 .claude/worktrees/
 .claude/settings.local.json
+.claude/last-doc-sweep
 
 # Custom-dictionary A/B eval harness artifacts (local only — see DictionaryEvalTests)
 ab-result.txt
@@ -17,3 +18,8 @@ eval-*.txt
 
 # Impeccable decision-page session logs (ephemeral)
 .impeccable/questions/
+
+# Release DMGs and their checksums (local builds / downloaded artifacts;
+# the real ones live on the GitHub Release — see scripts/make-dmg)
+*.dmg
+*.dmg.sha256
