@@ -40,7 +40,7 @@ The identity brief for the design phase that follows the naming decision ([../pl
 Settle these in the phase and record the answer here or in the surface's planning item.
 
 - **Motion implementation:** settled 2026-09-17 — SwiftUI throughout. The indicator is a `TimelineView(.animation)` over a `Canvas`, with every number in a pure, unit-tested `RiverIndicatorPresentation`; no Core Animation, no `Timer`, no frame `Task`.
-- **Accent color:** settled 2026-09-16: charcoal plus vivid turquoise (OKLCH hue 196), `#148284` on light and `#31C8CA` on dark grounds; pressed controls take white text on the light value and charcoal text on the dark one. See [identity-studies.md](identity-studies.md).
+- **Accent color:** settled 2026-09-16: charcoal plus vivid turquoise (OKLCH hue 196), `#148284` on light and `#31C8CA` on dark grounds; pressed controls take white text on the light value and charcoal text on the dark one. See [identity-studies.md](identity-studies.md). Its meaning and roles (the accent means "on") are defined in [color.md](color.md).
 - **Glyphs:** a custom template family. Settled 2026-09-24: the pixel r replaces the microphone slat glyph; see [pixel-identity.md](pixel-identity.md).
 - **Cues:** custom recordings, or synthesized in code for zero asset weight?
 - **Streaming preview:** should the HUD hint at continuous insertion before 0025 ships, or stay honest about paste-at-the-end?
