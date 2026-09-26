@@ -4,10 +4,10 @@ import Foundation
 import Testing
 @testable import River
 
-/// Renders the slat glyph's template PNGs from the geometry in `Constants` (planning
-/// 0028). This is the checked-in script: `RIVER_WRITE_GLYPHS=1 swift test --filter
-/// MenuBarGlyph` regenerates the assets; the normal suite checks the shipped files
-/// still match, so a geometry edit without a regeneration fails.
+/// Renders the pixel r's template PNGs from `PixelMark` and the geometry in `Constants`
+/// (planning 0029). This is the checked-in script: `RIVER_WRITE_GLYPHS=1 swift test --filter
+/// MenuBarGlyph` regenerates the assets; the normal suite checks the shipped files still
+/// match, so a geometry edit without a regeneration fails.
 enum MenuBarGlyphRenderer {
     static let assetDirectory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -15,6 +15,12 @@ enum MenuBarGlyphRenderer {
 
     static func fileName(_ glyph: MenuBarPresentation.Glyph, scale: Int) -> String {
         scale == 1 ? "\(glyph.rawValue).png" : "\(glyph.rawValue)@\(scale)x.png"
+    }
+
+    static func geometry(scale: Int) -> (cell: Double, gap: Double) {
+        scale == 1
+            ? (Constants.menuBarGlyphCell1x, Constants.menuBarGlyphGap1x)
+            : (Constants.menuBarGlyphCell2x, Constants.menuBarGlyphGap2x)
     }
 
     // Black ink with alpha on a clear ground: a template image is read by its alpha only.
@@ -27,47 +33,25 @@ enum MenuBarGlyphRenderer {
             space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { throw ContextUnavailable() }
-        // Top-left origin in points, matching the study page's 16-unit box.
+        // Top-left origin in points, matching the map's rows.
         context.translateBy(x: 0, y: CGFloat(pixels))
         context.scaleBy(x: CGFloat(scale), y: -CGFloat(scale))
         context.setShouldAntialias(true)
-        drawSlats(glyph, scale: scale, unit: 1, color: CGColor(gray: 0, alpha: 1), in: context)
+        let (cell, gap) = geometry(scale: scale)
+        drawPixelMark(PixelMark.staticCells(for: glyph), cell: cell, gap: gap, color: CGColor(gray: 0, alpha: 1), in: context)
         guard let image = context.makeImage() else { throw ContextUnavailable() }
         return image
     }
 
-    // The mark itself, in a box of `Constants.menuBarGlyphSize` units scaled by `unit`.
-    // Shared with the app icon so both surfaces are one drawing (identity-studies rule 8).
-    static func drawSlats(_ glyph: MenuBarPresentation.Glyph, scale: Int, unit: Double, color: CGColor, in context: CGContext) {
-        let size = Constants.menuBarGlyphSize
-        let centers = scale == 1 ? Constants.menuBarGlyphRowCenters1x : Constants.menuBarGlyphRowCenters2x
-        for (row, inset) in Constants.menuBarGlyphRowInsets.enumerated() {
-            let y = centers[row] * unit
-            let start = inset * unit, end = (size - inset) * unit
-            switch glyph {
-            case .ready, .listening:
-                let isReady = glyph == .ready
-                let ink = isReady && row != 2 ? Constants.menuBarGlyphReadySideInk : 1
-                context.setStrokeColor(color.copy(alpha: ink) ?? color)
-                context.setLineWidth((isReady ? Constants.menuBarGlyphReadyStroke : Constants.menuBarGlyphListeningStroke) * unit)
-                context.setLineCap(.round)
-                context.move(to: CGPoint(x: start, y: y))
-                context.addLine(to: CGPoint(x: end, y: y))
-                context.strokePath()
-            case .transcribing:
-                // Real circles whose first and last sit on the slat's endpoints, so the dotted
-                // outline is the solid outline (identity-studies working rule 12).
-                let count = Constants.menuBarGlyphDotCounts[row]
-                let radius = Constants.menuBarGlyphDotRadius * unit
-                context.setFillColor(color)
-                for dot in 0..<count {
-                    let even = start + (end - start) * Double(dot) / Double(count - 1)
-                    // At 2x the in-between dots snap to device pixels so none renders as two
-                    // half-lit columns; the endpoints already sit on the grid and never move.
-                    let x = scale == 2 ? (even * 2 / unit).rounded() / 2 * unit : even
-                    context.fillEllipse(in: CGRect(x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius))
-                }
-            }
+    // The mark itself, one rounded square per cell. Shared with the app icon so both
+    // surfaces are one drawing (identity-studies rule 8).
+    static func drawPixelMark(_ cells: [PixelMark.StaticCell], cell: Double, gap: Double, color: CGColor, in context: CGContext) {
+        let radius = PixelMark.cornerRadius(cell: cell)
+        for pixel in cells {
+            let rect = PixelMark.cellRect(x: Double(pixel.x), y: Double(pixel.y), cell: cell, gap: gap)
+            context.setFillColor(color.copy(alpha: pixel.ink) ?? color)
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            context.fillPath()
         }
     }
 
@@ -97,7 +81,7 @@ struct MenuBarGlyphTests {
 
     // The shipped PNGs are generated, never hand-edited; drift from the geometry in
     // `Constants` means someone changed one without the other. The tolerance absorbs
-    // antialiasing differences between macOS versions, not a moved or resized slat.
+    // antialiasing differences between macOS versions, not a moved or resized cell.
     @Test("the shipped PNGs match the geometry in Constants", arguments: variants)
     func assetsMatchGeometry(glyph: MenuBarPresentation.Glyph, scale: Int) throws {
         let url = MenuBarGlyphRenderer.assetDirectory.appendingPathComponent(MenuBarGlyphRenderer.fileName(glyph, scale: scale))
@@ -110,32 +94,25 @@ struct MenuBarGlyphTests {
         #expect(worst <= 8)
     }
 
-    // Crisp means the slat body covers whole device-pixel rows: at 2x a 1.1 pt stroke on a
-    // pixel boundary fills two full rows; at 1x a 1.1 px stroke on a pixel center fills one.
-    // A dot straddling two pixel columns reads as a split, blurred dot at menu bar size.
-    @Test("every transcribing dot at 2x is centered on a device-pixel boundary")
-    func dotsAreCrispAt2x() throws {
-        let alpha = MenuBarGlyphRenderer.alpha(of: try MenuBarGlyphRenderer.render(.transcribing, scale: 2))
-        let side = Int(Constants.menuBarGlyphSize) * 2
-        let middleRow = Int(Constants.menuBarGlyphRowCenters2x[2] * 2)
-        let lit = (0..<side).map { alpha[middleRow * side + $0] }
-        // Each dot's two center columns are equally lit, so no dot leans into a half column.
-        let peaks = (1..<side).filter { lit[$0] > 100 && lit[$0] == lit[$0 - 1] }
-        #expect(peaks.count == Constants.menuBarGlyphDotCounts[2])
+    // A cell edge between two device pixels renders as a half-lit column, which reads as a
+    // blurred mark at menu bar size; the grid's origin and pitch keep every edge whole.
+    @Test("every cell edge lands on a device pixel", arguments: [1, 2])
+    func cellsAreCrisp(scale: Int) {
+        let (cell, gap) = MenuBarGlyphRenderer.geometry(scale: scale)
+        for glyph in MenuBarPresentation.Glyph.allCases {
+            for pixel in PixelMark.staticCells(for: glyph) {
+                let rect = PixelMark.cellRect(x: Double(pixel.x), y: Double(pixel.y), cell: cell, gap: gap)
+                for edge in [rect.minX, rect.maxX, rect.minY, rect.maxY] {
+                    let devicePixels = edge * Double(scale)
+                    #expect(devicePixels == devicePixels.rounded())
+                }
+            }
+        }
     }
 
-    @Test("slat bodies fill whole device-pixel rows at 1x and 2x", arguments: [1, 2])
-    func slatsAreCrisp(scale: Int) throws {
-        let alpha = MenuBarGlyphRenderer.alpha(of: try MenuBarGlyphRenderer.render(.listening, scale: scale))
-        let side = Int(Constants.menuBarGlyphSize) * scale
-        let middleX = side / 2
-        let centers = scale == 1 ? Constants.menuBarGlyphRowCenters1x : Constants.menuBarGlyphRowCenters2x
-        for center in centers {
-            let fullRows = (0..<side).filter { alpha[$0 * side + middleX] >= 250 }
-            let expectedRows = scale == 1
-                ? [Int(center * 1)]
-                : [Int(center * 2) - 1, Int(center * 2)]
-            #expect(expectedRows.allSatisfy(fullRows.contains))
-        }
+    @Test("the mark fits the 18 pt box at both scales", arguments: [1, 2])
+    func markFitsTheBox(scale: Int) {
+        let (cell, gap) = MenuBarGlyphRenderer.geometry(scale: scale)
+        #expect(PixelMark.extent(cell: cell, gap: gap) <= Constants.menuBarGlyphSize)
     }
 }

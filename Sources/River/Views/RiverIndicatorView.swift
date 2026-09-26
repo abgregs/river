@@ -1,19 +1,21 @@
+import AppKit
 import SwiftUI
 
-/// The recording indicator's SwiftUI content (planning 0028): the river capsule, which
-/// carries only the recording state, and below it one rounded rectangle for the error
-/// toast (0018), the model-loading label (0004), and the live-reconfiguration notice.
-/// It observes `AppState` only; every number that shapes the motion lives in the pure
-/// `RiverIndicatorPresentation`, and panel and focus behavior live in the coordinator.
+/// The recording indicator's SwiftUI content (planning 0028, mark replaced in 0029): the
+/// pixel mark's panel, which carries only the recording state, and below it one rounded
+/// rectangle for the error toast (0018), the model-loading label (0004), and the
+/// live-reconfiguration notice. It observes `AppState` only; every number that shapes the
+/// motion lives in the pure `PixelMarkPresentation`, and panel and focus behavior live in
+/// the coordinator.
 struct RiverIndicatorView: View {
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        // Fixed geometry: the capsule keeps its place whether or not a message is on
-        // screen, and the panel never resizes under an animating transition.
+        // Fixed geometry: the mark's panel keeps its place whether or not a message is on
+        // screen, and the window never resizes under an animating transition.
         VStack(spacing: Constants.hudStackSpacing) {
-            RiverCapsule(state: appState.state, inputLevel: Double(appState.inputLevel))
+            MarkPanel(state: appState.state, inputLevel: Double(appState.inputLevel))
                 .modifier(HUDFade(isVisible: appState.state != .idle, reduceMotion: reduceMotion))
             ZStack(alignment: .top) {
                 if hasMessage {
@@ -75,19 +77,21 @@ struct RiverIndicatorView: View {
     }
 }
 
-/// The capsule around the mark, and the mark's accessible name: the strands are
-/// decorative, so the capsule speaks the state and, while listening, the elapsed time.
-private struct RiverCapsule: View {
+/// The panel around the mark, and the mark's accessible name: the pixels are decorative,
+/// so the panel speaks the state and, while listening, the elapsed time.
+private struct MarkPanel: View {
     let state: RiverState
     let inputLevel: Double
     @State private var recordingStart = Date()
 
     var body: some View {
         TimelineView(.animation(paused: state == .idle)) { context in
-            RiverMark(state: state, inputLevel: inputLevel, date: context.date)
-                .padding(.horizontal, Constants.riverCapsuleHorizontalPadding)
-                .padding(.vertical, Constants.riverCapsuleVerticalPadding)
-                .background { HUDSurface(shape: Capsule()) }
+            PixelMarkView(state: state, inputLevel: inputLevel, date: context.date)
+                .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
+                .padding(.vertical, Constants.indicatorPanelVerticalPadding)
+                .background {
+                    HUDSurface(shape: RoundedRectangle(cornerRadius: Constants.indicatorPanelCornerRadius, style: .continuous))
+                }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(state == .processing ? "Transcribing" : "Listening")
                 .accessibilityValue(state == .recording ? elapsed(at: context.date) : "")
@@ -104,75 +108,71 @@ private struct RiverCapsule: View {
     }
 }
 
-/// The three strands, drawn per display frame from the pure presentation functions.
-private struct RiverMark: View {
+/// The pixel mark, drawn per display frame from the pure presentation functions.
+private struct PixelMarkView: View {
     let state: RiverState
     let inputLevel: Double
     let date: Date
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var engine = RiverEngine()
+    @Environment(\.colorSchemeContrast) private var contrast
+    @State private var engine = PixelMarkEngine()
 
     var body: some View {
         Canvas { context, _ in
             let now = date.timeIntervalSinceReferenceDate
             let frame = engine.frame.advanced(to: now, state: state, inputLevel: inputLevel, reduceMotion: reduceMotion)
             engine.frame = frame
-            RiverMarkRenderer.draw(frame, time: now, reduceMotion: reduceMotion, in: &context)
+            PixelMarkRenderer.draw(frame, increaseContrast: contrast == .increased, in: &context)
         }
-        .frame(width: Constants.riverMarkWidth, height: Constants.riverMarkHeight)
+        .frame(width: Constants.pixelMarkSize, height: Constants.pixelMarkSize)
         .accessibilityHidden(true)
-        // A new cycle starts from rest, not from wherever the last one's level was left
+        // A new cycle starts from the r at rest, not from wherever the last one was left
         // when the timeline paused at idle.
         .onChange(of: state) { oldState, _ in
-            if oldState == .idle { engine.frame = RiverIndicatorFrame() }
+            if oldState == .idle { engine.frame = PixelMarkFrame() }
         }
     }
 }
 
-/// Draws the three strands for one frame. Shared by the live mark and the snapshot
+/// Draws the sixteen pixels for one frame. Shared by the live mark and the snapshot
 /// harness, so a held frame is the shipped drawing, not a copy of it.
-enum RiverMarkRenderer {
-    static func draw(_ frame: RiverIndicatorFrame, time: Double, reduceMotion: Bool, in context: inout GraphicsContext) {
-        typealias River = RiverIndicatorPresentation
-        let ink = Color(nsColor: Palette.ink)
-        let width = Constants.riverMarkWidth
-        let fade = Constants.riverEndFadeFraction
-        context.clipToLayer { mask in
-            mask.fill(Path(CGRect(x: 0, y: 0, width: width, height: Constants.riverMarkHeight)), with: .linearGradient(
-                Gradient(stops: [
-                    .init(color: .black.opacity(0), location: 0),
-                    .init(color: .black, location: fade),
-                    .init(color: .black, location: 1 - fade),
-                    .init(color: .black.opacity(0), location: 1),
-                ]),
-                startPoint: .zero, endPoint: CGPoint(x: width, y: 0)))
+enum PixelMarkRenderer {
+    static func draw(_ frame: PixelMarkFrame, increaseContrast: Bool, in context: inout GraphicsContext) {
+        context.opacity = frame.opacity
+        let radius = PixelMark.cornerRadius(cell: Constants.pixelCell)
+        for (index, cell) in PixelMark.cells.enumerated() {
+            let offset = frame.offset(ofCell: index)
+            let rect = PixelMark.cellRect(x: Double(cell.x) + offset.x, y: Double(cell.y) + offset.y,
+                                          cell: Constants.pixelCell, gap: Constants.pixelGap)
+            let ink = PixelMarkPresentation.displayInk(frame.ink[index], increaseContrast: increaseContrast)
+            context.fill(Path(roundedRect: rect, cornerRadius: radius),
+                         with: .color(color(accentMix: frame.accentMix[index]).opacity(ink)))
         }
-        let motion = River.motion(level: frame.level)
-        let stops = River.crestStopOpacities(base: River.crestBase(blend: frame.crestBlend))
-        let lastStop = Double(stops.count - 1)
-        let gradient = Gradient(stops: stops.enumerated().map { index, opacity in
-            .init(color: ink.opacity(opacity), location: Double(index) / lastStop)
-        })
-        for (index, strand) in Constants.riverStrands.enumerated() {
-            var path = Path()
-            path.addLines(River.strandPoints(strand, motion: motion, clock: frame.clock))
-            let crestStart = River.crestOffset(time: time, strandIndex: index)
-            var strandContext = context
-            strandContext.opacity = River.strandOpacity(strand, level: frame.level, time: time, reduceMotion: reduceMotion)
-            strandContext.stroke(
-                path,
-                with: .linearGradient(gradient,
-                                      startPoint: CGPoint(x: crestStart, y: 0),
-                                      endPoint: CGPoint(x: crestStart + Constants.riverCrestWidth, y: 0)),
-                style: StrokeStyle(lineWidth: River.strandWidth(strand, level: frame.level), lineCap: .round, lineJoin: .round))
-        }
+    }
+
+    // The panel is charcoal on every desktop, so the lit meter takes the dark accent.
+    private static let inkComponents = components(Palette.ink)
+    private static let accentComponents = components(Palette.accentDark)
+
+    static func color(accentMix: Double) -> Color {
+        let ink = inkComponents, accent = accentComponents
+        let mix = min(1, max(0, accentMix))
+        return Color(.sRGB,
+                     red: ink.red + (accent.red - ink.red) * mix,
+                     green: ink.green + (accent.green - ink.green) * mix,
+                     blue: ink.blue + (accent.blue - ink.blue) * mix)
+    }
+
+    private static func components(_ color: NSColor) -> (red: Double, green: Double, blue: Double) {
+        let srgb = color.usingColorSpace(.sRGB) ?? color
+        return (srgb.redComponent, srgb.greenComponent, srgb.blueComponent)
     }
 }
 
 /// Holds the engine's frame between renders. A reference so the renderer can advance it
 /// without invalidating the view; nothing observes it.
-private final class RiverEngine {
-    var frame = RiverIndicatorFrame()
+private final class PixelMarkEngine {
+    var frame = PixelMarkFrame()
 }
 
 /// The charcoal surface both HUD shapes share: near-opaque fill, two shadows, and on
