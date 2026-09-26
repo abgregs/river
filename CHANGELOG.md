@@ -22,6 +22,10 @@ show as raw text. -->
 - The recording indicator: while you speak, the r's squares drop into a turquoise level meter whose four columns move independently; while transcribing, they return to the r and a band of light runs through it. Reduce Motion swaps the two with a quick fade, and Increase Contrast brightens the dim squares.
 - While River gets its speech model ready at launch, the indicator shows the r with a slow band of light instead of a spinner, and the status reads "Preparing model" instead of "Loading".
 
+### Fixed
+
+- Quiet dictation is no longer thrown away. A recording spoken softly could be treated as silence and discarded without transcribing or saying so; the silence trim now scales with how loudly you spoke, and normal speech is trimmed exactly as before.
+
 ## [0.1.0] - 2026-09-18
 
 First public release — a macOS menu bar dictation app with fully on-device transcription.
