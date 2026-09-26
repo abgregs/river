@@ -16,6 +16,11 @@ show as raw text. -->
 
 ## [Unreleased]
 
+### Changed
+
+- A new mark: River is now a lowercase r built from rounded squares, in the menu bar, the app icon, and the recording indicator.
+- The recording indicator: while you speak, the r's squares drop into a turquoise level meter whose four columns move independently; while transcribing, they return to the r and a band of light runs through it. Reduce Motion swaps the two with a quick fade, and Increase Contrast brightens the dim squares.
+
 ## [0.1.0] - 2026-09-18
 
 First public release — a macOS menu bar dictation app with fully on-device transcription.

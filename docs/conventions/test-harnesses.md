@@ -6,14 +6,14 @@ general test conventions are in [tests.md](tests.md).
 
 ## Generated assets are rendered by tests (0028)
 
-River's menu bar glyphs and app icon are drawn from geometry in `Constants` — the slat rows, strokes, dot counts, the icon's squircle grid — by `MenuBarGlyphTests` and `AppIconTests`, in two halves:
+River's menu bar glyphs and app icon are drawn from the pixel r's map in `PixelMark` and the geometry in `Constants` — the per-scale cell and gap, the static readings, the icon's squircle grid — by `MenuBarGlyphTests` and `AppIconTests` through one shared drawing (planning 0029), in two halves:
 
 - **The writer** is env-gated (`RIVER_WRITE_GLYPHS=1` / `RIVER_WRITE_ICON=1`), exactly the `DictionaryEvalTests` shape: the normal suite writes nothing.
 - **The checks always run.** They re-render from `Constants` and compare against the checked-in files (alpha within a tolerance that absorbs antialiasing differences between macOS versions, not a moved slat), and assert the pixel-snapping and centering rules that make the mark crisp.
 
 **Why:** SwiftPM has no asset pipeline for a hand-rolled `.app` (`Bundle.module` resolves to the bundle root, which breaks signing), so the assets are checked-in files copied by `make bundle`. Without the always-on check, editing the geometry would leave the shipped art silently stale — the asset and the number that produced it would drift apart with nothing to catch it. There is no runtime detector for a wrong or missing asset either, so `make verify` asserts they reach the bundle ([../architecture/distribution.md](../architecture/distribution.md)).
 
-The same file also holds the indicator's **snapshot harness** (`RiverIndicatorSnapshotTests`, env-gated by `RIVER_SNAPSHOT_DIR`): it renders the capsule at held levels through `RiverMarkRenderer`, for side-by-side review against the study page and for PR screenshots.
+The same file also holds the indicator's **snapshot harness** (`RiverIndicatorSnapshotTests`, env-gated by `RIVER_SNAPSHOT_DIR`): it renders the mark's panel at held frames (rest, silence, speaking, transcribing, Reduce Motion, Increase Contrast), run through the real engine with a fixed seed, via `PixelMarkRenderer`, for side-by-side review against the study page and for PR screenshots.
 
 ## Transcription eval harness (0022)
 
