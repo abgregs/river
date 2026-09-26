@@ -22,6 +22,7 @@ A 6×6 grid; the r is 16 cells (a two-wide stem, a shoulder, a dropped tip). One
 - **State changes.** Every pixel's ink and tint follow their target at 18/s (about 0.17 s), and a travel retargets from where the pixel is, so interruptions never jump.
 - **Reduce Motion.** No travel: the mark dips out and back over 0.24 s and the layout swaps at the bottom of the dip. The columns move together on the smoothed level (attack 10/s, release 5/s). Transcribing is the dithered r below.
 - **Increase Contrast.** Every cell's ink has a 40% floor, so dim cells never drop out.
+- **Preparing.** While the model gets ready at idle (the 0004 load window), the panel shows the r with the same raised-cosine crest, slower (3.0 s) and over a dimmer 40% base, so it reads as waiting rather than working on your words; Reduce Motion shows the dithered r. It replaces the spinner. The label below is text only, renamed "Preparing model…" (menu bar: "Preparing model..."), and when it is the only message its rectangle fits the text and centers under the mark.
 - **Accessibility.** Unchanged: the panel speaks "Listening" or "Transcribing" and the elapsed time; the pixels are hidden. The states differ without color: the r, the meter's shape, and the r with ink moving through it.
 
 ### The menu bar glyphs

@@ -9,6 +9,7 @@ The identity round that replaced the 0028 marks with one pixel-grid lowercase **
 - **A square 4×4 meter**, proposed by the maintainer, replacing the first build's 3·3·3·3·2·2 columns: symmetric and centered under the r, 16 slots for 16 pixels, every column able to reach full height.
 - **Independent columns.** Directed after the first look: each column is its own readout, rising and falling out of step with the others, "for a more eye-catching, dynamic effect". The mechanism (own clock, own delay, random reach within the loudness) keeps every column tied to the voice: silence settles all four.
 - **A static menu bar.** Agreed 2026-09-24: one template icon per state, no animation (it would be tiny, monochrome, and a second moving indicator beside macOS's own microphone dot). Ready is the r; Listening a frozen meter reading, bars 3·1·4·2; Transcribing the r in a 50% dither.
+- **Preparing replaces the spinner** (2026-09-25): at launch the HUD shows the r with a slow, dim ink crest and the label "Preparing model…", after the maintainer found "Loading" and the stock spinner confusing and off-brand.
 - **The app icon is redrawn from the r**, and the native panel uses 5 pt cells with 2 pt gaps so the r is sharp at 1× (both decided 2026-09-24).
 
 ## Earlier rules this round deliberately revises

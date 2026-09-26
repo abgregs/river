@@ -20,6 +20,7 @@ show as raw text. -->
 
 - A new mark: River is now a lowercase r built from rounded squares, in the menu bar, the app icon, and the recording indicator.
 - The recording indicator: while you speak, the r's squares drop into a turquoise level meter whose four columns move independently; while transcribing, they return to the r and a band of light runs through it. Reduce Motion swaps the two with a quick fade, and Increase Contrast brightens the dim squares.
+- While River gets its speech model ready at launch, the indicator shows the r with a slow band of light instead of a spinner, and the status reads "Preparing model" instead of "Loading".
 
 ## [0.1.0] - 2026-09-18
 
