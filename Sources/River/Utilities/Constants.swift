@@ -229,6 +229,10 @@ enum Constants {
     static let pixelCrestRest: Double = 0.12
     static let pixelCrestPeriod: Double = 2.0
     static let pixelCrestBase: Double = 0.55
+    // Preparing (the model getting ready at launch): the same crest, slower and over a dimmer
+    // base, so it reads as waiting rather than working on your words.
+    static let pixelPreparingCrestPeriod: Double = 3.0
+    static let pixelPreparingCrestBase: Double = 0.4
     // The static Transcribing reading (menu bar, and the panel under Reduce Motion): every
     // other pixel dimmed. Removing them breaks the r apart; brighter reads as Ready.
     static let pixelDitherInk: Double = 0.3

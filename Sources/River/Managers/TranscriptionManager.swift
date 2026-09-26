@@ -68,7 +68,7 @@ final class TranscriptionManager {
     private var loadGeneration = 0
 
     // Published model load state — the menu bar observes this to show an honest
-    // "Downloading…" / "Loading…" / "Ready" status during the launch window.
+    // "Downloading…" / "Preparing…" / "Ready" status during the launch window.
     // Initialized from a synchronous disk check so the first emitted value is
     // already correct when `bind(transcription:)` subscribes in AppDelegate.
     private let loadStateSubject: CurrentValueSubject<ModelLoadState, Never>
@@ -90,7 +90,7 @@ final class TranscriptionManager {
     init(modelName: String = Constants.defaultModel) {
         self.modelName = modelName
         // Synchronous disk check: if the model files are already on disk the user
-        // will see "Loading…" (warm launch); otherwise "Downloading model…" (cold).
+        // will see "Preparing model…" (warm launch); otherwise "Downloading model…" (cold).
         let downloadBase = Self.modelDownloadBase()
         let isCached = Self.isModelCached(downloadBase: downloadBase, modelName: modelName)
         loadStateSubject = CurrentValueSubject(isCached ? .loading : .downloading)
@@ -130,7 +130,7 @@ final class TranscriptionManager {
     /// while the first is in-flight doesn't start a second download.
     ///
     /// Emits `ModelLoadState` transitions so the menu bar can show an honest
-    /// "Downloading model…" / "Loading…" status:
+    /// "Downloading model…" / "Preparing model…" status:
     ///   Cold launch: .downloading → .loading → .ready
     ///   Warm launch: .loading (already set at init) → .loading → .ready
     ///   Failure:     .downloading/.loading → .failed
@@ -154,7 +154,7 @@ final class TranscriptionManager {
             // Phase 2: files confirmed on disk — now loading CoreML models into
             // memory. Generation-guarded like the completion paths: a superseded
             // load finishing its download must not mislabel the *newer* switch's
-            // published state (e.g. flip "Downloading model…" to "Loading…" while
+            // published state (e.g. flip "Downloading model…" to "Preparing model…" while
             // another model's download is what the user is actually waiting on).
             if let self, self.loadGeneration == generation {
                 self.emitLoadState(.loading)

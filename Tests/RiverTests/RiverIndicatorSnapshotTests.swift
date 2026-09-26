@@ -16,15 +16,17 @@ struct RiverIndicatorSnapshotTests {
         let start = 1_000.0
         let speaking: (Double) -> Double = { inputLevel(decibels: speechDecibels + 5 * sin($0 * 9)) }
         let quiet: (Double) -> Double = { inputLevel(decibels: quietSpeechDecibels + 3 * sin($0 * 9)) }
-        let rest = PixelMarkFrame(seed: 11).running(.idle, from: start, for: 0.3).frame
-        let silence = PixelMarkFrame(seed: 11).running(.recording, from: start, for: 1.5).frame
-        let quietTalking = PixelMarkFrame(seed: 11).running(.recording, from: start, for: 2, level: quiet).frame
-        let (listening, end) = PixelMarkFrame(seed: 11).running(.recording, from: start, for: 2, level: speaking)
-        let transcribing = listening.running(.processing, from: end, for: Constants.pixelReturnSeconds + 0.6).frame
-        let (reduced, reducedEnd) = PixelMarkFrame(seed: 11).running(.recording, from: start, for: 1, reduceMotion: true, level: speaking)
-        let reducedTranscribing = reduced.running(.processing, from: reducedEnd, for: 1, reduceMotion: true).frame
+        let rest = PixelMarkFrame(seed: 11).running(.rest, from: start, for: 0.3).frame
+        let preparing = PixelMarkFrame(seed: 11).running(.preparing, from: start, for: 1.2).frame
+        let silence = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 1.5).frame
+        let quietTalking = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 2, level: quiet).frame
+        let (listening, end) = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 2, level: speaking)
+        let transcribing = listening.running(.transcribing, from: end, for: Constants.pixelReturnSeconds + 0.6).frame
+        let (reduced, reducedEnd) = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 1, reduceMotion: true, level: speaking)
+        let reducedTranscribing = reduced.running(.transcribing, from: reducedEnd, for: 1, reduceMotion: true).frame
         return [
             ("rest", rest, false),
+            ("preparing", preparing, false),
             ("listening-silence", silence, false),
             ("listening-silence-contrast", silence, true),
             ("listening-quiet", quietTalking, false),

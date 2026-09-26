@@ -42,12 +42,12 @@ struct MenuBarPresentationTests {
         #expect(visual.statusLabel == "Downloading model...")
     }
 
-    @Test("loading state shows ellipsis icon and 'Loading...' label")
+    @Test("loading state shows ellipsis icon and 'Preparing model...' label")
     func loadingState() {
         // Warm launch: files on disk, CoreML loading into memory. Still not "Ready".
         let visual = MenuBarPresentation.visual(state: .idle, hasError: false, modelLoadState: .loading)
         #expect(visual.icon == .symbol("ellipsis"))
-        #expect(visual.statusLabel == "Loading...")
+        #expect(visual.statusLabel == "Preparing model...")
     }
 
     @Test("failed state shows error icon and an honest failure label")

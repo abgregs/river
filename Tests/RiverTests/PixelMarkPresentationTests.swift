@@ -13,13 +13,13 @@ let speechDecibels = -32.0
 
 // Steps a frame at 60 fps, the way the indicator's TimelineView does.
 extension PixelMarkFrame {
-    func running(_ state: RiverState, from start: Double, for seconds: Double, reduceMotion: Bool = false,
+    func running(_ activity: PixelMarkActivity, from start: Double, for seconds: Double, reduceMotion: Bool = false,
                  level: (Double) -> Double = { _ in 0 }) -> (frame: PixelMarkFrame, end: Double) {
         var frame = self
         var now = start
         while now < start + seconds - 1e-9 {
             now += 1.0 / 60
-            frame = frame.advanced(to: now, state: state, inputLevel: level(now), reduceMotion: reduceMotion)
+            frame = frame.advanced(to: now, activity: activity, inputLevel: level(now), reduceMotion: reduceMotion)
         }
         return (frame, now)
     }
@@ -95,6 +95,19 @@ struct PixelMarkPresentationTests {
         #expect(Mark.loudness(level: inputLevel(decibels: trimFloorDecibels + 3)) > 0)
     }
 
+    // Preparing belongs to idle only: the model is ready before a recording can start, and a
+    // failed load stays in the menu (no mark on screen for an unrecoverable state).
+    @Test("the mark prepares only at idle while the model gets ready", arguments: [
+        (RiverState.idle, true, PixelMarkActivity.preparing),
+        (RiverState.idle, false, PixelMarkActivity.rest),
+        (RiverState.recording, true, PixelMarkActivity.listening),
+        (RiverState.recording, false, PixelMarkActivity.listening),
+        (RiverState.processing, false, PixelMarkActivity.transcribing),
+    ])
+    func activityMapping(state: RiverState, isModelPreparing: Bool, expected: PixelMarkActivity) {
+        #expect(PixelMarkActivity.of(state: state, isModelPreparing: isModelPreparing) == expected)
+    }
+
     @Test("Increase Contrast lifts dim cells and leaves bright ones alone")
     func increaseContrastFloor() {
         #expect(Mark.displayInk(Constants.pixelUnlitInk, increaseContrast: true) == Constants.pixelIncreasedContrastInkFloor)
@@ -113,7 +126,7 @@ struct PixelMarkFrameTests {
 
     @Test("at rest the mark is the r at full ink, untinted and in place")
     func restIsTheR() {
-        let (frame, _) = PixelMarkFrame(seed: 1).running(.idle, from: Self.start, for: 0.5)
+        let (frame, _) = PixelMarkFrame(seed: 1).running(.rest, from: Self.start, for: 0.5)
         for index in PixelMark.cells.indices {
             #expect(frame.ink[index] == 1)
             #expect(frame.accentMix[index] == 0)
@@ -125,7 +138,7 @@ struct PixelMarkFrameTests {
 
     @Test("listening drops every pixel onto its meter slot within the drop time")
     func dropLandsOnTheMeter() {
-        let (frame, _) = PixelMarkFrame(seed: 1).running(.recording, from: Self.start, for: Constants.pixelDropSeconds + 0.02)
+        let (frame, _) = PixelMarkFrame(seed: 1).running(.listening, from: Self.start, for: Constants.pixelDropSeconds + 0.02)
         for (index, cell) in PixelMark.cells.enumerated() {
             let offset = frame.offset(ofCell: index)
             #expect(offset.x == Double(cell.meterX - cell.x))
@@ -136,10 +149,10 @@ struct PixelMarkFrameTests {
     // A new state retargets from where the pixels are, so an interrupted drop never jumps.
     @Test("an interrupted drop turns back from where the pixels are")
     func interruptionIsContinuous() {
-        let (dropping, now) = PixelMarkFrame(seed: 1).running(.recording, from: Self.start, for: 0.1)
+        let (dropping, now) = PixelMarkFrame(seed: 1).running(.listening, from: Self.start, for: 0.1)
         let before = PixelMark.cells.indices.map { dropping.offset(ofCell: $0) }
         #expect(before.contains { $0.x != 0 || $0.y != 0 })
-        let turned = dropping.advanced(to: now + 1e-4, state: .processing, inputLevel: 0, reduceMotion: false)
+        let turned = dropping.advanced(to: now + 1e-4, activity: .transcribing, inputLevel: 0, reduceMotion: false)
         for index in PixelMark.cells.indices {
             let after = turned.offset(ofCell: index)
             #expect(abs(after.x - before[index].x) < 0.01 && abs(after.y - before[index].y) < 0.01)
@@ -148,8 +161,8 @@ struct PixelMarkFrameTests {
 
     @Test("transcribing returns every pixel to the r, then runs the crest in ink")
     func transcribingReturnsToTheR() {
-        let (listening, now) = PixelMarkFrame(seed: 1).running(.recording, from: Self.start, for: 1) { _ in 0.8 }
-        let (frame, _) = listening.running(.processing, from: now, for: Constants.pixelReturnSeconds + 0.6)
+        let (listening, now) = PixelMarkFrame(seed: 1).running(.listening, from: Self.start, for: 1) { _ in 0.8 }
+        let (frame, _) = listening.running(.transcribing, from: now, for: Constants.pixelReturnSeconds + 0.6)
         for index in PixelMark.cells.indices {
             let offset = frame.offset(ofCell: index)
             #expect(offset.x == 0 && offset.y == 0)
@@ -162,7 +175,7 @@ struct PixelMarkFrameTests {
     // Silence keeps a half-lit bottom row, so a quiet listening state never looks like rest.
     @Test("in silence every column settles to the pilot")
     func silenceSettlesToThePilot() {
-        let (frame, _) = PixelMarkFrame(seed: 3).running(.recording, from: Self.start, for: 2)
+        let (frame, _) = PixelMarkFrame(seed: 3).running(.listening, from: Self.start, for: 2)
         for bar in frame.bars {
             #expect(abs(bar.height - Constants.pixelMeterPilot) < 0.01)
         }
@@ -173,7 +186,7 @@ struct PixelMarkFrameTests {
         var now = start, total = 0.0, count = 0
         for step in 0..<240 {
             now += 1.0 / 60
-            frame = frame.advanced(to: now, state: .recording, inputLevel: level, reduceMotion: false)
+            frame = frame.advanced(to: now, activity: .listening, inputLevel: level, reduceMotion: false)
             if step >= 60 {
                 total += meanHeight(of: frame)
                 count += 1
@@ -195,7 +208,7 @@ struct PixelMarkFrameTests {
         var now = Self.start, spread = 0.0, count = 0
         for step in 0..<300 {
             now += 1.0 / 60
-            frame = frame.advanced(to: now, state: .recording, inputLevel: inputLevel(decibels: speechDecibels), reduceMotion: false)
+            frame = frame.advanced(to: now, activity: .listening, inputLevel: inputLevel(decibels: speechDecibels), reduceMotion: false)
             if step >= 60 {
                 let heights = frame.bars.map(\.height)
                 spread += (heights.max() ?? 0) - (heights.min() ?? 0)
@@ -207,7 +220,7 @@ struct PixelMarkFrameTests {
 
     @Test("under Reduce Motion the columns move together")
     func reduceMotionColumnsMoveTogether() {
-        let (frame, _) = PixelMarkFrame(seed: 7).running(.recording, from: Self.start, for: 1, reduceMotion: true) { _ in 0.8 }
+        let (frame, _) = PixelMarkFrame(seed: 7).running(.listening, from: Self.start, for: 1, reduceMotion: true) { _ in 0.8 }
         #expect(frame.bars[0].height == frame.bars[3].height)
         #expect(frame.bars[1].height == frame.bars[2].height)
         #expect(frame.bars[1].height > Constants.pixelMeterPilot + 1)
@@ -220,7 +233,7 @@ struct PixelMarkFrameTests {
         var now = Self.start, dipped = false
         for _ in 0..<60 {
             now += 1.0 / 60
-            frame = frame.advanced(to: now, state: .recording, inputLevel: 0, reduceMotion: true)
+            frame = frame.advanced(to: now, activity: .listening, inputLevel: 0, reduceMotion: true)
             for (index, cell) in PixelMark.cells.enumerated() {
                 let offset = frame.offset(ofCell: index)
                 let home = offset.x == 0 && offset.y == 0
@@ -235,8 +248,31 @@ struct PixelMarkFrameTests {
 
     @Test("under Reduce Motion transcribing is the dithered r, as in the menu bar")
     func reduceMotionTranscribingIsDithered() {
-        let (listening, now) = PixelMarkFrame(seed: 1).running(.recording, from: Self.start, for: 0.5, reduceMotion: true)
-        let (frame, _) = listening.running(.processing, from: now, for: 1, reduceMotion: true)
+        let (listening, now) = PixelMarkFrame(seed: 1).running(.listening, from: Self.start, for: 0.5, reduceMotion: true)
+        let (frame, _) = listening.running(.transcribing, from: now, for: 1, reduceMotion: true)
+        for (index, cell) in PixelMark.cells.enumerated() {
+            #expect(abs(frame.ink[index] - PixelMark.ditherInk(cell)) < 0.01)
+        }
+    }
+
+    // Preparing replaces the spinner: the r in place, in ink, with a slow crest over a dimmer
+    // base than transcribing, so waiting never reads as working on your words.
+    @Test("preparing keeps the r in place and runs a slow ink crest over a dim base")
+    func preparingIsAWaitingR() {
+        let (frame, _) = PixelMarkFrame(seed: 1).running(.preparing, from: Self.start, for: Constants.pixelPreparingCrestPeriod)
+        for index in PixelMark.cells.indices {
+            let offset = frame.offset(ofCell: index)
+            #expect(offset.x == 0 && offset.y == 0)
+            #expect(frame.accentMix[index] == 0)
+            #expect(frame.ink[index] > Constants.pixelPreparingCrestBase - 0.02)
+        }
+        #expect((frame.ink.min() ?? 1) < Constants.pixelCrestBase)
+        #expect(Constants.pixelPreparingCrestPeriod > Constants.pixelCrestPeriod)
+    }
+
+    @Test("under Reduce Motion preparing is the dithered r")
+    func reduceMotionPreparingIsDithered() {
+        let (frame, _) = PixelMarkFrame(seed: 1).running(.preparing, from: Self.start, for: 1, reduceMotion: true)
         for (index, cell) in PixelMark.cells.enumerated() {
             #expect(abs(frame.ink[index] - PixelMark.ditherInk(cell)) < 0.01)
         }
@@ -245,8 +281,8 @@ struct PixelMarkFrameTests {
     @Test("the same seed gives the same meter")
     func seededFramesRepeat() {
         let level: (Double) -> Double = { 0.5 + 0.3 * sin($0 * 7) }
-        let first = PixelMarkFrame(seed: 9).running(.recording, from: Self.start, for: 2, level: level).frame
-        let second = PixelMarkFrame(seed: 9).running(.recording, from: Self.start, for: 2, level: level).frame
+        let first = PixelMarkFrame(seed: 9).running(.listening, from: Self.start, for: 2, level: level).frame
+        let second = PixelMarkFrame(seed: 9).running(.listening, from: Self.start, for: 2, level: level).frame
         #expect(first == second)
     }
 }

@@ -15,8 +15,8 @@ struct RiverIndicatorView: View {
         // Fixed geometry: the mark's panel keeps its place whether or not a message is on
         // screen, and the window never resizes under an animating transition.
         VStack(spacing: Constants.hudStackSpacing) {
-            MarkPanel(state: appState.state, inputLevel: Double(appState.inputLevel))
-                .modifier(HUDFade(isVisible: appState.state != .idle, reduceMotion: reduceMotion))
+            MarkPanel(activity: activity, inputLevel: Double(appState.inputLevel))
+                .modifier(HUDFade(isVisible: activity != .rest, reduceMotion: reduceMotion))
             ZStack(alignment: .top) {
                 if hasMessage {
                     messages
@@ -37,6 +37,11 @@ struct RiverIndicatorView: View {
         appState.state == .idle ? RecordingIndicatorPresentation.loadingLabel(for: appState.modelLoadState) : nil
     }
 
+    // While the model gets ready the mark shows the waiting crest, not a spinner.
+    private var activity: PixelMarkActivity {
+        PixelMarkActivity.of(state: appState.state, isModelPreparing: loadingLabel != nil)
+    }
+
     // A notice belongs to the recording it describes: showing one at `.idle` would put
     // last cycle's message under a capsule that is on its way out (planning 0017's
     // canceled-notice bleed). The menu row stays its lingering home.
@@ -48,16 +53,17 @@ struct RiverIndicatorView: View {
         appState.toast != nil || loadingLabel != nil || notice != nil
     }
 
+    private var isPreparingLabelOnly: Bool {
+        loadingLabel != nil && appState.toast == nil && notice == nil
+    }
+
     private var messages: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let toast = appState.toast {
                 ToastRow(toast: toast)
             }
             if let label = loadingLabel {
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text(label).font(.callout)
-                }
+                Text(label).font(.callout)
             }
             if let notice {
                 Text(notice)
@@ -67,38 +73,41 @@ struct RiverIndicatorView: View {
             }
         }
         .padding(Constants.hudMessagePadding)
-        .frame(width: Constants.hudMessageWidth, alignment: .leading)
+        // The preparing label alone hugs its text and centers under the mark; toasts and
+        // notices keep the full width their wrapped prose needs.
+        .frame(width: isPreparingLabelOnly ? nil : Constants.hudMessageWidth, alignment: .leading)
         .foregroundStyle(Color(nsColor: Palette.ink))
         .background { HUDSurface(shape: RoundedRectangle(cornerRadius: Constants.hudMessageCornerRadius, style: .continuous)) }
-        // The surface is charcoal on every desktop, so its text and spinner take the dark
-        // appearance's colors regardless of the system's.
+        // The surface is charcoal on every desktop, so its text takes the dark appearance's
+        // colors regardless of the system's.
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
     }
 }
 
 /// The panel around the mark, and the mark's accessible name: the pixels are decorative,
-/// so the panel speaks the state and, while listening, the elapsed time.
+/// so the panel speaks the state and, while listening, the elapsed time. While preparing,
+/// the label below speaks instead.
 private struct MarkPanel: View {
-    let state: RiverState
+    let activity: PixelMarkActivity
     let inputLevel: Double
     @State private var recordingStart = Date()
 
     var body: some View {
-        TimelineView(.animation(paused: state == .idle)) { context in
-            PixelMarkView(state: state, inputLevel: inputLevel, date: context.date)
+        TimelineView(.animation(paused: activity == .rest)) { context in
+            PixelMarkView(activity: activity, inputLevel: inputLevel, date: context.date)
                 .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
                 .padding(.vertical, Constants.indicatorPanelVerticalPadding)
                 .background {
                     HUDSurface(shape: RoundedRectangle(cornerRadius: Constants.indicatorPanelCornerRadius, style: .continuous))
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(state == .processing ? "Transcribing" : "Listening")
-                .accessibilityValue(state == .recording ? elapsed(at: context.date) : "")
-                .accessibilityHidden(state == .idle)
+                .accessibilityLabel(activity == .transcribing ? "Transcribing" : "Listening")
+                .accessibilityValue(activity == .listening ? elapsed(at: context.date) : "")
+                .accessibilityHidden(activity == .rest || activity == .preparing)
         }
-        .onChange(of: state) { _, newState in
-            if newState == .recording { recordingStart = Date() }
+        .onChange(of: activity) { _, newActivity in
+            if newActivity == .listening { recordingStart = Date() }
         }
     }
 
@@ -110,7 +119,7 @@ private struct MarkPanel: View {
 
 /// The pixel mark, drawn per display frame from the pure presentation functions.
 private struct PixelMarkView: View {
-    let state: RiverState
+    let activity: PixelMarkActivity
     let inputLevel: Double
     let date: Date
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -120,7 +129,7 @@ private struct PixelMarkView: View {
     var body: some View {
         Canvas { context, _ in
             let now = date.timeIntervalSinceReferenceDate
-            let frame = engine.frame.advanced(to: now, state: state, inputLevel: inputLevel, reduceMotion: reduceMotion)
+            let frame = engine.frame.advanced(to: now, activity: activity, inputLevel: inputLevel, reduceMotion: reduceMotion)
             engine.frame = frame
             PixelMarkRenderer.draw(frame, increaseContrast: contrast == .increased, in: &context)
         }
@@ -128,8 +137,8 @@ private struct PixelMarkView: View {
         .accessibilityHidden(true)
         // A new cycle starts from the r at rest, not from wherever the last one was left
         // when the timeline paused at idle.
-        .onChange(of: state) { oldState, _ in
-            if oldState == .idle { engine.frame = PixelMarkFrame() }
+        .onChange(of: activity) { oldActivity, _ in
+            if oldActivity == .rest { engine.frame = PixelMarkFrame() }
         }
     }
 }

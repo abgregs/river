@@ -1,5 +1,20 @@
 import Foundation
 
+/// What the mark is doing (planning 0029). Preparing is the idle mark while the model gets
+/// ready at launch: the r with the crest running, slower and dimmer than transcribing, in
+/// place of a spinner.
+enum PixelMarkActivity: Equatable {
+    case rest, listening, transcribing, preparing
+
+    static func of(state: RiverState, isModelPreparing: Bool) -> PixelMarkActivity {
+        switch state {
+        case .recording: return .listening
+        case .processing: return .transcribing
+        case .idle: return isModelPreparing ? .preparing : .rest
+        }
+    }
+}
+
 /// Pure functions behind the pixel mark (planning 0029), ported number for number from
 /// the study page so the view only draws and every value that shapes the motion is
 /// unit-tested.
@@ -46,9 +61,9 @@ enum PixelMarkPresentation {
     // briefly, so the loop never pops.
     static var crestSpan: Double { 1 + 2 * Constants.pixelCrestHalfWidth + Constants.pixelCrestRest }
 
-    static func crestLoop(at fraction: Double, since: Double) -> Double {
+    static func crestLoop(at fraction: Double, since: Double, period: Double = Constants.pixelCrestPeriod) -> Double {
         guard since >= 0 else { return 0 }
-        let position = (since / Constants.pixelCrestPeriod * crestSpan).truncatingRemainder(dividingBy: crestSpan)
+        let position = (since / period * crestSpan).truncatingRemainder(dividingBy: crestSpan)
         return crest(at: fraction, position: position)
     }
 
@@ -111,7 +126,7 @@ struct PixelMarkFrame: Equatable {
         let level: Double
     }
 
-    private(set) var state: RiverState = .idle
+    private(set) var activity: PixelMarkActivity = .rest
     private(set) var time: Double?
     private(set) var travel: [Travel]
     private(set) var accentMix: [Double]
@@ -143,17 +158,17 @@ struct PixelMarkFrame: Equatable {
         return PixelMarkPresentation.fadeThroughOpacity(since: time - fadeStart)
     }
 
-    func advanced(to now: Double, state newState: RiverState, inputLevel: Double, reduceMotion: Bool) -> PixelMarkFrame {
+    func advanced(to now: Double, activity newActivity: PixelMarkActivity, inputLevel: Double, reduceMotion: Bool) -> PixelMarkFrame {
         typealias Mark = PixelMarkPresentation
         var next = self
         let interval = Mark.frameInterval(from: time, to: now)
         next.time = now
-        if newState != state { next.enter(newState, at: now, reduceMotion: reduceMotion) }
-        let level = newState == .recording ? min(1, max(0, inputLevel)) : 0
+        if newActivity != activity { next.enter(newActivity, at: now, reduceMotion: reduceMotion) }
+        let level = newActivity == .listening ? min(1, max(0, inputLevel)) : 0
         next.smoothedLevel = Mark.follow(current: smoothedLevel, target: level,
                                          rate: level > smoothedLevel ? Constants.pixelLevelAttackRate : Constants.pixelLevelReleaseRate,
                                          interval: interval)
-        if newState == .recording { next.listen(level, at: now, interval: interval, reduceMotion: reduceMotion) }
+        if newActivity == .listening { next.listen(level, at: now, interval: interval, reduceMotion: reduceMotion) }
         for (index, cell) in PixelMark.cells.enumerated() {
             let target = next.inkTarget(for: cell, at: now, reduceMotion: reduceMotion)
             next.accentMix[index] = Mark.follow(current: accentMix[index], target: target.accentMix,
@@ -164,9 +179,9 @@ struct PixelMarkFrame: Equatable {
         return next
     }
 
-    private mutating func enter(_ newState: RiverState, at now: Double, reduceMotion: Bool) {
-        state = newState
-        let toMeter = newState == .recording
+    private mutating func enter(_ newActivity: PixelMarkActivity, at now: Double, reduceMotion: Bool) {
+        activity = newActivity
+        let toMeter = newActivity == .listening
         if toMeter {
             heard.removeAll()
             // Random first ticks, so the columns wake one by one instead of on the same frame.
@@ -191,8 +206,9 @@ struct PixelMarkFrame: Equatable {
             crestStart = now
         } else {
             fadeStart = nil
-            // The crest writes the stroke once the r is whole again.
-            crestStart = now + Constants.pixelReturnSeconds
+            // The crest writes the stroke once the r is whole again; preparing starts at rest,
+            // already whole.
+            crestStart = newActivity == .preparing ? now : now + Constants.pixelReturnSeconds
         }
     }
 
@@ -225,15 +241,20 @@ struct PixelMarkFrame: Equatable {
     }
 
     private func inkTarget(for cell: PixelMark.Cell, at now: Double, reduceMotion: Bool) -> (accentMix: Double, ink: Double) {
-        switch state {
-        case .recording:
+        switch activity {
+        case .listening:
             let lit = min(1, max(0, bars[cell.meterColumn].height - Double(cell.meterStack)))
             return (lit, Constants.pixelUnlitInk + (Constants.pixelLitInk - Constants.pixelUnlitInk) * lit)
-        case .processing:
+        case .transcribing:
             if reduceMotion { return (0, PixelMark.ditherInk(cell)) }
             let crest = PixelMarkPresentation.crestLoop(at: cell.strokeFraction, since: now - crestStart)
             return (0, Constants.pixelCrestBase + (1 - Constants.pixelCrestBase) * crest)
-        case .idle:
+        case .preparing:
+            if reduceMotion { return (0, PixelMark.ditherInk(cell)) }
+            let crest = PixelMarkPresentation.crestLoop(at: cell.strokeFraction, since: now - crestStart,
+                                                        period: Constants.pixelPreparingCrestPeriod)
+            return (0, Constants.pixelPreparingCrestBase + (1 - Constants.pixelPreparingCrestBase) * crest)
+        case .rest:
             return (0, 1)
         }
     }
