@@ -61,6 +61,8 @@ The pixel-identity smoke ([0029](0029_pixel-identity.md)) found the fixed trim g
 
 The recording indicator's meter shares `silenceTrimFloor` as its floor, so it never lights for a recording this trim discards.
 
+**Quick taps (2026-09-26).** Dictations of 0.5–2 s often came back empty. Thirty recordings saved on device and replayed offline showed two causes: the trim kept only 0.1 s around detected speech, clipping short words at their onset, and Whisper returns nothing for a word shorter than about a second unless silence surrounds it. The no-speech gates were ruled out: disabling them changed nothing. The trim now keeps 0.5 s before speech and 0.2 s after (`silenceTrimLeadSeconds`, `silenceTrimTailSeconds`), and `TranscriptionManager.paddedForDecoding` adds 0.5 s of silence on each side of a clip under 1.2 s. Replayed, the same recordings went from 12 of 30 transcribed to 27, with no invented text. A symmetric 0.5 s margin scored one more but typed a stray "(" from a near-silent clip, which is the tail risk above, so the tail grows only from 0.1 s to 0.2 s. Remaining: capture starts about 0.15–0.25 s after the key press, so a word spoken instantly can lose its onset (a quick "hi" sometimes decodes as "Bye"). Preparing the audio engine ahead of time was rejected: preparing River's input unit switches connected AirPods into call mode while idle.
+
 ## Related
 
 - [0022_transcription-eval-harness.md](0022_transcription-eval-harness.md) — the silence fixtures and WER-regression instrument for every threshold here

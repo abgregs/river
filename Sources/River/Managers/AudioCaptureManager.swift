@@ -163,8 +163,8 @@ final class AudioCaptureManager {
     // 16 kHz mono buffer. Whisper's worst failure mode is inventing text
     // ("Thank you for watching.") from silent audio: an accidental activation
     // captures pure silence, and every real utterance carries trailing breath.
-    // Drop quiet RMS windows at both ends, keeping `marginSeconds` of audio around
-    // detected speech so onset/offset consonants are never clipped. The gate is
+    // Drop quiet RMS windows at both ends, keeping `leadSeconds` before detected speech
+    // and `tailSeconds` after it, so a word's soft onset survives. The gate is
     // `energyThreshold` for normal speech and drops toward `floor` for a quiet
     // recording, tracking its loudest window, so a whispered dictation is kept rather
     // than discarded whole. All-silence in → [] out, which the session reads as
@@ -175,7 +175,8 @@ final class AudioCaptureManager {
         energyThreshold: Float = Constants.silenceTrimEnergyThreshold,
         peakRatio: Float = Constants.silenceTrimPeakRatio,
         floor: Float = Constants.silenceTrimFloor,
-        marginSeconds: Double = Constants.silenceTrimMarginSeconds
+        leadSeconds: Double = Constants.silenceTrimLeadSeconds,
+        tailSeconds: Double = Constants.silenceTrimTailSeconds
     ) -> [Float] {
         guard !samples.isEmpty else { return [] }
         let window = max(1, Int(sampleRate * 0.02))  // 20 ms RMS window
@@ -189,9 +190,8 @@ final class AudioCaptureManager {
         let threshold = max(floor, min(energyThreshold, peak * peakRatio))
         let voiced = windows.filter { $0.rms >= threshold }
         guard let first = voiced.first?.start, let last = voiced.last?.end else { return [] }
-        let margin = Int(sampleRate * marginSeconds)
-        let lower = max(0, first - margin)
-        let upper = min(samples.count, last + margin)
+        let lower = max(0, first - Int(sampleRate * leadSeconds))
+        let upper = min(samples.count, last + Int(sampleRate * tailSeconds))
         return Array(samples[lower..<upper])
     }
 }

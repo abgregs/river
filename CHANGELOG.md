@@ -25,6 +25,7 @@ show as raw text. -->
 ### Fixed
 
 - Quiet dictation is no longer thrown away. A recording spoken softly could be treated as silence and discarded without transcribing or saying so; the silence trim now scales with how loudly you spoke, and normal speech is trimmed exactly as before.
+- Quick dictations of a second or two no longer come back empty: River keeps the start of each word and gives very short clips the surrounding silence the speech model needs.
 
 ## [0.1.0] - 2026-09-18
 
