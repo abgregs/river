@@ -258,11 +258,20 @@ final class TranscriptionManager {
         logger.info("Transcribing \(audioSamples.count, privacy: .public) samples")
 
         let promptTokens = buildPromptTokens(using: whisperKit)
+        let samples = Self.paddedForDecoding(audioSamples)
         let text = try await resolveWithEmptyPromptRetry(promptTokens: promptTokens) { tokens in
-            try await self.decode(audioSamples, promptTokens: tokens, using: whisperKit)
+            try await self.decode(samples, promptTokens: tokens, using: whisperKit)
         }
         logger.info("Transcribed \(text.count, privacy: .public) chars")
         return text
+    }
+
+    // internal for testability — a clip under `shortClipSeconds` gets silence on each side,
+    // the context Whisper needs to hear a short word at all; longer clips decode as captured.
+    nonisolated static func paddedForDecoding(_ samples: [Float], sampleRate: Double = 16_000) -> [Float] {
+        guard !samples.isEmpty, Double(samples.count) < Constants.shortClipSeconds * sampleRate else { return samples }
+        let silence = [Float](repeating: 0, count: Int(Constants.shortClipPadSeconds * sampleRate))
+        return silence + samples + silence
     }
 
     // internal for testability — the "a custom-dictionary prompt must only ever

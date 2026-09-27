@@ -163,36 +163,35 @@ final class AudioCaptureManager {
     // 16 kHz mono buffer. Whisper's worst failure mode is inventing text
     // ("Thank you for watching.") from silent audio: an accidental activation
     // captures pure silence, and every real utterance carries trailing breath.
-    // Drop below-`energyThreshold` RMS windows at both ends, keeping `marginSeconds`
-    // of audio around detected speech so onset/offset consonants are never clipped.
-    // All-silence in → [] out, which the session reads as "nothing was said"
-    // (planning 0023). Pure; runs at stop time on the `convert` output.
+    // Drop quiet RMS windows at both ends, keeping `leadSeconds` before detected speech
+    // and `tailSeconds` after it, so a word's soft onset survives. The gate is
+    // `energyThreshold` for normal speech and drops toward `floor` for a quiet
+    // recording, tracking its loudest window, so a whispered dictation is kept rather
+    // than discarded whole. All-silence in → [] out, which the session reads as
+    // "nothing was said" (planning 0023). Pure; runs at stop time on the `convert` output.
     static func trimSilence(
         _ samples: [Float],
         sampleRate: Double = 16_000,
         energyThreshold: Float = Constants.silenceTrimEnergyThreshold,
-        marginSeconds: Double = Constants.silenceTrimMarginSeconds
+        peakRatio: Float = Constants.silenceTrimPeakRatio,
+        floor: Float = Constants.silenceTrimFloor,
+        leadSeconds: Double = Constants.silenceTrimLeadSeconds,
+        tailSeconds: Double = Constants.silenceTrimTailSeconds
     ) -> [Float] {
         guard !samples.isEmpty else { return [] }
         let window = max(1, Int(sampleRate * 0.02))  // 20 ms RMS window
-        var firstVoiced: Int?
-        var lastVoiced: Int?
-        var start = 0
-        while start < samples.count {
+        let windows = stride(from: 0, to: samples.count, by: window).map { start in
             let end = min(start + window, samples.count)
             var sumSquares: Float = 0
             for i in start..<end { sumSquares += samples[i] * samples[i] }
-            let rms = (sumSquares / Float(end - start)).squareRoot()
-            if rms >= energyThreshold {
-                if firstVoiced == nil { firstVoiced = start }
-                lastVoiced = end
-            }
-            start += window
+            return (start: start, end: end, rms: (sumSquares / Float(end - start)).squareRoot())
         }
-        guard let first = firstVoiced, let last = lastVoiced else { return [] }
-        let margin = Int(sampleRate * marginSeconds)
-        let lower = max(0, first - margin)
-        let upper = min(samples.count, last + margin)
+        let peak = windows.map(\.rms).max() ?? 0
+        let threshold = max(floor, min(energyThreshold, peak * peakRatio))
+        let voiced = windows.filter { $0.rms >= threshold }
+        guard let first = voiced.first?.start, let last = voiced.last?.end else { return [] }
+        let lower = max(0, first - Int(sampleRate * leadSeconds))
+        let upper = min(samples.count, last + Int(sampleRate * tailSeconds))
         return Array(samples[lower..<upper])
     }
 }

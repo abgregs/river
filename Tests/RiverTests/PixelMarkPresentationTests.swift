@@ -88,9 +88,17 @@ struct PixelMarkPresentationTests {
 
     // A meter that moved for a recording the capture trim then discards as silence would
     // claim River heard words it threw away.
+    // The maintainer's smoke: quiet speech on a built-in mic did not register at all on a
+    // linear scale. On the decibel scale quiet talking reaches a third of the range.
+    @Test("quiet talking reaches a third of the meter's range")
+    func quietSpeechRegisters() {
+        #expect(Mark.loudness(level: inputLevel(decibels: quietSpeechDecibels)) >= 1.0 / 3)
+        #expect(Mark.loudness(level: inputLevel(decibels: quietSpeechDecibels)) < Mark.loudness(level: inputLevel(decibels: speechDecibels)))
+    }
+
     @Test("the meter stays dark for audio the capture trim treats as silence")
-    func meterFloorIsTheTrimGate() {
-        let trimFloorDecibels = 20 * log10(Double(Constants.silenceTrimEnergyThreshold))
+    func meterFloorIsTheTrimFloor() {
+        let trimFloorDecibels = 20 * log10(Double(Constants.silenceTrimFloor))
         #expect(Mark.loudness(level: inputLevel(decibels: trimFloorDecibels - 1)) == 0)
         #expect(Mark.loudness(level: inputLevel(decibels: trimFloorDecibels + 3)) > 0)
     }
@@ -193,6 +201,13 @@ struct PixelMarkFrameTests {
             }
         }
         return total / Double(count)
+    }
+
+    // "Low" must read as more than the silence row: the maintainer's quiet speech on a
+    // built-in mic did not move the meter at all on the first build.
+    @Test("quiet talking lifts the meter clearly above silence")
+    func quietSpeechLiftsTheMeter() {
+        #expect(Self.averageHeight(level: inputLevel(decibels: quietSpeechDecibels)) > Self.averageHeight(level: 0) + 0.5)
     }
 
     @Test("louder speech raises the meter")

@@ -190,18 +190,18 @@ struct AudioCaptureSilenceTrimTests {
     @MainActor
     @Test("silence-padded speech keeps the speech with a margin, dropping the padding")
     func paddedSpeechPreservesSpeech() {
-        // 0.5 s silence, 0.5 s voiced, 0.5 s silence at 16 kHz. The leading/trailing
-        // silence beyond the 100 ms margin must be dropped, but the speech and its
-        // onset/offset margin must survive intact.
-        let pad = [Float](repeating: 0, count: 8_000)
+        // 1 s silence, 0.5 s voiced, 1 s silence at 16 kHz. The silence beyond the
+        // lead-in and tail margins must be dropped, but the speech and its margins
+        // must survive intact.
+        let pad = [Float](repeating: 0, count: 16_000)
         let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
         let padded = pad + speech + pad
 
         let out = AudioCaptureManager.trimSilence(padded)
 
-        #expect(out.count < padded.count)          // padding trimmed
-        #expect(out.count >= speech.count)         // speech + margins survive
-        #expect(out.count < padded.count - 8_000)  // most of one silent side is gone
+        #expect(out.count < padded.count)           // padding trimmed
+        #expect(out.count >= speech.count)          // speech + margins survive
+        #expect(out.count < padded.count - 16_000)  // most of the silence is gone
         let rms = (out.reduce(Float(0)) { $0 + $1 * $1 } / Float(out.count)).squareRoot()
         #expect(rms > 0.1)                         // preserved speech carries energy
     }
@@ -214,6 +214,60 @@ struct AudioCaptureSilenceTrimTests {
         let speech = sineSamples(count: 16_000, frequency: 440, amplitude: 0.5)
         #expect(AudioCaptureManager.trimSilence(speech).count == speech.count)
     }
+
+    // The maintainer's smoke: quiet talking on a built-in mic never reached transcription
+    // under the fixed -40 dBFS gate, so nothing was typed.
+    @MainActor
+    @Test("a quiet dictation survives the trim instead of being discarded whole")
+    func quietDictationSurvives() {
+        let pad = [Float](repeating: 0, count: 8_000)
+        let quiet = sineSamples(count: 8_000, frequency: 440, amplitude: sineAmplitude(decibels: -44))
+        let padded = pad + quiet + pad
+        let fixedGate = AudioCaptureManager.trimSilence(padded, peakRatio: 1, floor: Constants.silenceTrimEnergyThreshold)
+        #expect(fixedGate.isEmpty)
+        #expect(AudioCaptureManager.trimSilence(padded).count >= quiet.count)
+    }
+
+    // Planning 0023: room tone left after speech can decode as invented text, so a normal
+    // dictation's tail must be cut exactly where the fixed gate cut it.
+    @MainActor
+    @Test("normal speech keeps the fixed gate, so its quiet tail is still cut")
+    func normalSpeechTrimsAsBefore() {
+        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
+        let tail = sineSamples(count: 16_000, frequency: 440, amplitude: sineAmplitude(decibels: -45))
+        let recording = speech + tail
+        let trimmed = AudioCaptureManager.trimSilence(recording)
+        #expect(trimmed == AudioCaptureManager.trimSilence(recording, peakRatio: 1, floor: Constants.silenceTrimEnergyThreshold))
+        #expect(trimmed.count < speech.count + tail.count / 2)
+    }
+
+    // The maintainer's smoke (2026-09-26): with 0.1 s kept before a word, quick taps of
+    // "hello there" reached Whisper clipped mid-word and decoded to nothing; the lead-in
+    // is the context it needs. The tail stays short, since room tone after speech is what
+    // Whisper turns into invented text (planning 0023).
+    @MainActor
+    @Test("the trim keeps half a second before speech and a fifth of a second after")
+    func trimKeepsLeadInAndShortTail() {
+        let silence = [Float](repeating: 0, count: 16_000)
+        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
+        let out = AudioCaptureManager.trimSilence(silence + speech + silence)
+        #expect(Constants.silenceTrimLeadSeconds == 0.5)
+        #expect(Constants.silenceTrimTailSeconds == 0.2)
+        #expect(out.count == Int(Constants.silenceTrimLeadSeconds * 16_000) + speech.count + Int(Constants.silenceTrimTailSeconds * 16_000))
+    }
+
+    // An accidental activation in a quiet room must still decode nothing.
+    @MainActor
+    @Test("near-silence below the floor still trims to empty")
+    func nearSilenceTrimsToEmpty() {
+        let roomTone = sineSamples(count: 16_000, frequency: 440, amplitude: sineAmplitude(decibels: -56))
+        #expect(AudioCaptureManager.trimSilence(roomTone).isEmpty)
+    }
+}
+
+// Peak amplitude of a sine whose RMS is this many decibels of full scale.
+private func sineAmplitude(decibels: Double) -> Float {
+    Float(pow(10, decibels / 20) * 2.0.squareRoot())
 }
 
 // A 16 kHz mono Float32 sample array holding a pure sine — a synthetic "speech"
