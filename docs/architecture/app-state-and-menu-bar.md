@@ -47,11 +47,11 @@ Mapping (per [../requirements/core-feature.md](../requirements/core-feature.md) 
 
 | State | Icon | Label |
 |---|---|---|
-| `.idle` | slat glyph, Ready | Ready |
-| `.recording` | slat glyph, Listening | Recording... |
-| `.processing` | slat glyph, Transcribing | Processing... |
+| `.idle` | pixel r glyph, Ready | Ready |
+| `.recording` | pixel r glyph, Listening | Recording... |
+| `.processing` | pixel r glyph, Transcribing | Processing... |
 
-The three cycle states draw River's own five-slat template images (planning [0028](../planning/0028_identity-implementation.md)); every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
+The three cycle states draw River's own pixel-r template images (planning [0029](../planning/0029_pixel-identity.md), replacing 0028's slats); every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
 
 A pending error overrides **only the `.idle` icon** with `exclamationmark.triangle`; an active state's icon always wins (errors surface at end-of-cycle, so a live `.recording`/`.processing` glyph is never masked by a stale error). The label always reflects the raw state.
 

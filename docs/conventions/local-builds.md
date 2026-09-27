@@ -133,7 +133,7 @@ The `.mlmodelc` files on disk are CoreML's *portable, architecture-neutral* comp
 
 That gap is why the indicator misleads. "Loading" implies reading bytes into memory, an operation whose duration scales with size in a way people intuitively expect. What actually happens is closer to **building** or **compiling**, and it can take minutes on a large model. Someone who reads "Loading…" and waits two minutes reasonably concludes the app has hung — which is exactly what happened to the maintainer on a `large-v3-turbo` build.
 
-Wording like "Preparing model…" or "Optimizing for this Mac…" would set the correct expectation at zero engineering cost. Tracked as a copy refinement under planning 0004.
+Wording like "Preparing model…" or "Optimizing for this Mac…" sets the correct expectation at zero engineering cost. **Done 2026-09-25** ([0029](../planning/0029_pixel-identity.md)): the HUD and the menu bar now say "Preparing model…", and the HUD shows the pixel r with a slow ink crest instead of a spinner.
 
 ### It is once per installed *version*, not once ever
 

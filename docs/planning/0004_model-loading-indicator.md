@@ -55,6 +55,14 @@ is now hit often enough to need a user-visible surface.
    rather than the bare `.modelNotLoaded` error.
 4. The load-state → label mapping is unit-tested (pure, like `MenuBarPresentation`).
 
+## Update (2026-09-25): copy, visual, and open follow-ups
+
+Planning [0029](0029_pixel-identity.md) renamed the `.loading` label to "Preparing model…" (HUD) and "Preparing model..." (menu bar), because "Loading" reads as a hang when a first launch compiles for the Neural Engine ([../conventions/local-builds.md](../conventions/local-builds.md)). The HUD shows the pixel r with a slow ink crest above a text-only label, in place of the spinner. Behavior is unchanged. Three follow-ups remain open:
+
+- **When the HUD shows.** It appears for every load, including routine warm launches of about 2.5 s that nobody asked to see. Proposed: always while downloading, for slow first-launch preparation, and otherwise only when the user activates before the model is ready.
+- **A network check on every launch.** Before `loadModels`, `WhisperKit(model:downloadBase:load: false)` asks Hugging Face for the model's file list and compares it with the cache, even when the files are present. On the maintainer's warm launch this took 2.1 s of a 2.5 s wait (the CoreML load was 0.38 s). Passing the cached model folder to WhisperKit would skip it, making warm launches sub-second and offline, as `PRODUCT.md` says they are.
+- **Download progress.** WhisperKit reports progress during `download`; River does not pass it on. The pixel r could fill in one square per sixteenth of the download.
+
 ## Related
 
 - [../architecture/app-state-and-menu-bar.md](../architecture/app-state-and-menu-bar.md) — the status surface this extends

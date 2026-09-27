@@ -135,21 +135,24 @@ enum Constants {
     // Gap between the HUD panel and the bottom of the active screen's visible frame.
     static let hudBottomMargin: Double = 120
 
-    // The river indicator (planning 0028). Every number was measured or tuned on the
-    // study page (docs/design/studies/river-identity-studies.html) and is ported as is.
+    // The pixel mark (planning 0029). Every number was tuned on the study page
+    // (docs/design/studies/pixel-identity.html) and is ported as is, except the meter's
+    // level reference, which is calibrated on device.
 
-    // Geometry: the 108 x 40 mark is the strands' full range of motion; the capsule
-    // adds side and vertical padding and never changes size.
-    static let riverMarkWidth: Double = 108
-    static let riverMarkHeight: Double = 40
-    static let riverCapsuleHorizontalPadding: Double = 12
-    static let riverCapsuleVerticalPadding: Double = 8
-    static let riverCapsuleWidth: Double = riverMarkWidth + 2 * riverCapsuleHorizontalPadding
-    static let riverCapsuleHeight: Double = riverMarkHeight + 2 * riverCapsuleVerticalPadding
-    static let riverCapsuleCornerRadius: Double = riverCapsuleHeight / 2
-    // Strand samples across the width, and the fraction at each end faded to nothing.
-    static let riverSampleCount: Int = 57
-    static let riverEndFadeFraction: Double = 0.14
+    // Geometry: 5 pt cells and 2 pt gaps make a 40 pt mark whose edges land on whole
+    // pixels at 1x and 2x (the page's 4.5 pt cells fall on half pixels at 1x). The panel
+    // keeps the 56 pt height of the river capsule it replaces and never changes size.
+    static let pixelCell: Double = 5
+    static let pixelGap: Double = 2
+    static let pixelMarkSize: Double = 6 * pixelCell + 5 * pixelGap
+    // Cell corners are this fraction of the cell at every size, so the mark keeps one roundness.
+    static let pixelCornerFraction: Double = 0.16
+    static let indicatorPanelHorizontalPadding: Double = 12
+    static let indicatorPanelVerticalPadding: Double = 8
+    static let indicatorPanelWidth: Double = pixelMarkSize + 2 * indicatorPanelHorizontalPadding
+    static let indicatorPanelHeight: Double = pixelMarkSize + 2 * indicatorPanelVerticalPadding
+    // The approved page's panel corner; a square mark takes a rounded square, not a capsule.
+    static let indicatorPanelCornerRadius: Double = 13
 
     // The HUD surface: near-opaque charcoal, no material (a material flips the palette
     // per desktop). Dark appearance adds a hairline where the shadow vanishes.
@@ -180,75 +183,81 @@ enum Constants {
     // 2026-09-17, when a notice grew the content inside an already-sized panel).
     static let hudMessageReservedHeight: Double = 140
 
-    // Level engine, per display frame: attack and release rates per second (round two's timing).
-    static let riverAttackRate: Double = 10
-    static let riverReleaseRate: Double = 5
-    // Motion floor: amplitude and width never fall below this level's shape.
-    static let riverRestLevel: Double = 0.35
-    // The strand clock runs at this fraction of real time at rest, rising to full speed with ink.
-    static let riverRestSpeed: Double = 0.45
-    // Ink and speed follow the level through a smoothstep over this span.
-    static let riverInkSpan: Double = 0.5
-    // Ink at rest, breathing by this depth at this angular rate (about seven seconds); still under Reduce Motion.
-    static let riverRestInk: Double = 0.44
-    static let riverBreathDepth: Double = 0.06
-    static let riverBreathRate: Double = 0.9
-    // The level the strands settle to while transcribing.
-    static let riverTranscribingLevel: Double = 0.4
+    // Motion. The drop and the return move all sixteen pixels at once on a strong ease-out;
+    // the return is the quicker of the two, as an exit should be.
+    static let pixelDropSeconds: Double = 0.26
+    static let pixelReturnSeconds: Double = 0.24
+    static let pixelEaseOut = (x1: 0.23, y1: 1.0, x2: 0.32, y2: 1.0)
+    // Reduce Motion: no travel; the mark dips out and back while the layout swaps.
+    static let pixelFadeThroughSeconds: Double = 0.24
+    // Each pixel's ink and tint follow their target at this rate per second (about 0.17 s).
+    static let pixelInkRate: Double = 18
+    // The smoothed level Reduce Motion's meter follows: the river's attack and release.
+    static let pixelLevelAttackRate: Double = 10
+    static let pixelLevelReleaseRate: Double = 5
     // Longest frame interval the engine advances by, so a resumed timeline does not leap.
-    static let riverMaxFrameInterval: Double = 0.05
+    static let pixelMaxFrameInterval: Double = 0.05
 
-    // Strand shape: y = base + amplitudeScale * motion * amp * (meander + rippleWeight * ripple).
-    static let riverAmplitudeScale: Double = 11
-    static let riverWidthGain: Double = 0.8
-    static let riverMeanderDrift: Double = 0.6
-    static let riverRippleDrift: Double = 1.9
-    static let riverRippleWeight: Double = 0.45
-    static let riverRipplePhaseGain: Double = 1.7
-    static let riverStrands: [RiverStrand] = [
-        RiverStrand(baseY: 11.5, amplitude: 0.7, meanderLength: 1.9, rippleLength: 0.62, phase: 0.4, speed: 0.55, width: 1.6, ink: 0.70),
-        RiverStrand(baseY: 20, amplitude: 1.0, meanderLength: 1.45, rippleLength: 0.41, phase: 2.1, speed: 0.72, width: 2.6, ink: 1.00),
-        RiverStrand(baseY: 28.5, amplitude: 0.8, meanderLength: 2.3, rippleLength: 0.53, phase: 4.0, speed: 0.61, width: 1.4, ink: 0.55),
-    ]
+    // The meter: four columns, each its own readout, reading loudness in decibels of full
+    // scale (dBFS); a linear scale left quiet speech invisible on a built-in mic
+    // (maintainer's smoke, 2026-09-24). The floor is the capture trim's gate, so the meter
+    // never lights for a recording the trim then discards as silence: a meter that moved
+    // for a dictation River threw away would claim it heard you. The ceiling fills a
+    // column. Display only: the meter reads `inputLevel`, which the capture path never uses.
+    static let pixelMeterFloorDecibels: Double = 20 * log10(Double(silenceTrimEnergyThreshold))
+    static let pixelMeterCeilingDecibels: Double = -28
+    // Silence keeps the bottom row half lit, so a quiet listening state never looks like rest.
+    static let pixelMeterPilot: Double = 0.5
+    // A slight center bias keeps the block balanced.
+    static let pixelMeterGains: [Double] = [0.85, 1, 1, 0.85]
+    // Each column re-reads the voice on its own clock, at a random interval in this range,
+    // hearing it this late (shuffled, so syllables ripple through rather than sweep).
+    static let pixelMeterTickRange: ClosedRange<Double> = 0.12...0.26
+    static let pixelMeterHearDelays: [Double] = [0.06, 0, 0.12, 0.03]
+    static let pixelMeterHistorySeconds: Double = 0.3
+    // Each reading lands between this fraction and one more of the loudness's reach.
+    static let pixelMeterSpreadFloor: Double = 0.25
+    // Columns rise fast and fall slowly, like a level meter.
+    static let pixelBarAttackRate: Double = 22
+    static let pixelBarReleaseRate: Double = 6
+    static let pixelUnlitInk: Double = 0.16
+    static let pixelLitInk: Double = 0.95
 
-    // Transcribing: a raised-cosine crest of full ink slides along each stroke once per
-    // period over a dimmed base, each strand offset by a fraction of the period.
-    static let riverCrestPeriod: Double = 2.0
-    static let riverCrestWidth: Double = 70
-    static let riverCrestStopCount: Int = 17
-    static let riverCrestStagger: Double = 0.18
-    static let riverCrestBase: Double = 0.55
-    // The crest profile blends in and out at this rate per second (about 0.2 s).
-    static let riverCrestBlendRate: Double = 12
+    // Transcribing: a raised-cosine crest of full ink runs the stroke over a dimmed base,
+    // the approved river crest carried over (its width is a fraction of the stroke here).
+    static let pixelCrestHalfWidth: Double = 0.32
+    static let pixelCrestRest: Double = 0.12
+    static let pixelCrestPeriod: Double = 2.0
+    static let pixelCrestBase: Double = 0.55
+    // Preparing (the model getting ready at launch): the same crest, slower and over a dimmer
+    // base, so it reads as waiting rather than working on your words.
+    static let pixelPreparingCrestPeriod: Double = 3.0
+    static let pixelPreparingCrestBase: Double = 0.4
+    // The static Transcribing reading (menu bar, and the panel under Reduce Motion): every
+    // other pixel dimmed. Removing them breaks the r apart; brighter reads as Ready.
+    static let pixelDitherInk: Double = 0.3
+    static let pixelIncreasedContrastInkFloor: Double = 0.4
 
-    // Menu bar slat glyph (planning 0028): five slats in an 18 pt template image. The
-    // studies' 16 pt mark read optically smaller than the neighboring status items and
-    // sat a point low, so the box grew, the group widened, and the pitch opened from 2.5
-    // to 3.5 (maintainer's smoke, 2026-09-17). The indicator keeps the study page's own
-    // geometry. Rows are centered on the box at 2x, where stroke edges land on device
-    // pixels; 1x cannot both center five rows and sit on pixel centers, so it keeps the
-    // crisp rows and gives up half a point of centering.
-    // The left x of each row, mirrored on the right.
+    // Menu bar glyphs (planning 0029): the pixel r in an 18 pt template image, drawn denser
+    // than the panel because 1 pt gaps at this size read as dots. Every cell edge lands on a
+    // device pixel, so the grid sits at the box's origin rather than a half pixel off center.
     static let menuBarGlyphSize: Double = 18
-    static let menuBarGlyphRowInsets: [Double] = [4.75, 2.25, 1.75, 2.25, 4.75]
-    static let menuBarGlyphRowCenters1x: [Double] = [3.5, 6.5, 9.5, 12.5, 15.5]
-    static let menuBarGlyphRowCenters2x: [Double] = [2, 5.5, 9, 12.5, 16]
-    static let menuBarGlyphReadyStroke: Double = 1.6
-    static let menuBarGlyphListeningStroke: Double = 1.9
-    // Ready: the middle slat at full ink, the others dimmed.
-    static let menuBarGlyphReadySideInk: Double = 0.55
-    // Transcribing: dots per row, the first and last centered on the slat's endpoints.
-    static let menuBarGlyphDotCounts: [Int] = [3, 4, 5, 4, 3]
-    static let menuBarGlyphDotRadius: Double = 0.8
+    static let menuBarGlyphCell1x: Double = 2
+    static let menuBarGlyphGap1x: Double = 1
+    static let menuBarGlyphCell2x: Double = 2.5
+    static let menuBarGlyphGap2x: Double = 0.5
+    // Listening: a frozen meter reading with its bars out of step (2·3·4·1 reads as a
+    // signal-strength icon).
+    static let menuBarListeningHeights: [Int] = [3, 1, 4, 2]
 
-    // App icon: the same slat mark in ink on a charcoal squircle, drawn on Apple's 1024
+    // App icon: the same pixel r in ink on a charcoal squircle, drawn on Apple's 1024
     // grid where the rounded square occupies 824 of the canvas. The accent stays off it
-    // for now, so the icon matches every other River mark (maintainer, 2026-09-17).
+    // for now, so the icon matches the menu bar glyphs (maintainer, 2026-09-17).
     static let appIconCanvas: Double = 1024
     static let appIconSquircleInset: Double = 100
     static let appIconCornerRadius: Double = 185.4
     // The mark's width as a fraction of the squircle's.
-    static let appIconMarkFraction: Double = 0.58
+    static let appIconMarkFraction: Double = 0.52
     static let appIconFileName = "River.icns"
 
     // How long an error toast stays on the HUD before auto-dismissing (planning

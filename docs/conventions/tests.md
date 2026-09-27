@@ -14,7 +14,8 @@ Tests/
     ├── CapabilityTests.swift        # the capability layer, grouped (see below)
     ├── AppStateTests.swift          # the Combine→Observable UI bridge
     ├── MenuBarPresentationTests.swift  # the pure state→icon/label mapping
-    ├── RiverIndicatorPresentationTests.swift  # the indicator's pure motion functions
+    ├── PixelMarkTests.swift         # the mark's map, meter pairing, static readings, pixel-exact geometry
+    ├── PixelMarkPresentationTests.swift  # the indicator's pure motion (seeded, frame by frame)
     ├── MenuBarGlyphTests.swift      # renders the glyph PNGs; fails on drift from Constants
     ├── AppIconTests.swift           # renders River.icns; same pattern
     └── ...
@@ -80,8 +81,8 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `RiverSession.configurationApplyCount` / `configurationDeferCount` — internal counters so tests can assert subscription wiring without reaching into the handler closures
 - `AppState.apply(_:)` — the two update entry points (`RiverState` and `RiverError`), internal so tests drive observation and the redaction-at-the-boundary choke point without standing up SwiftUI or a live session
 - `MenuBarPresentation.visual(state:hasError:modelLoadState:)` — pure `state` + error + load state → icon/label mapping, exercised directly so the [core-feature.md](../requirements/core-feature.md) item 5 icon/label contract has a regression guard without a real `MenuBarExtra`. The cycle states return a glyph asset name, which is also the bundle's filename contract (`make verify` asserts those files ship)
-- `RiverIndicatorPresentation` / `RiverIndicatorFrame` — the recording indicator's pure motion (level smoothing, motion floor, ink, clock rate, crest window and travel, strand geometry), ported number for number from the study page (planning 0028). Its expected values were produced by running that page's own JavaScript, so the tests pin the port to the approved reference rather than to itself
-- `RiverMarkRenderer.draw(_:time:reduceMotion:in:)` — the one drawing shared by the live `Canvas` and the snapshot harness, so a held frame rendered for review is the shipped drawing, not a copy of it
+- `PixelMarkPresentation` / `PixelMarkFrame` — the recording indicator's pure motion (the drop and return, the independent meter columns, the ink follow, the transcribing crest, Reduce Motion's fade-through), ported number for number from the study page (planning 0029). The meter's randomness comes from a seedable generator carried in the frame, so a test drives exact, repeatable frames; the tests assert intent (silence settles, louder is taller, columns move out of step, nothing travels under Reduce Motion) rather than transcribing the numbers
+- `PixelMarkRenderer.draw(_:increaseContrast:in:)` — the one drawing shared by the live `Canvas` and the snapshot harness, so a held frame rendered for review is the shipped drawing, not a copy of it
 - `ActivationKeyOption.all` / `capsLockHoldWarning(keyCode:mode:)` — the pure activation-key table and the mode-aware Caps Lock/Hold warning predicate, tested so a dropped key or changed warning copy is a failing test, not silent drift (mirrors `MenuBarPresentation`)
 - `TranscriptionManager.evaluateDictionaryPrompt(wavPath:)` — internal seam for the **A/B eval harness** (`DictionaryEvalTests`): decodes one fixed clip with and without the dictionary prompt, bypassing the empty-fallback, so a recorded clip shows whether the prompt biases or degenerates. The harness is **env-gated** (`.enabled(if: RIVER_AB_WAV)`) so the normal suite skips it; it loads the real model and writes its result to `ab-result.txt`. Used to confirm `small.en` biases where `base.en` empties (`requirements/custom-dictionary.md`)
 - `TranscriptionManager.loadAudioSamples(fromPath:)` — internal seam for the **transcription eval harness** (`TranscriptionEvalTests`, planning 0022): wraps WhisperKit's `AudioProcessor.loadAudioAsFloatArray` so WhisperKit stays a single import boundary and the test target need not depend on it. Not used in production (live capture supplies samples directly)

@@ -39,7 +39,7 @@ enum RecordingIndicatorPresentation {
     static func loadingLabel(for modelLoadState: ModelLoadState) -> String? {
         switch modelLoadState {
         case .downloading: return "Downloading model…"
-        case .loading: return "Loading model…"
+        case .loading: return "Preparing model…"
         case .ready, .failed: return nil
         }
     }

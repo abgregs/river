@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>River — Drop &amp; Play</title>
+<style>
+  :root {
+    --ground: #1C1F23;
+    --panel: #23262B;
+    --panel-2: #2E3238;
+    --ink: #ECEEF1;
+    --ink-2: rgba(236, 238, 241, 0.62);
+    --ink-dim: rgba(236, 238, 241, 0.28);
+    --ink-faint: rgba(236, 238, 241, 0.12);
+    --accent: #31C8CA;
+    --accent-dim: rgba(49, 200, 202, 0.35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font: 14px/1.5 system-ui, sans-serif;
+    padding: 32px 40px 80px;
+  }
+  ::selection { background: var(--accent-dim); }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-2); margin-top: 4px; max-width: 72ch; text-wrap: pretty; }
+  .sub a { color: var(--accent); text-underline-offset: 2px; }
+
+  /* ---- Control bar ---- */
+  .controls {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(28, 31, 35, 0.88);
+    backdrop-filter: blur(16px);
+    margin: 20px -40px 28px; padding: 12px 40px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 20px;
+    border-bottom: 1px solid rgba(236, 238, 241, 0.07);
+  }
+  .group { display: flex; align-items: center; gap: 8px; }
+  .group > .lbl { color: var(--ink-dim); font-size: 12px; margin-right: 2px; }
+  button {
+    font: 13px system-ui, sans-serif; color: var(--ink);
+    background: var(--panel-2); border: none; border-radius: 7px;
+    padding: 6px 12px; cursor: pointer;
+    transition: background-color 120ms ease, transform 120ms ease;
+  }
+  button:hover { background: #383D44; }
+  button:active { transform: scale(0.96); }
+  button.on { background: var(--accent); color: #16282A; font-weight: 600; }
+  input[type="range"] { accent-color: var(--accent); width: 130px; }
+  label.chk { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 13px; cursor: pointer; }
+  .lvl-readout { font-variant-numeric: tabular-nums; color: var(--ink-dim); font-size: 12px; width: 118px; }
+  .lvl-readout b { color: var(--ink); font-weight: 600; }
+
+  /* ---- Layout: the live panel beside the static menu bar set ---- */
+  .layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  section.card {
+    background: var(--panel);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25);
+  }
+  section.card h2 { font-size: 15px; font-weight: 600; }
+  section.card .desc { color: var(--ink-2); font-size: 12.5px; margin: 4px 0 18px; max-width: 64ch; text-wrap: pretty; }
+
+  .stage {
+    display: flex; align-items: center; justify-content: center;
+    height: 220px; border-radius: 12px; background: var(--ground);
+    margin-bottom: 16px;
+  }
+  .grid { position: relative; }
+  .px { position: absolute; background: transparent; }
+  .grid.moves .px { will-change: transform; }
+
+  /* panel mock at 2x: as shipped, the mark alone in a snug enclosure. A square mark takes a squircle:
+     12pt padding, corners concentric with the cells (cell radius + padding). */
+  .capsule-row { display: flex; align-items: center; gap: 16px; }
+  .capsule {
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; border-radius: 26px;
+    background: var(--panel-2);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35), 0 12px 32px rgba(0,0,0,0.3);
+  }
+  .cap-note { color: var(--ink-2); font-size: 12px; max-width: 24ch; }
+
+  /* ---- Menu bar ---- */
+  .strips { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .mbar {
+    display: flex; align-items: center; justify-content: flex-end; gap: 14px;
+    height: 24px; padding: 0 14px; border-radius: 6px;
+    font: 13px system-ui, sans-serif;
+  }
+  .mbar .where { margin-right: auto; font-size: 12px; opacity: 0.6; }
+  .tone-dark { background: #2B2C30; color: rgba(255, 255, 255, 0.9); }
+  .tone-light { background: #E8E8EA; color: rgba(0, 0, 0, 0.85); }
+  .icon { display: block; }
+
+  .specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .spec {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    background: var(--ground); border-radius: 12px; padding: 18px 12px 14px;
+    color: var(--ink); text-align: center;
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: box-shadow 120ms ease;
+  }
+  .spec.now { box-shadow: inset 0 0 0 1px var(--accent-dim); }
+  .spec .chips { display: flex; gap: 6px; }
+  .spec .chip { display: flex; align-items: center; justify-content: center; width: 36px; height: 24px; border-radius: 6px; }
+  .spec .name { font-size: 13px; font-weight: 600; }
+  .spec .now-tag {
+    position: absolute; top: 10px; right: 12px;
+    font-size: 12px; font-weight: 500; color: var(--accent);
+    opacity: 0; transition: opacity 120ms ease;
+  }
+  .spec.now .now-tag { opacity: 1; }
+  .spec p { color: var(--ink-2); font-size: 12px; text-wrap: balance; }
+
+  footer { margin-top: 36px; color: var(--ink-2); font-size: 12px; max-width: 72ch; }
+</style>
+</head>
+<body>
+
+<h1>River — Drop &amp; Play</h1>
+<p class="sub">The chosen direction. In the panel the mark is live. It is the r at rest, drops into a 4×4 meter while you speak, and returns to the r while an ink crest runs the stroke. In the menu bar it is static: one template icon per state, swapped instantly, and tinted by the system for light and dark menu bars. The native build is planning 0029; the rounds that led here are recorded in pixel-identity.md. Serve this folder over localhost (not file://) to use the microphone.</p>
+
+<div class="controls">
+  <div class="group" id="stateBtns">
+    <span class="lbl">State</span>
+    <button data-state="rest" class="on">Rest</button>
+    <button data-state="recording">Recording</button>
+    <button data-state="transcribing">Transcribing</button>
+    <button data-state="cycle">Run full cycle</button>
+  </div>
+  <div class="group" id="levelBtns">
+    <span class="lbl">Audio</span>
+    <button data-lvl="speech" class="on">Speech pattern</button>
+    <button data-lvl="silence">Silence</button>
+    <button data-lvl="low">Low</button>
+    <button data-lvl="high">Speaking</button>
+    <button id="micBtn">Use mic</button>
+  </div>
+  <div class="group">
+    <input type="range" id="manual" min="0" max="100" value="0" title="Manual level (drag to take over)">
+    <span class="lvl-readout">level <b id="lvlNum">0.00</b> · <span id="lvlBand">silence</span></span>
+  </div>
+  <div class="group" id="speedBtns">
+    <span class="lbl">Speed</span>
+    <button data-speed="1" class="on">1×</button>
+    <button data-speed="0.25">¼×</button>
+    <button data-speed="0.1">⅒×</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="reduceMotion"> Reduce Motion</label>
+</div>
+
+<main class="layout">
+  <section class="card">
+    <h2>Panel</h2>
+    <p class="desc">Rest: the r. Listening: all sixteen pixels drop together into a 4×4 meter in 260 ms. Each column is its own readout, rising fast and falling slowly, out of step with the others. Silence settles all four to the lit bottom row. Transcribing: the pixels return to the r, and an ink crest traces the stroke from its foot.</p>
+    <div class="stage" id="stage"></div>
+    <div class="capsule-row">
+      <div class="capsule" id="capsule"></div>
+      <span class="cap-note">Panel mock at 2×: the mark alone, as shipped, with 12 pt padding.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Menu bar</h2>
+    <p class="desc">Static template icons, one per state, swapped instantly when the state changes, so nothing moves in the menu bar. Each maps to what the panel is doing. They are drawn denser than the panel, with 2.5 pt cells and 0.5 pt gaps in a 17.5 pt square, because at this size wider gaps turn the mark into dots.</p>
+    <div class="strips">
+      <div class="mbar tone-dark"><span class="where">Dark menu bar</span><span class="live-icon"></span><span>Thu 24 Sep 1:04 PM</span></div>
+      <div class="mbar tone-light"><span class="where">Light menu bar</span><span class="live-icon"></span><span>Thu 24 Sep 1:04 PM</span></div>
+    </div>
+    <div class="specs" id="specs"></div>
+  </section>
+</main>
+
+<footer>
+  Judge transitions at ¼× or ⅒× as well as at full speed: what feels off when slowed is what is
+  subtly wrong at 1×. Mic preview note: the browser applies automatic gain control, so web levels
+  run hotter than <code>AVAudioEngine</code> (the 0.08 RMS lesson from 0028). Judge the shapes and
+  transitions here, and calibrate thresholds on-device. The level is sampled every 70 ms, the
+  native publish rate. The menu bar strips approximate the system's tint for template images.
+</footer>
+
+<script>
+"use strict";
+
+/* ---------------- The mark ---------------- */
+
+/* 6x6 lowercase r: 2-wide stem, shoulder arc out to a dropped tip. */
+const R_MAP = [
+  "XX.XX.",
+  "XXX..X",
+  "XX....",
+  "XX....",
+  "XX....",
+  "XX....",
+];
+/* Stroke order of the r for its crest: stem foot -> up -> shoulder -> tip. */
+const R_PATH = [
+  [0,5],[1,5],[0,4],[1,4],[0,3],[1,3],[0,2],[1,2],[0,1],[0,0],[1,0],[1,1],[2,1],[3,0],[4,0],[5,1],
+];
+
+function parseMap(map) {
+  const cells = [];
+  map.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== ".") cells.push({ x, y, ch }); }));
+  return { cols: map[0].length, rows: map.length, cells };
+}
+
+/* ---------------- Motion constants ---------------- */
+const LEVEL_TICK = 0.07;                     // the native level publishes every 70 ms
+const ATTACK = 10, RELEASE = 5;              // the approved river response ("really fluid")
+const INK_RATE = 18;                         // per-cell ink follow: state changes settle in ~0.17 s
+const CREST_W = 0.32;                        // raised-cosine half-width (approved: 70 of 108 px)
+const CREST_SPAN = 1 + 2 * CREST_W + 0.12;   // one pass enters and leaves fully, then rests briefly
+const CREST_PERIOD = 2.0;                    // approved transcribing period
+const CREST_BASE = 0.55;                     // approved transcribing base ink
+const DITHER_LOW = 0.3;                      // static Transcribing reading: menu bar, Reduce Motion
+const EASE_OUT = cubicBezier(0.23, 1, 0.32, 1);
+
+function cubicBezier(x1, y1, x2, y2) {
+  const ax = 3 * x1 - 3 * x2 + 1, bx = 3 * x2 - 6 * x1, cx = 3 * x1;
+  const ay = 3 * y1 - 3 * y2 + 1, by = 3 * y2 - 6 * y1, cy = 3 * y1;
+  const sx = u => ((ax * u + bx) * u + cx) * u, sy = u => ((ay * u + by) * u + cy) * u;
+  return x => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let lo = 0, hi = 1, u = x;
+    for (let i = 0; i < 24; i++) { if (sx(u) < x) lo = u; else hi = u; u = (lo + hi) / 2; }
+    return sy(u);
+  };
+}
+
+const lerp = (a, b, k) => a + (b - a) * k;
+const clamp01 = v => Math.min(1, Math.max(0, v));
+const follow = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-dt * rate));
+
+/* Raised-cosine crest: smooth to the first derivative, so the brightness ramp has no corners. */
+function crest(u, pos) {
+  const dist = Math.abs(u - (pos - CREST_W));
+  return dist >= CREST_W ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * dist / CREST_W);
+}
+function crestLoop(u, since) {
+  return since < 0 ? 0 : crest(u, (since / CREST_PERIOD * CREST_SPAN) % CREST_SPAN);
+}
+
+/* Tweens retarget from wherever the cell is now, so an interrupted move never jumps. */
+function tweenAt(tw, t) {
+  const k = EASE_OUT(clamp01((t - tw.start) / Math.max(tw.dur, 1e-6)));
+  return [lerp(tw.fx, tw.tx, k), lerp(tw.fy, tw.ty, k)];
+}
+function tweenTo(tw, now, tx, ty, delay, dur) {
+  const [x, y] = tweenAt(tw, now);
+  Object.assign(tw, { fx: x, fy: y, tx, ty, start: now + delay, dur });
+}
+
+const checker = c => ((c.x + c.y) % 2 === 0 ? 1 : DITHER_LOW);
+
+/* ---------------- Clock, state, level engine ---------------- */
+const clock = { t: 0, speed: 1 };
+const state = { mode: "rest", modeAt: 0, levelSrc: "speech",
+  manualOverride: false, cycle: null, mic: null, reduce: false };
+let level = 0, held = 0, heldAt = -Infinity;
+
+function speechPattern(t) {
+  // Bursty syllables: envelope of overlapping sines gated by a slow on/off phrase rhythm.
+  const phrase = (Math.sin(t * 0.45) + Math.sin(t * 0.13 + 1.7)) > -0.35 ? 1 : 0;
+  const syll = Math.max(0, Math.sin(t * 7.1) * 0.5 + Math.sin(t * 11.7 + 2) * 0.35 + 0.45);
+  return phrase * Math.min(1, syll * 0.85);
+}
+
+function currentLevel(t) {
+  if (state.manualOverride) return +document.getElementById("manual").value / 100;
+  if (state.levelSrc === "mic" && state.mic) return state.mic.read();
+  if (state.levelSrc === "silence") return 0.015 + Math.random() * 0.01;
+  if (state.levelSrc === "low") return 0.16 + Math.sin(t * 5) * 0.06;
+  if (state.levelSrc === "high") return 0.62 + Math.sin(t * 6.3) * 0.18 + Math.sin(t * 11) * 0.08;
+  return speechPattern(t);
+}
+
+function stepLevel(t, dt) {
+  if (state.mode !== "recording") held = 0;
+  else if (t - heldAt >= LEVEL_TICK) { held = currentLevel(t); heldAt = t; }
+  level = follow(level, held, held > level ? ATTACK : RELEASE, dt);
+}
+
+function band(v) { return v < 0.06 ? "silence" : v < 0.35 ? "low" : "speaking"; }
+
+/* ---------------- Drop & Play ---------------- */
+const R_MARK = parseMap(R_MAP);
+(function prepareR(mark) {
+  const rank = new Map(R_PATH.map((p, i) => [p + "", i]));
+  mark.cells.forEach(c => { c.d = (rank.get([c.x, c.y] + "") ?? 0) / (R_PATH.length - 1); });
+  // The meter: four equal columns centered in the grid (middle four columns and rows). Cells pair with slots by
+  // shortest total squared travel, which keeps paths from tangling when all sixteen move at once.
+  const n = mark.cells.length, heights = [0, 0, 0, 0], fillOrder = [1, 2, 0, 3];
+  for (let i = 0; i < n; i++) heights[fillOrder[i % 4]]++;
+  const slots = [];
+  [1, 2, 3, 4].forEach((x, col) => {
+    for (let s = 0; s < heights[col]; s++) slots.push({ x, y: (mark.rows + 4) / 2 - 1 - s, col, stack: s });
+  });
+  const cost = (c, s) => (c.x - s.x) ** 2 + (c.y - s.y) ** 2;
+  const pick = mark.cells.map((_, i) => i);
+  for (let improved = true; improved;) {
+    improved = false;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const [ci, cj] = [mark.cells[i], mark.cells[j]];
+      if (cost(ci, slots[pick[j]]) + cost(cj, slots[pick[i]]) < cost(ci, slots[pick[i]]) + cost(cj, slots[pick[j]])) {
+        [pick[i], pick[j]] = [pick[j], pick[i]];
+        improved = true;
+      }
+    }
+  }
+  mark.cells.forEach((c, i) => { c.eq = slots[pick[i]]; });
+})(R_MARK);
+
+function dropAndPlay(mark) {
+  const cells = mark.cells;
+  const tw = cells.map(() => ({ fx: 0, fy: 0, tx: 0, ty: 0, start: 0, dur: 0 }));
+  const DROP = 0.26, RETURN = 0.24, FADE = 0.24;
+  const GAIN = [0.85, 1, 1, 0.85];            // a slight center bias keeps the block balanced
+  const PILOT = 0.5;                          // silence: the bottom row stays half lit
+  // Each column is its own readout: it samples the voice on its own clock and picks its own
+  // height within the range the loudness allows, then rises fast and falls slowly like a meter.
+  // The four bars move out of step, yet all of them still rise with the voice and settle in silence.
+  const TICK_MIN = 0.12, TICK_MAX = 0.26, BAR_ATTACK = 22, BAR_RELEASE = 6;
+  // Each column hears the voice a little late, in shuffled order: syllables ripple through the
+  // block out of step rather than sweeping left to right.
+  const HEAR_DELAY = [0.06, 0, 0.12, 0.03];
+  const heard = [];                           // recent raw level samples, newest last
+  const bars = GAIN.map(() => ({ h: PILOT, target: PILOT, nextAt: 0 }));
+  const levelAgo = (now, delay) => {
+    for (let k = heard.length - 1; k >= 0; k--) if (heard[k].t <= now - delay) return heard[k].v;
+    return 0;
+  };
+  let crestFrom = 0, fadeAt = -Infinity;
+  return {
+    onMode(now, mode, reduce) {
+      const meter = mode === "recording";
+      const to = c => (meter ? [c.eq.x - c.x, c.eq.y - c.y] : [0, 0]);
+      // Random first ticks, so the bars wake one by one instead of on the same frame.
+      if (meter) {
+        heard.length = 0;
+        bars.forEach(b => Object.assign(b, { h: PILOT, target: PILOT, nextAt: now + Math.random() * TICK_MIN }));
+      }
+      if (reduce) {
+        // Reduce Motion: no travel. Fade out, swap layouts at the dip, fade back in.
+        fadeAt = now;
+        cells.forEach((c, i) => tweenTo(tw[i], now, ...to(c), FADE / 2, 0));
+        crestFrom = now;
+        return;
+      }
+      // All sixteen move together; staggering them sends pixels through each other mid-flight.
+      cells.forEach((c, i) => tweenTo(tw[i], now, ...to(c), 0, meter ? DROP : RETURN));
+      crestFrom = now + RETURN;               // the crest writes the stroke once the r is whole
+    },
+    update(now, dt, lvl, mode, reduce, out, raw) {
+      if (mode === "recording") {
+        heard.push({ t: now, v: raw });
+        while (heard.length && heard[0].t < now - 0.3) heard.shift();
+        bars.forEach((b, col) => {
+          if (reduce) {
+            // Reduce Motion: no independent bouncing; all four follow the smoothed level together.
+            b.h = PILOT + 3.5 * clamp01(clamp01(lvl / 0.7) * GAIN[col]);
+            return;
+          }
+          if (now >= b.nextAt) {
+            const loud = clamp01(levelAgo(now, HEAR_DELAY[col]) / 0.7);
+            b.target = PILOT + 3.5 * clamp01(loud * GAIN[col] * (0.25 + Math.random()));
+            b.nextAt = now + lerp(TICK_MIN, TICK_MAX, Math.random());
+          }
+          b.h = follow(b.h, b.target, b.target > b.h ? BAR_ATTACK : BAR_RELEASE, dt);
+        });
+      }
+      cells.forEach((c, i) => {
+        [out.dx[i], out.dy[i]] = tweenAt(tw[i], now);
+        if (mode === "recording") {
+          const f = clamp01(bars[c.eq.col].h - c.eq.stack);   // cells lit, fractional at the top
+          out.m[i] = f;
+          out.a[i] = lerp(0.16, 0.95, f);
+        } else if (mode === "transcribing") {
+          out.m[i] = 0;
+          out.a[i] = reduce ? checker(c) : CREST_BASE + (1 - CREST_BASE) * crestLoop(c.d, now - crestFrom);
+        } else {
+          out.m[i] = 0;
+          out.a[i] = 1;
+        }
+      });
+      out.opacity = now - fadeAt < FADE ? Math.abs(1 - 2 * clamp01((now - fadeAt) / FADE)) : 1;
+    },
+  };
+}
+
+/* ---------------- Panel rendering ---------------- */
+const INK_RGB = [236, 238, 241], ACCENT_RGB = [49, 200, 202];
+function rgba(m, a) {
+  const [r, g, b] = INK_RGB.map((v, i) => Math.round(lerp(v, ACCENT_RGB[i], m)));
+  return `rgba(${r}, ${g}, ${b}, ${clamp01(a).toFixed(3)})`;
+}
+
+function makeGrid(parent, mark, cell, gap) {
+  const root = document.createElement("div");
+  root.className = "grid moves";
+  const pitch = cell + gap;
+  root.style.width = (mark.cols * pitch - gap) + "px";
+  root.style.height = (mark.rows * pitch - gap) + "px";
+  const radius = Math.max(0.5, Math.round(cell * 0.16 * 2) / 2) + "px";   // same roundness at every size
+  const els = mark.cells.map(c => {
+    const el = document.createElement("div");
+    el.className = "px";
+    Object.assign(el.style, { width: cell + "px", height: cell + "px", borderRadius: radius,
+      left: c.x * pitch + "px", top: c.y * pitch + "px" });
+    root.appendChild(el);
+    return el;
+  });
+  parent.appendChild(root);
+  return { root, els, pitch };
+}
+
+const n = R_MARK.cells.length, zeros = () => new Array(n).fill(0), ones = () => new Array(n).fill(1);
+const panel = {
+  logic: dropAndPlay(R_MARK),
+  grids: [makeGrid(document.getElementById("stage"), R_MARK, 16, 6),
+          makeGrid(document.getElementById("capsule"), R_MARK, 9, 3)],
+  m: zeros(), a: ones(),
+  out: { m: zeros(), a: ones(), dx: zeros(), dy: zeros(), opacity: 1 },
+  seenModeAt: -1,
+};
+
+function paint(dt) {
+  const { out } = panel, k = 1 - Math.exp(-dt * INK_RATE);
+  for (let i = 0; i < n; i++) {
+    panel.m[i] += (out.m[i] - panel.m[i]) * k;
+    panel.a[i] += (out.a[i] - panel.a[i]) * k;
+  }
+  for (const g of panel.grids) {
+    g.root.style.opacity = out.opacity;
+    g.els.forEach((el, i) => {
+      el.style.backgroundColor = rgba(panel.m[i], panel.a[i]);
+      el.style.transform = `translate(${out.dx[i] * g.pitch}px, ${out.dy[i] * g.pitch}px)`;
+    });
+  }
+}
+
+/* ---------------- Menu bar: static template icons ---------------- */
+/* 2.5pt cells, 0.5pt gaps (5px and 1px on Retina), 17.5pt square. Opacity is the only
+   variable, because a template image is one color that the system tints. */
+const MENU_CELL = 2.5, MENU_PITCH = 3, MENU_SIZE = 6 * MENU_PITCH - (MENU_PITCH - MENU_CELL);
+
+// A frozen readout of the meter: bars out of step, centered in the square, no unlit cells
+// (dim cells turn the icon into a gray block at this size).
+function meterSnapshot(heights) {
+  const cells = [];
+  heights.forEach((h, col) => { for (let s = 0; s < h; s++) cells.push({ x: col + 1, y: 4 - s, a: 1 }); });
+  return cells;
+}
+
+const MENU_ICONS = {
+  rest: { name: "Ready", means: "The r, as the panel shows it at rest.",
+    cells: R_MARK.cells.map(c => ({ x: c.x, y: c.y, a: 1 })) },
+  recording: { name: "Listening", means: "A frozen reading of the meter, with bars out of step.",
+    cells: meterSnapshot([3, 1, 4, 2]) },
+  transcribing: { name: "Transcribing", means: "The r in a 50% dither, standing in for the ink crest.",
+    cells: R_MARK.cells.map(c => ({ x: c.x, y: c.y, a: checker(c) })) },
+};
+
+function iconSVG(cells, scale = 1) {
+  const r = (MENU_CELL * 0.16).toFixed(2);
+  const rects = cells.map(c => `<rect x="${c.x * MENU_PITCH}" y="${c.y * MENU_PITCH}" width="${MENU_CELL}" height="${MENU_CELL}" rx="${r}" fill="currentColor" fill-opacity="${c.a}"/>`).join("");
+  return `<svg class="icon" width="${MENU_SIZE * scale}" height="${MENU_SIZE * scale}" viewBox="0 0 ${MENU_SIZE} ${MENU_SIZE}" aria-hidden="true">${rects}</svg>`;
+}
+
+document.getElementById("specs").innerHTML = Object.entries(MENU_ICONS).map(([mode, icon]) => `
+  <figure class="spec" data-mode="${mode}">
+    ${iconSVG(icon.cells, 6)}
+    <div class="chips">
+      <span class="chip tone-dark">${iconSVG(icon.cells)}</span>
+      <span class="chip tone-light">${iconSVG(icon.cells)}</span>
+    </div>
+    <span class="now-tag">Now</span>
+    <figcaption>
+      <div class="name">${icon.name}</div>
+      <p>${icon.means}</p>
+    </figcaption>
+  </figure>`).join("");
+
+// The real menu bar swaps images with no transition, so the live strips do too.
+function renderMenuBar() {
+  const svg = iconSVG(MENU_ICONS[state.mode].cells);
+  document.querySelectorAll(".live-icon").forEach(slot => { slot.innerHTML = svg; });
+  document.querySelectorAll(".spec").forEach(spec => spec.classList.toggle("now", spec.dataset.mode === state.mode));
+}
+
+/* ---------------- Main loop ---------------- */
+let lastNow = performance.now();
+function frame(nowMs) {
+  const dt = Math.min(0.05, (nowMs - lastNow) / 1000) * clock.speed;
+  lastNow = nowMs;
+  clock.t += dt;
+  const t = clock.t;
+
+  if (state.cycle !== null) {
+    state.cycle += dt;
+    if (state.cycle < 1) setMode("rest", false);
+    else if (state.cycle < 6) setMode("recording", false);
+    else if (state.cycle < 9) setMode("transcribing", false);
+    else setMode("rest");
+  }
+
+  stepLevel(t, dt);
+  document.getElementById("lvlNum").textContent = level.toFixed(2);
+  document.getElementById("lvlBand").textContent = state.mode === "recording" ? band(level) : "—";
+
+  if (panel.seenModeAt !== state.modeAt) {
+    panel.seenModeAt = state.modeAt;
+    panel.logic.onMode(t, state.mode, state.reduce);
+  }
+  panel.logic.update(t, dt, level, state.mode, state.reduce, panel.out, held);
+  paint(dt);
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- Wiring ---------------- */
+function setMode(m, clearCycle = true) {
+  if (clearCycle) state.cycle = null;
+  if (m !== state.mode) {
+    state.mode = m;
+    state.modeAt = clock.t;
+    renderMenuBar();
+  }
+  document.querySelectorAll("#stateBtns button").forEach(b =>
+    b.classList.toggle("on", b.dataset.state === m || (state.cycle !== null && b.dataset.state === "cycle")));
+}
+document.getElementById("stateBtns").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.state === "cycle") { state.cycle = 0; b.classList.add("on"); return; }
+  setMode(b.dataset.state);
+});
+document.getElementById("levelBtns").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.id === "micBtn") return;
+  state.levelSrc = b.dataset.lvl; state.manualOverride = false;
+  document.querySelectorAll("#levelBtns button").forEach(x => x.classList.toggle("on", x === b));
+});
+document.getElementById("speedBtns").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  clock.speed = +b.dataset.speed;
+  document.querySelectorAll("#speedBtns button").forEach(x => x.classList.toggle("on", x === b));
+});
+document.getElementById("manual").addEventListener("input", () => {
+  state.manualOverride = true;
+  document.querySelectorAll("#levelBtns button").forEach(x => x.classList.remove("on"));
+});
+document.getElementById("reduceMotion").addEventListener("change", e => { state.reduce = e.target.checked; });
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  state.reduce = true; document.getElementById("reduceMotion").checked = true;
+}
+
+document.getElementById("micBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("micBtn");
+  if (state.mic) { state.mic.stop(); state.mic = null; btn.textContent = "Use mic"; btn.classList.remove("on"); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new AudioContext();
+    const src = ctx.createMediaStreamSource(stream);
+    const an = ctx.createAnalyser();
+    an.fftSize = 1024;
+    src.connect(an);
+    const buf = new Float32Array(an.fftSize);
+    state.mic = {
+      read() {
+        an.getFloatTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        return Math.min(1, Math.sqrt(sum / buf.length) * 6); // rough normalize; browser AGC applies
+      },
+      stop() { stream.getTracks().forEach(tr => tr.stop()); ctx.close(); },
+    };
+    state.levelSrc = "mic"; state.manualOverride = false;
+    document.querySelectorAll("#levelBtns button").forEach(x => x.classList.remove("on"));
+    btn.textContent = "Mic on"; btn.classList.add("on");
+  } catch (err) { btn.textContent = "Mic blocked"; }
+});
+
+renderMenuBar();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

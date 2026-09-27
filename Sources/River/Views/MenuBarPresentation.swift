@@ -29,7 +29,7 @@ enum MenuBarPresentation {
     // surface at end-of-cycle, so an active state's icon always wins.
     //
     // During the model load window (planning 0004), the idle state shows the load
-    // progress ("Downloading model…" / "Loading…") instead of "Ready". Active cycle
+    // progress ("Downloading model…" / "Preparing model…") instead of "Ready". Active cycle
     // states (.recording / .processing) are never masked — the model is ready before
     // recording is permitted, so the load state only affects the idle presentation.
     static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState = .ready) -> Visual {
@@ -55,7 +55,7 @@ enum MenuBarPresentation {
         case .downloading:
             return Visual(icon: .symbol("arrow.down.circle"), statusLabel: "Downloading model...")
         case .loading:
-            return Visual(icon: .symbol("ellipsis"), statusLabel: "Loading...")
+            return Visual(icon: .symbol("ellipsis"), statusLabel: "Preparing model...")
         case .failed:
             // "Ready" here would be the exact lie 0004 removes — dictation cannot
             // work until relaunch, so the label says so alongside the glyph. (The

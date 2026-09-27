@@ -18,7 +18,7 @@ final class AppState {
     private(set) var errorMessage: String?
     private(set) var notice: String?
     /// Model load lifecycle — `.loading` until the model is warm, then `.ready`.
-    /// Menu bar reads this to show "Downloading model…" / "Loading…" during launch.
+    /// Menu bar reads this to show "Downloading model…" / "Preparing model…" during launch.
     private(set) var modelLoadState: ModelLoadState = .loading
     /// Transient HUD toast (planning 0018). Distinct from `errorMessage` (the
     /// lingering menu row): it auto-dismisses after `errorToastDurationSeconds` and

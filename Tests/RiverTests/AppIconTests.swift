@@ -5,8 +5,8 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// Renders the app icon — the slat mark in ink on a charcoal squircle — from the same
-/// geometry the menu bar glyph uses. The checked-in script:
+/// Renders the app icon — the pixel r in ink on a charcoal squircle — through the same
+/// drawing the menu bar glyphs use. The checked-in script:
 /// `RIVER_WRITE_ICON=1 swift test --filter AppIcon` regenerates `River.icns`; the normal
 /// suite checks the shipped file still carries every size macOS asks for.
 enum AppIconRenderer {
@@ -38,12 +38,14 @@ enum AppIconRenderer {
         context.setFillColor(Palette.charcoal.cgColor)
         context.fillPath()
 
-        // The mark is drawn at full ink on every slat: the icon carries no cycle state.
+        // The r at rest, at the panel's cell-to-gap proportion: the icon carries no cycle state.
         let markWidth = side * Constants.appIconMarkFraction
-        let unit = markWidth / Constants.menuBarGlyphSize
+        let gapRatio = Constants.pixelGap / Constants.pixelCell
+        let cell = markWidth / (Double(PixelMark.size) + Double(PixelMark.size - 1) * gapRatio)
         context.saveGState()
         context.translateBy(x: (Constants.appIconCanvas - markWidth) / 2, y: (Constants.appIconCanvas - markWidth) / 2)
-        MenuBarGlyphRenderer.drawSlats(.listening, scale: 2, unit: unit, color: Palette.ink.cgColor, in: context)
+        MenuBarGlyphRenderer.drawPixelMark(PixelMark.staticCells(for: .ready), cell: cell, gap: cell * gapRatio,
+                                           color: Palette.ink.cgColor, in: context)
         context.restoreGState()
 
         guard let image = context.makeImage() else { throw ContextUnavailable() }

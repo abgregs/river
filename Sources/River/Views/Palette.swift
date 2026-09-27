@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// River's color tokens (planning 0028), the one place the identity's colors are
-/// spelled. Marks use `ink` only; the accent never touches the indicator or the menu bar.
+/// spelled. Marks use `ink`, except the indicator's lit meter (planning 0029); the menu bar never takes the accent.
 enum Palette {
     static let charcoal = NSColor(srgbHex: 0x23262B)
     static let raisedCharcoal = NSColor(srgbHex: 0x2E3238)

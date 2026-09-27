@@ -118,7 +118,7 @@ final class RecordingIndicatorCoordinator {
 
     static let panelSize = NSSize(
         width: Constants.hudMessageWidth + 2 * Constants.hudShadowMargin,
-        height: Constants.hudShadowMargin * 2 + Constants.riverCapsuleHeight
+        height: Constants.hudShadowMargin * 2 + Constants.indicatorPanelHeight
             + Constants.hudStackSpacing + Constants.hudMessageReservedHeight
     )
 
@@ -130,7 +130,7 @@ final class RecordingIndicatorCoordinator {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let size = Self.panelSize
-        let capsuleBottomInPanel = size.height - Constants.hudShadowMargin - Constants.riverCapsuleHeight
+        let capsuleBottomInPanel = size.height - Constants.hudShadowMargin - Constants.indicatorPanelHeight
         panel.setFrame(
             NSRect(
                 x: visible.midX - size.width / 2,

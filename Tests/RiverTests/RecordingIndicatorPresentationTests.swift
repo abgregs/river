@@ -50,7 +50,7 @@ struct RecordingIndicatorPresentationTests {
     @Test("loadingLabel names the two waiting states and nothing else")
     func loadingLabelMapping() {
         #expect(RecordingIndicatorPresentation.loadingLabel(for: .downloading) == "Downloading model…")
-        #expect(RecordingIndicatorPresentation.loadingLabel(for: .loading) == "Loading model…")
+        #expect(RecordingIndicatorPresentation.loadingLabel(for: .loading) == "Preparing model…")
         #expect(RecordingIndicatorPresentation.loadingLabel(for: .ready) == nil)
         #expect(RecordingIndicatorPresentation.loadingLabel(for: .failed) == nil)
     }
