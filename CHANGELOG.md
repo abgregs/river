@@ -17,6 +17,10 @@ show as raw text. -->
 
 ## [Unreleased]
 
+### Fixed
+
+- River no longer goes online every time it starts. When the speech model is already downloaded, River loads it straight from disk, so "Preparing model" finishes sooner and River works without a network connection. Before, an offline start with the model already downloaded failed until River was relaunched.
+
 ## [0.2.0] - 2026-09-27
 
 A new look, and dictations that are quick or quiet now come through.

@@ -1,7 +1,7 @@
 # Conventions: Test harnesses and generated assets
 
 Suites that do more than assert. Two render the art River ships; two measure a real model
-against real audio and are env-gated so the normal `swift test` never touches them. The
+against real audio and one loads a real model offline; those three are env-gated so the normal `swift test` never touches them. The
 general test conventions are in [tests.md](tests.md).
 
 ## Generated assets are rendered by tests (0028)
@@ -53,6 +53,10 @@ open -e eval-openai_whisper-small.en.txt    # the scorecard, written to the pack
 
 - `RIVER_EVAL_MODEL` — WhisperKit model name (default: `Constants.defaultModel`, i.e. `small.en`). Run once per candidate model; the fixed corpus makes scorecards directly comparable.
 - `RIVER_EVAL_OUT` — override the scorecard path (default: `./eval-<model>.txt`).
+
+## Offline model load (0004)
+
+`CachedModelOfflineLoadTests` (env-gated by `RIVER_OFFLINE_LOAD`) loads a model River has already downloaded, in a test process that `sandbox-exec` denies network access, and expects it to reach `.ready`. It is the check behind loading a cached model from disk: before that fix, WhisperKit asked Hugging Face for the file list on every launch and an offline start failed. The command is in the test's doc comment; `--disable-sandbox` is required because SwiftPM otherwise applies its own sandbox inside this one, which macOS refuses.
 
 ## Related
 

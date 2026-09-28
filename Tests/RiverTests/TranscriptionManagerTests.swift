@@ -353,3 +353,33 @@ struct TranscriptionManagerShortClipTests {
         #expect(TranscriptionManager.paddedForDecoding([]).isEmpty)
     }
 }
+
+/// Manual offline-load check (planning 0004 follow-up) — env-gated like the eval
+/// harness, because it needs a model River has already downloaded. A cached model
+/// must load with no network: warm launches used to ask Hugging Face for the file
+/// list first, which cost seconds and failed outright offline. Run it in a process
+/// the sandbox denies network access, so the check can only pass from disk
+/// (`--disable-sandbox` stops SwiftPM applying its own sandbox inside this one,
+/// which macOS refuses):
+///
+///   swift build --build-tests && RIVER_OFFLINE_LOAD=1 sandbox-exec -p '(version 1)(allow default)(deny network*)' swift test --skip-build --disable-sandbox --filter CachedModelOfflineLoad
+///
+///   Optional: RIVER_OFFLINE_LOAD_MODEL=openai_whisper-small.en  (default: base.en, the fastest to load)
+@Suite("CachedModelOfflineLoad")
+struct CachedModelOfflineLoadTests {
+    @MainActor
+    @Test(
+        "a cached model reaches ready with the network blocked",
+        .enabled(if: ProcessInfo.processInfo.environment["RIVER_OFFLINE_LOAD"] != nil)
+    )
+    func cachedModelLoadsOffline() async throws {
+        let model = ProcessInfo.processInfo.environment["RIVER_OFFLINE_LOAD_MODEL"] ?? "openai_whisper-base.en"
+        try #require(
+            TranscriptionManager.isModelCached(downloadBase: TranscriptionManager.modelDownloadBase(), modelName: model),
+            "\(model) is not downloaded; pick it in River once, then rerun"
+        )
+        let manager = TranscriptionManager(modelName: model)
+        try await manager.loadModel()
+        #expect(manager.currentModelLoadState == .ready)
+    }
+}
