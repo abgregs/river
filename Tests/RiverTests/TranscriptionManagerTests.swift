@@ -323,3 +323,33 @@ struct TranscriptionFilterTests {
         #expect(filtered.isEmpty)
     }
 }
+
+@Suite("TranscriptionManager short clips")
+struct TranscriptionManagerShortClipTests {
+    // The maintainer's smoke (2026-09-26): quick taps of "hi" and "yes" under about a
+    // second decoded to nothing until silence surrounded them; with half a second each
+    // side, the same recordings transcribed.
+    @Test("a clip under 1.2 s gets half a second of silence on each side")
+    func shortClipIsPadded() {
+        let clip = [Float](repeating: 0.1, count: 12_000)
+        let padded = TranscriptionManager.paddedForDecoding(clip)
+        let pad = Int(Constants.shortClipPadSeconds * 16_000)
+        #expect(Constants.shortClipSeconds == 1.2)
+        #expect(Constants.shortClipPadSeconds == 0.5)
+        #expect(padded.count == clip.count + 2 * pad)
+        #expect(padded.prefix(pad).allSatisfy { $0 == 0 } && padded.suffix(pad).allSatisfy { $0 == 0 })
+        #expect(Array(padded[pad..<(pad + clip.count)]) == clip)
+    }
+
+    // Padding a longer clip hurt some real recordings in the replay, so it stays exact.
+    @Test("a clip of 1.2 s or longer is decoded as captured")
+    func longClipIsUntouched() {
+        let clip = [Float](repeating: 0.1, count: Int(Constants.shortClipSeconds * 16_000))
+        #expect(TranscriptionManager.paddedForDecoding(clip) == clip)
+    }
+
+    @Test("an empty clip stays empty")
+    func emptyStaysEmpty() {
+        #expect(TranscriptionManager.paddedForDecoding([]).isEmpty)
+    }
+}

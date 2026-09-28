@@ -102,10 +102,28 @@ enum Constants {
     // handled by `TranscriptionManager.isNonSpeechAnnotation` instead. Tune
     // against the 0022 silence corpus once it's recorded.
     static let silenceTrimEnergyThreshold: Float = 0.01
+    // Quiet recordings get a lower gate: the cut sits `silenceTrimPeakRatio` below the
+    // recording's loudest window, never above `silenceTrimEnergyThreshold` and never below
+    // `silenceTrimFloor`. A fixed -40 dBFS gate discarded whole quiet dictations: quiet
+    // talking on a built-in mic was never transcribed (maintainer's smoke, 2026-09-24).
+    // Normal speech peaks near -24 dBFS or louder, where the relative cut reaches the
+    // fixed gate, so its trailing trim is unchanged (planning 0023's tail finding).
+    static let silenceTrimPeakRatio: Float = 0.18      // about 15 dB below the peak window
+    static let silenceTrimFloor: Float = 0.0032        // about -50 dBFS: quieter is never speech
 
-    // Safety margin kept on each side of detected speech so onset/offset consonants
-    // are never clipped by the trim. 100 ms at 16 kHz. See planning/0023.
-    static let silenceTrimMarginSeconds: Double = 0.1
+    // Audio kept around detected speech. The lead-in is the context Whisper needs to hear a
+    // word's soft start: with 0.1 s, quick taps reached it clipped mid-word and decoded to
+    // nothing (maintainer's smoke, 2026-09-26). The tail stays short, since room tone after
+    // speech is what Whisper turns into invented text (planning 0023).
+    static let silenceTrimLeadSeconds: Double = 0.5
+    static let silenceTrimTailSeconds: Double = 0.2
+
+    // Whisper returns nothing for a word shorter than about a second unless silence
+    // surrounds it, so a clip under `shortClipSeconds` is decoded with `shortClipPadSeconds`
+    // of silence on each side. Longer clips are decoded as captured: padding them hurt
+    // some real recordings in the replay (maintainer's smoke, 2026-09-26).
+    static let shortClipSeconds: Double = 1.2
+    static let shortClipPadSeconds: Double = 0.5
 
     // Decoding thresholds pinned to upstream Whisper defaults (planning 0023): they
     // drive the temperature fallback for low-confidence segments and are *meant* to
@@ -200,11 +218,11 @@ enum Constants {
 
     // The meter: four columns, each its own readout, reading loudness in decibels of full
     // scale (dBFS); a linear scale left quiet speech invisible on a built-in mic
-    // (maintainer's smoke, 2026-09-24). The floor is the capture trim's gate, so the meter
+    // (maintainer's smoke, 2026-09-24). The floor is the capture trim's floor, so the meter
     // never lights for a recording the trim then discards as silence: a meter that moved
     // for a dictation River threw away would claim it heard you. The ceiling fills a
     // column. Display only: the meter reads `inputLevel`, which the capture path never uses.
-    static let pixelMeterFloorDecibels: Double = 20 * log10(Double(silenceTrimEnergyThreshold))
+    static let pixelMeterFloorDecibels: Double = 20 * log10(Double(silenceTrimFloor))
     static let pixelMeterCeilingDecibels: Double = -28
     // Silence keeps the bottom row half lit, so a quiet listening state never looks like rest.
     static let pixelMeterPilot: Double = 0.5

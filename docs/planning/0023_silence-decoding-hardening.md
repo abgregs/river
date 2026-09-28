@@ -51,6 +51,18 @@ Two separate instances during the #30–#36 smoke testing. In both, a normal dic
 
 The eval harness (0022) is the instrument for any of these: add a few clips that end in a second or two of room tone and check whether output gains trailing text.
 
+## Quiet speech (2026-09-24)
+
+The pixel-identity smoke ([0029](0029_pixel-identity.md)) found the fixed trim gate discarding real dictations. `silenceTrimEnergyThreshold` is 0.01 RMS, about −40 dBFS, and a recording with no 20 ms window above it trimmed to nothing: no transcription and no error. Quiet talking on the maintainer's built-in mic was never transcribed; with the gate below it is, and the meter shows it (smoke, 2026-09-24). Two recordings in that session's log that trimmed to nothing were a different bug: they came from AirPods at 24 kHz on a first recording after launch, not from quiet speech.
+
+**Fix: a gate relative to the recording's own peak.** The cut sits `silenceTrimPeakRatio` (0.18, about 15 dB) below the recording's loudest window, never above the fixed −40 dBFS gate and never below `silenceTrimFloor` (0.0032, about −50 dBFS). Normal speech peaks near −24 dBFS or louder, where the relative cut reaches the fixed gate, so its trimming, including the trailing tail behind the hallucination finding above, is exactly what it was; a test pins that. Only quiet recordings get the lower gate. A flat −50 gate was rejected because it would lengthen every recording's trailing tail and feed that finding.
+
+**Risk on record:** an accidental activation in a room whose noise sits between −50 and −40 dBFS used to trim to nothing and now reaches Whisper, where `isNonSpeechAnnotation` and the decode gates apply but may not catch a hallucinated phrase. Check with a few empty activations in a quiet room, and with the 0022 silence fixtures once they exist.
+
+The recording indicator's meter shares `silenceTrimFloor` as its floor, so it never lights for a recording this trim discards.
+
+**Quick taps (2026-09-26).** Dictations of 0.5–2 s often came back empty. Thirty recordings saved on device and replayed offline showed two causes: the trim kept only 0.1 s around detected speech, clipping short words at their onset, and Whisper returns nothing for a word shorter than about a second unless silence surrounds it. The no-speech gates were ruled out: disabling them changed nothing. The trim now keeps 0.5 s before speech and 0.2 s after (`silenceTrimLeadSeconds`, `silenceTrimTailSeconds`), and `TranscriptionManager.paddedForDecoding` adds 0.5 s of silence on each side of a clip under 1.2 s. Replayed, the same recordings went from 12 of 30 transcribed to 27, with no invented text. A symmetric 0.5 s margin scored one more but typed a stray "(" from a near-silent clip, which is the tail risk above, so the tail grows only from 0.1 s to 0.2 s. Remaining: capture starts about 0.15–0.25 s after the key press, so a word spoken instantly can lose its onset (a quick "hi" sometimes decodes as "Bye"). Preparing the audio engine ahead of time was rejected: preparing River's input unit switches connected AirPods into call mode while idle.
+
 ## Related
 
 - [0022_transcription-eval-harness.md](0022_transcription-eval-harness.md) — the silence fixtures and WER-regression instrument for every threshold here
