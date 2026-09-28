@@ -111,15 +111,19 @@ final class TranscriptionManager {
         return appSupport.appendingPathComponent(Constants.modelCacheFolderName, isDirectory: true)
     }
 
+    // Where WhisperKit puts a model's CoreML files:
+    // {base}/models/argmaxinc/whisperkit-coreml/{name}/. Pure (no I/O).
+    private static func modelFolder(downloadBase: URL, modelName: String) -> URL {
+        downloadBase.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(modelName)", isDirectory: true)
+    }
+
     // internal for testability — checks whether the model's CoreML files are
     // already on disk. Used at init time to set the correct initial load state
-    // (downloading vs. loading) without an async call. Checks for `AudioEncoder`
-    // which WhisperKit requires before `loadModels()` can proceed.
+    // (downloading vs. loading) without an async call, and by `loadModel` to load a
+    // cached model offline. Checks for `AudioEncoder` which WhisperKit requires
+    // before `loadModels()` can proceed.
     static func isModelCached(downloadBase: URL, modelName: String) -> Bool {
-        // WhisperKit downloads under {base}/models/argmaxinc/whisperkit-coreml/{name}/
-        let dir = downloadBase.appendingPathComponent(
-            "models/argmaxinc/whisperkit-coreml/\(modelName)", isDirectory: true
-        )
+        let dir = modelFolder(downloadBase: downloadBase, modelName: modelName)
         let fm = FileManager.default
         return fm.fileExists(atPath: dir.appendingPathComponent("AudioEncoder.mlmodelc").path)
             || fm.fileExists(atPath: dir.appendingPathComponent("AudioEncoder.mlpackage").path)
@@ -132,7 +136,8 @@ final class TranscriptionManager {
     /// Emits `ModelLoadState` transitions so the menu bar can show an honest
     /// "Downloading model…" / "Preparing model…" status:
     ///   Cold launch: .downloading → .loading → .ready
-    ///   Warm launch: .loading (already set at init) → .loading → .ready
+    ///   Warm launch: .loading (already set at init) → .ready, offline
+    ///   Partial cache: .loading → .downloading → .loading → .ready
     ///   Failure:     .downloading/.loading → .failed
     func loadModel() async throws {
         if whisperKit != nil { return }
@@ -148,6 +153,29 @@ final class TranscriptionManager {
         let task = Task<WhisperKit, Error> { [weak self] in
             // Download under Application Support (planning 0010).
             try FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+            // A cached model loads straight from its folder with downloading off: no
+            // network, so a warm launch is quick and works offline. WhisperKit's
+            // download path asks Hugging Face for the file list first, even when every
+            // file is on disk (planning 0004 follow-up). The cache check trusts one
+            // file, so a partial download can pass it (planning 0026); if the folder
+            // won't load, fall through and let the download path complete it.
+            if Self.isModelCached(downloadBase: downloadBase, modelName: modelName) {
+                do {
+                    let folder = Self.modelFolder(downloadBase: downloadBase, modelName: modelName)
+                    let wk = try await WhisperKit(
+                        model: modelName, downloadBase: downloadBase, modelFolder: folder.path,
+                        load: false, download: false
+                    )
+                    try await wk.loadModels()
+                    return wk
+                } catch {
+                    try Task.checkCancellation()
+                    self?.logger.warning("Cached model failed to load, downloading it again: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+                    if let self, self.loadGeneration == generation {
+                        self.emitLoadState(.downloading)
+                    }
+                }
+            }
             // Phase 1: download or find cached model files. `load: false` skips the
             // in-memory load so we can emit the `.loading` transition before it.
             let wk = try await WhisperKit(model: modelName, downloadBase: downloadBase, load: false)
