@@ -11,10 +11,15 @@ workflow extracts a section as everything between its header and the next one, a
 Sparkle renders those notes literally in a <pre>, where stray link definitions would
 show as raw text. -->
 
-[Unreleased]: https://github.com/abgregs/river/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/abgregs/river/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/abgregs/river/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/abgregs/river/releases/tag/v0.1.0
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-09-27
+
+A new look, and dictations that are quick or quiet now come through.
 
 ### Changed
 
@@ -26,6 +31,17 @@ show as raw text. -->
 
 - Quiet dictation is no longer thrown away. A recording spoken softly could be treated as silence and discarded without transcribing or saying so; the silence trim now scales with how loudly you spoke, and normal speech is trimmed exactly as before.
 - Quick dictations of a second or two no longer come back empty: River keeps the start of each word and gives very short clips the surrounding silence the speech model needs.
+
+### Known issues
+
+- **First recording with AirPods can come back empty.** With AirPods connected, the first dictation after launch can capture nothing: opening the microphone switches the AirPods to their call mode, and the recording stops hearing you. The next dictation works.
+- **A word spoken the instant you press can lose its first sound.** Recording starts a fraction of a second after the key press; pause for a beat before speaking.
+- **"Preparing model" shows on every launch.** The indicator shows it for a few seconds after each launch, even when the model is already downloaded.
+- **Trailing invented text.** After real speech, the model can append a plausible sentence that you never said — most often when a dictation ends with silence or breath. Silence trimming and no-speech gating reduce it; they do not eliminate it. Check what lands before sending it.
+- **Switching models mid-download.** A model still downloading in the background can make a cached model look unavailable, and a failed load needs a relaunch to retry.
+- **Permissions may need a Refresh.** After granting a permission in System Settings, onboarding does not always notice on its own; press Refresh, and on a first launch after an update you may need to relaunch River.
+- **Apple Silicon and macOS 14+ only.** There is no Intel build.
+- **English only.** The shipped models are the `.en` family.
 
 ## [0.1.0] - 2026-09-18
 
