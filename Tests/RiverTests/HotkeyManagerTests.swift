@@ -175,12 +175,11 @@ struct HotkeyManagerCancelTests {
     @MainActor
     @Test("Hold: cancelling mid-hold leaves the press latch intact")
     func holdCancelPreservesPressLatch() {
-        // The Hold half of the cancel-reset asymmetry (planning 0017). Hold tracks
-        // the PHYSICAL key: during a cancel the activation key is still held down,
-        // so the eventual release must read as a release. If `resetTapState` ever
-        // also cleared `isKeyDown`, that release would toggle the latch to "down"
-        // and fire a PHANTOM ACTIVATE — starting a recording as the user lifts off
-        // the key. This test fails the moment that happens.
+        // Planning 0017. Hold tracks the PHYSICAL key: during a cancel the activation
+        // key is still held down, so the eventual release must read as a release. If
+        // the cancel path ever cleared `isKeyDown`, that release would toggle the
+        // latch to "down" and fire a PHANTOM ACTIVATE — starting a recording as the
+        // user lifts off the key. This test fails the moment that happens.
         let manager = makeManager(mode: .hold, cancelKeyCode: 63)
         var activates = 0
         var deactivates = 0
@@ -191,7 +190,6 @@ struct HotkeyManagerCancelTests {
         #expect(activates == 1)
 
         manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))   // fn while still held
-        manager.resetTapState()                                               // what handleCancel does
 
         manager.handle(.flagsChanged(keyCode: 62, flags: []))                 // release the held key
         #expect(deactivates == 1)   // a genuine release edge...
@@ -228,7 +226,9 @@ struct HotkeyManagerTapTests {
     // Tap modes act only on the completing (key-up) edge of a tap and route
     // start/stop through the embedded TapStateMachine. Double-tap timing itself is
     // covered in TapStateMachineTests; here two *immediate* taps are well within
-    // the 400 ms window, so they always pair under the real clock.
+    // the 400 ms window, so they always pair under the real clock. `wireSession`
+    // stands in for RiverSession: it reports a recording between an accepted start
+    // and the next stop.
 
     @MainActor
     @Test("single tap: a completed tap starts, the next stops")
@@ -236,8 +236,7 @@ struct HotkeyManagerTapTests {
         let manager = makeManager(mode: .singleTap)
         var activates = 0
         var deactivates = 0
-        manager.onActivate = { activates += 1 }
-        manager.onDeactivate = { deactivates += 1 }
+        wireSession(manager, onActivate: { activates += 1 }, onDeactivate: { deactivates += 1 })
 
         manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))  // key-down
         #expect(activates == 0)  // a press alone does nothing in tap modes
@@ -268,8 +267,7 @@ struct HotkeyManagerTapTests {
         let manager = makeManager(mode: .doubleTap)
         var activates = 0
         var deactivates = 0
-        manager.onActivate = { activates += 1 }
-        manager.onDeactivate = { deactivates += 1 }
+        wireSession(manager, onActivate: { activates += 1 }, onDeactivate: { deactivates += 1 })
 
         tap(manager)
         #expect(activates == 0)  // first tap: awaiting the second
@@ -284,13 +282,12 @@ struct HotkeyManagerTapTests {
     @Test("a live key change preserves the recording: the new key stops it, the old key is ignored")
     func liveKeyChangePreservesRecording() {
         // This is the load-bearing behavior for live-apply (river-session.md):
-        // switching the key mid-recording is a refilter, the tap machine keeps its
-        // .recording state, so the new key stops the in-flight recording while the
-        // old key falls silent.
+        // switching the key mid-recording is a refilter and the session still
+        // reports the recording, so the new key stops it while the old key falls
+        // silent.
         let manager = makeManager(mode: .singleTap)
         var deactivates = 0
-        manager.onActivate = {}
-        manager.onDeactivate = { deactivates += 1 }
+        wireSession(manager, onActivate: {}, onDeactivate: { deactivates += 1 })
 
         tap(manager)                          // start recording on key 62
         manager.setActivationKeyCode(59)      // live key change to Left Control
@@ -320,47 +317,58 @@ struct HotkeyManagerTapTests {
     }
 
     @MainActor
-    @Test("single tap: after resetTapState the next tap starts, it is not eaten as a stop")
-    func singleTapAfterResetStarts() {
-        // Planning 0017 field bug: cancel ends the recording through the session,
-        // not through a tap, so without the reset the tap machine stays in
-        // `.recording` and the user's next tap is consumed as a `stop` for a
-        // recording that no longer exists — they must press twice to start again.
+    @Test("single tap: after a refused start the next tap starts, it is not eaten as a stop")
+    func singleTapAfterRefusedStartStarts() {
+        // The session refuses a start while the model is preparing, a permission is
+        // denied, or a dictation is still transcribing, and stays idle. The next tap
+        // must be another start. The tap machine once kept its own "recording" flag
+        // and read that tap as a stop the session ignored, costing a keypress.
         let manager = makeManager(mode: .singleTap)
         var activates = 0
         var deactivates = 0
-        manager.onActivate = { activates += 1 }
-        manager.onDeactivate = { deactivates += 1 }
+        wireSession(manager, accepts: false, onActivate: { activates += 1 }, onDeactivate: { deactivates += 1 })
 
-        tap(manager)                 // start
-        #expect(activates == 1)
-
-        manager.resetTapState()      // stands in for the cancel path
-
-        tap(manager)                 // must START, not stop
+        tap(manager)                 // start, refused
+        tap(manager)                 // must START again, not stop
         #expect(activates == 2)
         #expect(deactivates == 0)
     }
 
     @MainActor
-    @Test("double tap: after resetTapState two quick taps start a fresh recording")
-    func doubleTapAfterResetStarts() {
+    @Test("double tap: after a refused start two quick taps start again")
+    func doubleTapAfterRefusedStartStarts() {
         let manager = makeManager(mode: .doubleTap)
         var activates = 0
         var deactivates = 0
-        manager.onActivate = { activates += 1 }
-        manager.onDeactivate = { deactivates += 1 }
+        wireSession(manager, accepts: false, onActivate: { activates += 1 }, onDeactivate: { deactivates += 1 })
 
         tap(manager)
-        tap(manager)                 // two quick taps → start
-        #expect(activates == 1)
-
-        manager.resetTapState()      // stands in for the cancel path
-
+        tap(manager)                 // two quick taps → start, refused
         tap(manager)
         tap(manager)                 // two quick taps → start again
         #expect(activates == 2)
         #expect(deactivates == 0)
+    }
+
+    // Stands in for RiverSession: `accepts` decides whether a start begins a
+    // recording, and `isRecording` reports it until the next stop.
+    @MainActor
+    private func wireSession(
+        _ manager: HotkeyManager,
+        accepts: Bool = true,
+        onActivate: @escaping () -> Void,
+        onDeactivate: @escaping () -> Void
+    ) {
+        var recording = false
+        manager.isRecording = { recording }
+        manager.onActivate = {
+            onActivate()
+            if accepts { recording = true }
+        }
+        manager.onDeactivate = {
+            onDeactivate()
+            recording = false
+        }
     }
 
     @MainActor
