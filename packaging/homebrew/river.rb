@@ -28,11 +28,12 @@ cask "river" do
     On first launch, onboarding guides you through granting them in
     System Settings -> Privacy & Security.
 
-    First launch downloads the speech model (~240 MB). Every launch and
+    First launch downloads the speech model (~490 MB). Every launch and
     dictation after that is fully on-device.
   EOS
 
-  # `zap` also removes the app-specific model cache (~240 MB); a plain
+  # `zap` also removes the app-specific model cache (~490 MB, more if other
+  # models were tried); a plain
   # uninstall leaves it in place so a reinstall need not re-download it.
   zap trash: [
     "~/Library/Preferences/com.river.app.plist",

@@ -13,7 +13,7 @@ Hold (or tap) a key, speak, and your words appear at the cursor — in any app y
 - Text is typed straight in; your clipboard is never touched.
 - 100% on-device — no account, no telemetry, no subscription.
 
-First launch downloads the default model (~240 MB) into `~/Library/Application Support/River`. Everything after that is offline.
+First launch downloads the default model (~490 MB) into `~/Library/Application Support/River`. Everything after that is offline.
 
 ## Install
 

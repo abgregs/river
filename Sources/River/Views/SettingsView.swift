@@ -63,7 +63,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             // Switching keeps the previous model cached (planning 0021 disk-footprint
-            // decision: fast switch-back over reclaiming ~240–630 MB; the Homebrew cask
+            // decision: fast switch-back over reclaiming ~150 MB–1.6 GB; the Homebrew cask
             // `zap` clears the whole cache dir, so there's no in-app cleanup UI).
             Text("Changing the model downloads it the first time and briefly shows a loading status in the menu bar.")
                 .font(.callout)
