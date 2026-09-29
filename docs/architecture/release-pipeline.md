@@ -30,9 +30,11 @@ On a `v*` tag push, on an Apple Silicon runner:
    notarizes, and staples it.
 7. EdDSA-signs the DMG with `sign_update` and writes a single-item Sparkle
    appcast ([`scripts/make-appcast`](../../scripts/make-appcast)) — planning 0009.
-8. Publishes the DMG + a SHA-256 checksum + `appcast.xml` to the GitHub
-   Release, with the curated `CHANGELOG.md` section as the release body (the
-   same text feeds the appcast `<description>`).
+8. Publishes the DMG + a SHA-256 checksum + `appcast.xml` + the zipped dSYM
+   (`River-<version>.dSYM.zip`) to the GitHub Release, with the curated
+   `CHANGELOG.md` section as the release body (the same text feeds the appcast
+   `<description>`). The shipped binary is stripped; symbolicate a crash report
+   from that release with its dSYM, e.g. `atos -o River.dSYM/Contents/Resources/DWARF/River -arch arm64 -l <load address> <address>`.
 9. Renders the cask template ([`packaging/homebrew/river.rb`](../../packaging/homebrew/river.rb))
    with the new `version` + published `sha256` and pushes it to the tap repo's
    `Casks/river.rb` via `TAP_BUMP_TOKEN` — releases only, never
@@ -116,7 +118,7 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 Then: watch the Action and confirm the Release has `River-0.1.0.dmg` +
-`.dmg.sha256` + `appcast.xml` with the changelog section as its body, and that
+`.dmg.sha256` + `appcast.xml` + `.dSYM.zip` with the changelog section as its body, and that
 the tap's `Casks/river.rb` was bumped (release notes and cask are both
 automated — planning 0013). Releases are **immutable** — to fix a bad build,
 tag a new version; never replace an asset under an existing tag. If only the
