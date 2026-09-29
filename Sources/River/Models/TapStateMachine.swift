@@ -6,6 +6,11 @@ import Foundation
 /// `HotkeyManager` owns the trivial key-down→key-up pairing and calls `handleTap`
 /// on each completed tap; Hold mode never routes here. See
 /// requirements/activation-key-and-mode.md.
+///
+/// It keeps only the double-tap timing. Whether a recording is live is the
+/// session's state, passed in on every tap: a start the session refuses (model not
+/// ready, permission denied, a dictation still transcribing) leaves nothing here
+/// to undo, so the user's next tap is never read as a stop.
 @MainActor
 final class TapStateMachine {
     enum Action: Equatable { case start, stop, none }
@@ -13,7 +18,6 @@ final class TapStateMachine {
     enum State: Equatable {
         case idle
         case awaitingSecondTap(since: TimeInterval)  // double-tap only
-        case recording
     }
 
     private(set) var state: State = .idle
@@ -32,49 +36,34 @@ final class TapStateMachine {
     }
 
     /// Advances on one completed tap (key-down then key-up) and returns the action
-    /// the hotkey should fire.
-    func handleTap() -> Action {
+    /// the hotkey should fire. `isRecording` is the session's own state.
+    func handleTap(isRecording: Bool) -> Action {
         switch mode {
         case .hold:
             return .none  // Hold is handled inline by HotkeyManager, never here.
         case .singleTap:
-            if state == .recording {
-                state = .idle
-                return .stop
-            }
-            state = .recording
-            return .start
+            return isRecording ? .stop : .start
         case .doubleTap:
-            let t = now()
-            switch state {
-            case .recording:
+            if isRecording {
                 state = .idle
                 return .stop
-            case .awaitingSecondTap(let since):
-                if (t - since) * 1000 <= Double(windowMs) {
-                    state = .recording
-                    return .start
-                }
-                // Too slow — this tap becomes the new first tap.
-                state = .awaitingSecondTap(since: t)
-                return .none
-            case .idle:
-                state = .awaitingSecondTap(since: t)
-                return .none
             }
+            let t = now()
+            if case .awaitingSecondTap(let since) = state, (t - since) * 1000 <= Double(windowMs) {
+                state = .idle
+                return .start
+            }
+            // The first tap, or a second one too slow to pair: this tap starts a new pair.
+            state = .awaitingSecondTap(since: t)
+            return .none
         }
     }
 
-    /// Adopts a new mode mid-session. Clears a half-finished double-tap detection
-    /// but preserves an active `.recording` so a live mode change doesn't strand
-    /// the in-flight recording (it must still be stoppable). See
-    /// architecture/river-session.md on live-apply.
+    /// Adopts a new mode mid-session and clears a half-finished double-tap
+    /// detection. An in-flight recording needs nothing here: the next tap reads it
+    /// from the session and stops it. See architecture/river-session.md on live-apply.
     func setMode(_ newMode: ActivationMode) {
         mode = newMode
-        if state != .recording { state = .idle }
-    }
-
-    func reset() {
         state = .idle
     }
 }

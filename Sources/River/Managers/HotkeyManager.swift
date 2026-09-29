@@ -17,6 +17,9 @@ final class HotkeyManager {
     /// The cancel gesture fired (planning 0017). `RiverSession` guards it to
     /// `.recording`, so firing outside a recording is a harmless no-op.
     var onCancel: (() -> Void)?
+    /// Whether a recording is live, read on each completed tap in the tap modes.
+    /// `RiverSession` answers from its own state, the only "recording" there is.
+    var isRecording: () -> Bool = { false }
 
     private var watchedKeyCode: Int
     private var mode: ActivationMode
@@ -55,9 +58,9 @@ final class HotkeyManager {
 
     /// Live-apply for the watched key. Resets the press latch so a half-press
     /// of the old key can't fire a phantom deactivate against the new one. Does
-    /// NOT touch the tap machine: switching the key is a keycode refilter, and an
-    /// active `.recording` must survive so the new key can stop it (a stale
-    /// double-tap `awaiting` state self-clears via the time window).
+    /// NOT touch the tap machine: switching the key is a keycode refilter, and the
+    /// new key stops an active recording because the session still reports it (a
+    /// stale double-tap `awaiting` state self-clears via the time window).
     func setActivationKeyCode(_ code: Int) {
         guard watchedKeyCode != code else { return }
         logger.info("Activation key changed: \(self.watchedKeyCode, privacy: .public) -> \(code, privacy: .public)")
@@ -66,27 +69,13 @@ final class HotkeyManager {
     }
 
     /// Live-apply for the activation mode. Resets the press latch and hands the
-    /// new mode to the tap machine (which preserves an in-flight `.recording`).
+    /// new mode to the tap machine, which clears a half-finished double tap.
     func setActivationMode(_ newMode: ActivationMode) {
         guard mode != newMode else { return }
         logger.info("Activation mode changed: \(self.mode.rawValue, privacy: .public) -> \(newMode.rawValue, privacy: .public)")
         mode = newMode
         isKeyDown = false
         tapMachine.setMode(newMode)
-    }
-
-    /// Clears the tap machine after a recording was discarded out-of-band
-    /// (planning 0017). Cancel ends the recording through the session, not
-    /// through a tap, so the tap machine would otherwise stay in `.recording`
-    /// and consume the user's next tap as a `stop` for a recording that no
-    /// longer exists — costing them a keypress before a new one starts.
-    ///
-    /// Deliberately does NOT reset `isKeyDown`: in Hold mode the activation key
-    /// is physically held down during a cancel, and clearing the latch would
-    /// make the eventual release read as a press. Hold mode never routes through
-    /// the tap machine, so resetting only that is both sufficient and safe.
-    func resetTapState() {
-        tapMachine.reset()
     }
 
     // internal for testability — subscribes to the capability's event stream
@@ -123,7 +112,7 @@ final class HotkeyManager {
                 if isKeyDown { fireActivate() } else { fireDeactivate() }
             case .singleTap, .doubleTap:
                 guard !isKeyDown else { return }
-                switch tapMachine.handleTap() {
+                switch tapMachine.handleTap(isRecording: isRecording()) {
                 case .start: fireActivate()
                 case .stop: fireDeactivate()
                 case .none: break

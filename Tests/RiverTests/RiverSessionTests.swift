@@ -490,11 +490,12 @@ struct RiverSessionTests {
     @Test("in a tap mode, the tap after a cancel starts a new recording immediately")
     func tapAfterCancelStartsImmediately() async throws {
         // Planning 0017 field bug, observed on-device in both tap modes: cancel ends
-        // the recording through the session rather than through a tap, so without a
-        // reset the tap machine stays in `.recording` and eats the next tap as a
-        // `stop` for a recording that no longer exists. The user had to press the
-        // activation key twice to start again. Timing-independent — the stale state
-        // persists indefinitely, so this asserts behavior, not a race.
+        // the recording through the session rather than through a tap, and a tap
+        // machine with its own "recording" flag ate the next tap as a `stop` for a
+        // recording that no longer existed. The user had to press the activation key
+        // twice to start again. The machine now reads the session's state instead.
+        // Timing-independent — the stale state persisted indefinitely, so this
+        // asserts behavior, not a race.
         let env = makeSession()
         // Set the mode through the store, before `start()` subscribes — setting it
         // on the hotkey afterward gets overwritten when the configuration
@@ -519,6 +520,37 @@ struct RiverSessionTests {
         // The very next tap must start a fresh recording, not be swallowed.
         env.hotkey.handle(.flagsChanged(keyCode: key, flags: .maskAlternate))
         env.hotkey.handle(.flagsChanged(keyCode: key, flags: []))
+        try await Task.sleep(nanoseconds: 20_000_000)
+        #expect(env.session.currentState == .recording)
+    }
+
+    @MainActor
+    @Test("in a tap mode, the tap after a refused start starts a recording", arguments: [ActivationMode.singleTap, .doubleTap])
+    func tapAfterRefusedStartStartsRecording(mode: ActivationMode) async throws {
+        // Found in the 2026-09-28 architecture review: the tap machine kept its own
+        // "recording" flag, so when the session refused a start (model still
+        // preparing, a permission denied, a dictation still transcribing) the machine
+        // believed a recording was live and turned the user's next tap into a stop
+        // the session ignored. Tapping during "Preparing model" at launch cost the
+        // user a keypress. The session's state is the only "recording" there is.
+        let env = makeSession()
+        env.store.setValue(mode, for: Settings.activationMode)
+        try await env.session.start()
+        env.session.wireHotkeyCallbacks()
+        let key = Int64(Constants.defaultActivationKeyCode)
+        let activate = {
+            for _ in 0..<(mode == .doubleTap ? 2 : 1) {
+                env.hotkey.handle(.flagsChanged(keyCode: key, flags: .maskAlternate))
+                env.hotkey.handle(.flagsChanged(keyCode: key, flags: []))
+            }
+        }
+
+        env.transcription.setModelLoadStateForTesting(.loading)
+        activate()
+        #expect(env.session.currentState == .idle)   // refused: the model is not ready
+
+        env.transcription.setModelLoadStateForTesting(.ready)
+        activate()
         try await Task.sleep(nanoseconds: 20_000_000)
         #expect(env.session.currentState == .recording)
     }
