@@ -192,6 +192,10 @@ jobs:
         run: |
           set -euo pipefail
           shasum -a 256 "$DMG" > "$DMG.sha256"
+          # The shipped binary is stripped (Makefile `bundle`); its dSYM, same UUID,
+          # is what symbolicates a crash report from this build.
+          DSYM_ZIP="$RUNNER_TEMP/$APP_NAME-$VERSION.dSYM.zip"
+          ditto -c -k --keepParent ".build/arm64-apple-macosx/release/$APP_NAME.dSYM" "$DSYM_ZIP"
           # A suffixed tag (e.g. v0.0.1-rc1) publishes as a pre-release — the
           # safe way to exercise the pipeline without minting a "real" release.
           # The appcast rides along on every release; SUFeedURL points at
@@ -199,7 +203,7 @@ jobs:
           # Release body = the curated CHANGELOG section (planning 0013);
           # --generate-notes is only the pre-release fallback when no section
           # exists yet.
-          args=( "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" "$APPCAST" --title "$GITHUB_REF_NAME" )
+          args=( "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" "$APPCAST" "$DSYM_ZIP" --title "$GITHUB_REF_NAME" )
           if [ -n "${NOTES_FILE:-}" ]; then
             args+=( --notes-file "$NOTES_FILE" )
           else
