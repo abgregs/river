@@ -24,6 +24,17 @@ What the app should look, move, and sound like: the identity brief and the princ
 ### [decisions/](decisions/_index.md)
 ADRs — load-bearing architectural decisions and the rationale for *not* taking specific refactors. Read before re-suggesting a known-deferred change.
 
+## Cross-cutting axes
+
+Concerns that cut across categories, where two rules can each be accurate yet conflict. A doc review audits one axis at a time, reading every rule that touches it together.
+
+- **Network behavior** — model downloads, Sparkle's update check, and every "offline" or "on-device" claim. *last audited: 2026-09-29*
+- **Permissions and signing identity** — TCC, the capabilities, onboarding, and the dev versus Developer ID signatures. *last audited: never*
+- **The cycle state seam** — `RiverState` transitions and every observer: menu bar, panel, sounds, hotkey. *last audited: never*
+- **User content privacy** — audio, transcripts, logs, the clipboard, the eval corpus, and release artifacts. *last audited: never*
+- **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: never*
+- **Bundle and release artifacts** — the Makefile, `make verify`, the release workflow's assets, the cask, and the appcast. *last audited: never*
+
 ## Conventions of these docs
 
 - Files are kebab-case, single-topic, max ~150 lines.

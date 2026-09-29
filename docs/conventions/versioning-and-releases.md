@@ -42,8 +42,8 @@ An `.app` carries two version fields, serving different masters:
 
 | Channel | How users get the new version |
 |---|---|
-| **DMG download** | Manual — re-download from the Release page (no notification until [Sparkle](../planning/0009_sparkle-auto-update.md) lands) |
-| **Homebrew** | `brew upgrade` (pull-based) — **requires bumping the cask** (`version` + `sha256`) in the tap each release |
+| **DMG download** | [Sparkle](../planning/0009_sparkle-auto-update.md) offers it in-app: automatically once the user agrees at first launch, or via "Check for Updates…" |
+| **Homebrew** | `brew upgrade` (pull-based); the release workflow bumps the tap's cask (`version` + `sha256`) on every release ([0013](../planning/0013_release-automation.md)) |
 | **Source build** | `git pull` + `make install` |
 
 See [distribution.md](../architecture/distribution.md) for the full update story.
@@ -53,4 +53,4 @@ See [distribution.md](../architecture/distribution.md) for the full update story
 - [../architecture/release-pipeline.md](../architecture/release-pipeline.md) — the pipeline that runs on a tag; secrets and setup
 - [../architecture/distribution.md](../architecture/distribution.md) — channels, signing identities, update delivery
 - [git.md](git.md) — tag protection and the merge-to-`main` flow
-- [../planning/0009_sparkle-auto-update.md](../planning/0009_sparkle-auto-update.md) — planned in-app auto-update
+- [../planning/0009_sparkle-auto-update.md](../planning/0009_sparkle-auto-update.md) — in-app auto-update, shipped in v0.1.0

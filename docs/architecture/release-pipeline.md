@@ -5,10 +5,11 @@ How a public release is built, signed, notarized, and published. The pipeline is
 implements the security requirements in
 [../planning/0005_release-pipeline-security.md](../planning/0005_release-pipeline-security.md).
 
-> **Status (2026-06-22): in production.** The pipeline ran on the `v0.1.0` tag —
-> it produced a Developer-ID-signed, notarized, stapled `River-0.1.0.dmg` +
-> its SHA-256, published to the GitHub Release and feeding the live Homebrew tap.
-> M11's exit criteria are met; the flow below is the proven release path, not a draft.
+> **Status: in production.** The pipeline shipped `v0.1.0` (2026-09-18) and
+> `v0.2.0` (2026-09-28): Developer-ID-signed, notarized, stapled DMGs published to
+> GitHub Releases, feeding Sparkle and the live Homebrew tap. Its first run was the
+> June `v0.1.0`, since withdrawn ([../planning/0027_project-naming.md](../planning/0027_project-naming.md)).
+> The flow below is the proven release path, not a draft.
 
 ## What it does
 
@@ -21,8 +22,10 @@ On a `v*` tag push, on an Apple Silicon runner:
    published; a suffixed pre-release tag falls back to generated notes
    (planning 0013). Then stamps the version from the tag into `Info.plist`.
 3. Imports the Developer ID cert into an **ephemeral keychain**.
-4. `make verify` — builds release, assembles the bundle, signs with Developer ID
-   (`--options runtime`), and runs the `codesign -dv` identifier check. Passes
+4. `make verify` — builds release, assembles the bundle (stripping the binary and
+   embedding Sparkle arm64-only), signs with Developer ID (`--options runtime`),
+   and checks the identifier, the icon and glyphs, the stripped binary, and the
+   arm64-only Sparkle. Passes
    `SWIFT_FLAGS=-Xswiftc -DRIVER_RELEASE` so the dev-only Skip button is
    compiled out (see [permissions.md](permissions.md)).
 5. Notarizes the app via `notarytool --wait`, staples it.

@@ -1,6 +1,6 @@
 # Planning: Pixel identity — the pixel r in the indicator, menu bar, and icon (roadmap 0029)
 
-**Implemented 2026-09-24** on `feat/pixel-identity`. Replaces the marks 0028 shipped — the three-strand river indicator, the five-slat menu bar glyph, and the slat app icon — with one pixel-grid lowercase **r**, approved by the maintainer on 2026-09-24 after three rounds of prototypes. The accent tokens, the panel window, the toast rectangle, and every seam 0028 set up are unchanged. The reference implementation is [../design/studies/pixel-identity.html](../design/studies/pixel-identity.html): every number below was tuned there, and the rounds that led to it are recorded in [../design/pixel-identity.md](../design/pixel-identity.md).
+**Implemented 2026-09-24; shipped in v0.2.0 (2026-09-28)** via #52. Replaces the marks 0028 shipped — the three-strand river indicator, the five-slat menu bar glyph, and the slat app icon — with one pixel-grid lowercase **r**, approved by the maintainer on 2026-09-24 after three rounds of prototypes. The accent tokens, the panel window, the toast rectangle, and every seam 0028 set up are unchanged. The reference implementation is [../design/studies/pixel-identity.html](../design/studies/pixel-identity.html): every number below was tuned there, and the rounds that led to it are recorded in [../design/pixel-identity.md](../design/pixel-identity.md).
 
 ## Problem
 
