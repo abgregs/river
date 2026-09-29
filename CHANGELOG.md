@@ -17,6 +17,10 @@ show as raw text. -->
 
 ## [Unreleased]
 
+### Changed
+
+- River is about half its previous size: the app is 4.7 MB, down from 9.2 MB, and the download shrinks too. It no longer carries its debug symbols, or the Intel code in its update framework, neither of which it ever used.
+
 ### Fixed
 
 - In Single Tap and Double Tap modes, a tap River turns down no longer swallows your next one. Tapping while the model was still preparing, while a permission was missing, or while the last dictation was still transcribing used to make the following tap do nothing.

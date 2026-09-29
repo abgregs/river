@@ -8,6 +8,12 @@ APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 # SwiftPM drops it next to the release products; the bundle embeds it.
 SPARKLE_FRAMEWORK := $(RELEASE_BIN_DIR)/Sparkle.framework
 SPARKLE_EMBEDDED := $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework
+# Every executable inside the embedded framework; `verify` checks each is arm64-only.
+SPARKLE_BINARIES := $(SPARKLE_EMBEDDED)/Versions/B/Sparkle \
+	$(SPARKLE_EMBEDDED)/Versions/B/Autoupdate \
+	$(SPARKLE_EMBEDDED)/Versions/B/Updater.app/Contents/MacOS/Updater \
+	$(SPARKLE_EMBEDDED)/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader \
+	$(SPARKLE_EMBEDDED)/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer
 # Extra flags forwarded to `swift build`. Empty for local builds; the release
 # workflow passes `-Xswiftc -DRIVER_RELEASE` to compile out dev-only UI.
 SWIFT_FLAGS ?=
@@ -46,13 +52,24 @@ bundle: build
 	mkdir -p $(APP_BUNDLE)/Contents/Resources
 	mkdir -p $(APP_BUNDLE)/Contents/Frameworks
 	cp $(RELEASE_BIN_DIR)/$(APP_NAME) $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
+	# Ship the binary without its symbol table, as an Xcode archive does: it is over
+	# half the file and nothing reads it at runtime. The dSYM SwiftPM writes beside
+	# the build carries the same UUID, so crash reports stay symbolicable; the
+	# release workflow publishes it with each release.
+	strip $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 	cp $(INFO_PLIST) $(APP_BUNDLE)/Contents/Info.plist
 	cp $(MENU_BAR_GLYPHS)/*.png $(APP_BUNDLE)/Contents/Resources/
 	cp $(APP_ICON) $(APP_BUNDLE)/Contents/Resources/
 	# Embed Sparkle.framework and point the binary's rpath at Contents/Frameworks
 	# so @rpath/Sparkle.framework resolves at launch. `ditto` preserves the
 	# framework's version symlinks; without the embed the app fails to launch.
-	ditto $(SPARKLE_FRAMEWORK) $(SPARKLE_EMBEDDED)
+	# Sparkle ships universal binaries; `--arch arm64` drops the Intel half River
+	# never runs (Apple Silicon only), and the headers and module map exist only for
+	# compiling against the framework. `sign` re-signs everything the copy changed.
+	ditto --arch arm64 $(SPARKLE_FRAMEWORK) $(SPARKLE_EMBEDDED)
+	rm -rf $(SPARKLE_EMBEDDED)/Headers $(SPARKLE_EMBEDDED)/PrivateHeaders $(SPARKLE_EMBEDDED)/Modules \
+		$(SPARKLE_EMBEDDED)/Versions/B/Headers $(SPARKLE_EMBEDDED)/Versions/B/PrivateHeaders \
+		$(SPARKLE_EMBEDDED)/Versions/B/Modules
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 
 sign: bundle
@@ -99,6 +116,14 @@ verify: sign
 	@/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" $(APP_BUNDLE)/Contents/Info.plist >/dev/null || \
 		(echo "FAIL: Info.plist has no CFBundleIconFile"; exit 1)
 	@echo "OK: app icon present"
+	@test "$$(nm -U $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME) | wc -l)" -le 1 || \
+		(echo "FAIL: the app binary still carries its symbol table"; exit 1)
+	@echo "OK: app binary stripped"
+	@for bin in $(SPARKLE_BINARIES); do \
+		test "$$(lipo -archs $$bin)" = arm64 || \
+			(echo "FAIL: $$bin is not arm64-only"; exit 1) || exit 1; \
+	done
+	@echo "OK: Sparkle is arm64-only"
 	@echo "--- entitlements ---"
 	@codesign -d --entitlements - --xml $(APP_BUNDLE) 2>/dev/null | plutil -p - || true
 ifneq ($(SIGN_IDENTITY),$(DEV_SIGN_IDENTITY))
