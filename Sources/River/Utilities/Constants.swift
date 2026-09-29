@@ -46,7 +46,7 @@ enum Constants {
     // WhisperKit model identifier. `small.en` is the default because the custom
     // dictionary (prompt-token biasing) is unreliable on smaller models: `base.en`
     // degenerates to empty output when given a prompt (verified via the A/B eval
-    // harness — see requirements/custom-dictionary.md). `small.en` (~240 MB) handles
+    // harness — see requirements/custom-dictionary.md). `small.en` (~490 MB) handles
     // prompts robustly and is more accurate, at some cost in speed/memory. The model
     // picker (planning 0021) lets speed-focused users drop back to `base.en`; this is
     // the default the `Settings.selectedModel` key sources.
@@ -57,7 +57,8 @@ enum Constants {
     // these four are placeholders: the two known-good English models plus two stronger
     // candidates that have never been evaluated here. Names are the exact
     // `argmaxinc/whisperkit-coreml` repo folders WhisperKit downloads (verified against
-    // WhisperKit 0.18's model tables). Sizes are approximate on-disk footprints. Each
+    // WhisperKit 0.18's model tables). Sizes are each folder's total in that repo, which
+    // matches the on-disk footprint (measured 2026-09-29). Each
     // entry must earn its place via a 0022 scorecard before this list is finalized.
     static let curatedModels: [ModelOption] = [
         ModelOption(
@@ -68,17 +69,17 @@ enum Constants {
         ModelOption(
             name: defaultModel,   // openai_whisper-small.en
             label: "Small (English)",
-            hint: "Balanced speed and accuracy (~240 MB). Current default."
+            hint: "Balanced speed and accuracy (~490 MB). Current default."
         ),
         ModelOption(
             name: "distil-whisper_distil-large-v3",
             label: "Distil Large v3",
-            hint: "High accuracy, distilled for speed (~600 MB)."
+            hint: "High accuracy, distilled for speed (~1.5 GB). The first load can take a few minutes."
         ),
         ModelOption(
             name: "openai_whisper-large-v3-v20240930_turbo",
             label: "Large v3 Turbo",
-            hint: "Most accurate, turbo decoding (~630 MB). Slowest to load."
+            hint: "Most accurate, turbo decoding (~1.6 GB). Slowest to load; the first load can take a few minutes."
         ),
     ]
 

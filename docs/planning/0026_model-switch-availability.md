@@ -29,7 +29,7 @@ Session-side contracts are untouched: switches still apply only at `.idle` (defe
 2. Switching away from a mid-download model does not cancel it; when it completes, the model reads as cached and a later switch to it needs no download. The completion never mutates the active model's published `ModelLoadState`.
 3. `isModelCached` returns false for a partial model directory (fixture: a dir containing only a config-sized subset) and true for a complete one.
 4. Re-picking a model whose load `.failed` retries the load; the failure emits a one-shot toast on the HUD instead of a pinned panel.
-5. Picker size hints match 0022 scorecard on-disk measurements, and heavy-model hints mention that the first load takes minutes (CoreML compilation).
+5. Picker size hints match 0022 scorecard on-disk measurements, and heavy-model hints mention that the first load takes minutes (CoreML compilation). *Done 2026-09-29, measured from the `argmaxinc/whisperkit-coreml` repo instead (no scorecards exist yet; the three models on the maintainer's Mac matched it exactly): base.en 147 MB, small.en 487 MB, distil-large-v3 1.5 GB, large-v3 turbo 1.6 GB.*
 
 ## Related
 

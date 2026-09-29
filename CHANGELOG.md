@@ -23,6 +23,7 @@ show as raw text. -->
 
 ### Fixed
 
+- The model picker's sizes now match the download. The larger models were listed at less than half their real size: Small is about 490 MB, Distil Large v3 about 1.5 GB, and Large v3 Turbo about 1.6 GB.
 - In Single Tap and Double Tap modes, a tap River turns down no longer swallows your next one. Tapping while the model was still preparing, while a permission was missing, or while the last dictation was still transcribing used to make the following tap do nothing.
 - River no longer goes online every time it starts. When the speech model is already downloaded, River loads it straight from disk, so "Preparing model" finishes sooner and River works without a network connection. Before, an offline start with the model already downloaded failed until River was relaunched.
 

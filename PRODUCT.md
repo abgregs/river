@@ -33,7 +33,7 @@ Three things together, which a neighboring product cannot truthfully copy withou
 - Lives in the menu bar; the user's attention is in whatever app they are typing into, not in River.
 - The whole cycle is one activation key, configurable across ten modifier keys, in Hold, Single Tap, or Double Tap mode.
 - macOS gates the app on three permissions: Microphone, Input Monitoring, and Accessibility. First run is a permissions walkthrough, and permission state is an ongoing part of the experience, not a one-time setup step.
-- First launch downloads a speech model, roughly 140 MB to 1.4 GB depending on the choice, into Application Support. Every launch and dictation after that is offline. Large models take minutes to prepare on first load.
+- First launch downloads a speech model, roughly 150 MB to 1.6 GB depending on the choice, into Application Support. Every launch and dictation after that is offline. Large models take minutes to prepare on first load.
 - Updates arrive in-app via Sparkle; Homebrew defers to it.
 
 ## Capabilities and Constraints
