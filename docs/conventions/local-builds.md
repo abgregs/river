@@ -112,10 +112,10 @@ Load time scales with model size:
 
 | Model | On-disk size |
 |---|---|
-| `openai_whisper-base.en` | ~140 MB |
-| `openai_whisper-small.en` | ~464 MB (the default) |
-| `distil-whisper_distil-large-v3` | ~1.4 GB |
-| `openai_whisper-large-v3-v20240930_turbo` | ~1.5 GB |
+| `openai_whisper-base.en` | ~150 MB |
+| `openai_whisper-small.en` | ~490 MB (the default) |
+| `distil-whisper_distil-large-v3` | ~1.5 GB |
+| `openai_whisper-large-v3-v20240930_turbo` | ~1.6 GB |
 
 When smoking anything **other than transcription quality** — cancel gestures, clipboard behavior, permissions, sound cues, HUD states — transcription accuracy is irrelevant. You only need words to come out. Use `base.en` and every rebuild gets dramatically cheaper.
 
