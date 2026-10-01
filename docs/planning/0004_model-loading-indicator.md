@@ -9,22 +9,22 @@ ready gets clear feedback instead of a silent failure.
 The custom dictionary needs the model fully loaded — including the tokenizer —
 before the first transcription, or the prompt is empty (see
 [../requirements/custom-dictionary.md](../requirements/custom-dictionary.md)).
-`TranscriptionService.loadModel()` now uses `load: true`, so the model genuinely
-loads into memory at launch, and the default `small.en` (~240 MB) makes the
+`TranscriptionManager.loadModel()` now uses `load: true`, so the model genuinely
+loads into memory at launch, and the default `small.en` (~490 MB) makes the
 first-ever run longer. During that window `transcribe` fail-fasts with
 `.modelNotLoaded` ("Couldn't transcribe. Transcription model is not loaded yet")
 and the spoken audio is lost — while the menu bar still shows "Ready," which is a
 lie until the model is warm.
 
 The fail-fast itself is deliberate (the cycle returns to `.idle` rather than hang
-— see `TranscriptionServiceTests` "model gate"), but with a real load at launch it
+— see `TranscriptionManagerTests` "model gate"), but with a real load at launch it
 is now hit often enough to need a user-visible surface.
 
 ## Desired behavior ("warm vs warming up" — the cache-hit analogy)
 
 - **Cold launch** (model not yet downloaded): status shows **"Downloading model…"**
   then **"Loading…"** — never "Ready" — until the model is in memory. First run
-  only (~240 MB).
+  only (~490 MB).
 - **Warm launch** (model already downloaded): **no re-download**; a brief
   **"Loading…"** while CoreML loads it into memory, then **"Ready."** (Each process
   start re-loads into memory — a few seconds — so "Ready" follows a short load, not
@@ -35,7 +35,7 @@ is now hit often enough to need a user-visible surface.
 
 ## Mechanism (sketch)
 
-- `TranscriptionService` exposes a load state (e.g. `downloading / loading / ready
+- `TranscriptionManager` exposes a load state (e.g. `downloading / loading / ready
   / failed`), distinguishing download from in-memory load.
 - `AppState` observes it via the existing Combine→`@Observable` bridge, and
   `MenuBarPresentation` maps it to the icon/label — extending the menu-bar layer
