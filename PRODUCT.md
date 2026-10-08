@@ -67,7 +67,7 @@ Three things together, which a neighboring product cannot truthfully copy withou
 
 ## Product Principles
 
-1. **The cursor is the product.** Text arrives where the user was already working. Any surface that pulls focus, steals the caret, or asks the user to come to River has failed.
+1. **The cursor is the product.** Text arrives where the user is already working, with nothing in between by default. A surface that draws attention away from the cursor has to earn its place by making dictation easier to follow or more accurate.
 2. **Local is the whole point.** On-device is not a feature flag or a privacy claim in marketing copy; it is the reason the product exists and it constrains every future capability.
 3. **Model-neutral.** The speech model is an implementation detail that will change. Nothing in the name, interface, or copy ties the product to one.
 4. **Permissions are the app's job, not the user's.** The app determines its own permission state and asks for the minimum; it never makes the user perform its bookkeeping.
