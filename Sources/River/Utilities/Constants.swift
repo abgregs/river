@@ -31,7 +31,7 @@ enum Constants {
     // keyboards, is rarely chorded during dictation (unlike Command/Control/Shift,
     // which would false-cancel on every shortcut), and is distinct from the default
     // activation key. The menu-bar "Cancel Recording" item is the always-available
-    // discoverable fallback. Internal tunable, not a user setting (load-bearing rule
+    // discoverable fallback. Internal tunable, not a user setting (AGENTS.md rule
     // #5). If it ever equals the watched activation key the gesture disables itself
     // (the menu item still works). Verify fn delivers a `.flagsChanged` with keycode
     // 63 on-device — the Globe key is special-cased on some keyboards.
@@ -97,7 +97,7 @@ enum Constants {
     // Silence-trim energy gate: a 16 kHz window whose RMS is below this (linear
     // amplitude, not dBFS) is treated as silence and dropped from the ends of the
     // recording. Internal tunable, not a setting — the user shouldn't reason about
-    // dBFS (load-bearing rule #5). First-pass value: an on-device probe with
+    // dBFS (AGENTS.md rule #5). First-pass value: an on-device probe with
     // ad-hoc clips showed real room tone peaks ABOVE it (~0.02 RMS windows), so
     // the trim only catches near-digital silence; realistic near-silence is
     // handled by `TranscriptionManager.isNonSpeechAnnotation` instead. Tune
@@ -144,7 +144,7 @@ enum Constants {
     static let decodingTemperatureFallbackCount: Int = 5
 
     // Recording-indicator HUD (planning 0002/0018/0020). These are internal
-    // tunables, NOT settings: the HUD has no user-facing configuration (load-bearing
+    // tunables, NOT settings: the HUD has no user-facing configuration (AGENTS.md
     // rule #5), so its timing, layout, and thresholds live here.
 
     // Fade in/out duration for the HUD panel. The panel is ordered out only after

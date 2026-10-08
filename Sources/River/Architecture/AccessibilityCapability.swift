@@ -94,7 +94,7 @@ final class AccessibilityCapability: Capability {
     }
 
     /// Post a synthesized `CGEvent`. This is the **only** `CGEvent.post` call
-    /// site in the project (load-bearing rule #3 in CLAUDE.md). Throws if
+    /// site in the project (AGENTS.md rule #3). Throws if
     /// status is not `.granted`. Production calls deliver to
     /// `.cghidEventTap` so the event traverses the full input pipeline and
     /// target apps see it as a real keystroke.

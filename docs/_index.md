@@ -22,7 +22,7 @@ Active and future work: the walking-skeleton milestone, milestone roadmap, curre
 What the app should look, move, and sound like: the identity brief and the principles each surface is designed against.
 
 ### [decisions/](decisions/_index.md)
-ADRs — load-bearing architectural decisions and the rationale for *not* taking specific refactors. Read before re-suggesting a known-deferred change.
+Decision records — why specific refactors were or weren't taken, and when to revisit them. Read before re-suggesting a known-deferred change.
 
 ## Cross-cutting axes
 

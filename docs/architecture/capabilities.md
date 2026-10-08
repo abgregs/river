@@ -56,7 +56,7 @@ final class AccessibilityCapability: Capability {
 }
 ```
 
-**Only `AccessibilityCapability` calls `CGEvent.post`. Only `MicrophoneCapability` starts the audio engine. Only `InputMonitoringCapability` creates the tap.** This is the load-bearing invariant.
+**Only `AccessibilityCapability` calls `CGEvent.post`. Only `MicrophoneCapability` starts the audio engine. Only `InputMonitoringCapability` creates the tap.** This is the layer's core rule (`AGENTS.md` rule 3).
 
 ## Status detection
 
