@@ -126,6 +126,30 @@ enum Constants {
     static let shortClipSeconds: Double = 1.2
     static let shortClipPadSeconds: Double = 0.5
 
+    // Streaming (0025 prototype; values from docs/planning/drafts/0025-streaming-review.md).
+    // A pause of `streamingPauseSeconds` after `streamingMinVoicedSeconds` of speech cuts a
+    // segment: 0.7 s cut thinking pauses into fragments, 1.0 s read better once joined. The
+    // voiced minimum is also the pre-decode gate (distil decodes noise as "Thank you."). A
+    // speaker who never pauses is cut every `streamingMaxSegmentSeconds`, at the quietest
+    // 100 ms in the last `streamingForcedCutSearchSeconds`: arbitrary cut instants cost 3–6 %
+    // WER, the quietest point none. Each segment is decoded with `streamingOverlapSeconds`
+    // of the previous one in front so the join can be aligned (3 s was no better than 2).
+    static let streamingPauseSeconds: Double = 1.0
+    static let streamingMinVoicedSeconds: Double = 1.5
+    static let streamingMaxSegmentSeconds: Double = 10
+    static let streamingForcedCutSearchSeconds: Double = 2
+    static let streamingOverlapSeconds: Double = 2
+    // The tail left at release after earlier segments is decoded only if it holds this much
+    // speech; less is a breath or room tone. A first guess: a 0.3 s fragment of real speech
+    // decoded to "I want" in the probe, so this sits just below it.
+    static let streamingTailMinVoicedSeconds: Double = 0.25
+    // Between cuts, the phrase still being spoken is decoded every
+    // `streamingProvisionalIntervalSeconds` of new audio, for the panel only, once it holds
+    // `streamingProvisionalMinVoicedSeconds` of speech (shorter fragments decode to partial
+    // words). First guesses, to tune on device.
+    static let streamingProvisionalIntervalSeconds: Double = 0.5
+    static let streamingProvisionalMinVoicedSeconds: Double = 1.0
+
     // Decoding thresholds pinned to upstream Whisper defaults (planning 0023): they
     // drive the temperature fallback for low-confidence segments and are *meant* to
     // gate silent audio to empty output — but an on-device probe showed they don't
@@ -201,6 +225,14 @@ enum Constants {
     // appearing or leaving can never move it (the shift the maintainer saw on cancel,
     // 2026-09-17, when a notice grew the content inside an already-sized panel).
     static let hudMessageReservedHeight: Double = 140
+
+    // The streaming transcript panel: its own surface, a fixed size, `hudStackSpacing` above
+    // the mark's panel. Bare prototype UI; scrolls when the text outgrows it.
+    static let transcriptPanelWidth: Double = 440
+    static let transcriptPanelHeight: Double = 176
+    static let transcriptPanelHorizontalPadding: Double = 16
+    static let transcriptPanelVerticalPadding: Double = 14
+    static let transcriptFontSize: Double = 14
 
     // Motion. The drop and the return move all sixteen pixels at once on a strong ease-out;
     // the return is the quicker of the two, as an exit should be.
