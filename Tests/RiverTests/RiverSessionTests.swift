@@ -689,6 +689,57 @@ struct RiverSessionTests {
         return buffer
     }
 
+    // MARK: - Streaming (0025 prototype)
+
+    @MainActor
+    @Test("with streaming on, a phrase shows before release and the text is inserted once at release")
+    func streamingShowsTextThenInsertsOnce() async throws {
+        // The whole point: the panel has text while the user is still talking, and the field
+        // still receives one insertion — nothing is typed mid-dictation.
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "hello world"
+        var shown = ""
+        let watch = env.session.liveTranscript.sink { shown = $0 }
+        defer { watch.cancel() }
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 2 s of sound
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }            // 1.2 s pause
+        await waitUntil { !shown.isEmpty }
+        #expect(shown == "hello world")
+        #expect(env.session.currentState == .recording)
+        #expect(env.accessibility.postedEventCountForTesting == 0)
+
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+        await env.session.handleDeactivate()
+
+        #expect(env.session.hasLastTranscript)
+        #expect(env.accessibility.postedEventCountForTesting > 0)
+        #expect(env.session.currentState == .idle)
+    }
+
+    @MainActor
+    @Test("with streaming off, nothing reaches the live transcript")
+    func streamingOffShowsNothing() async throws {
+        let env = makeSession()
+        env.store.setValue(false, for: Settings.streamingDictation)
+        env.transcription.transcribeResultForTesting = "hello world"
+        var shown: [String] = []
+        let watch = env.session.liveTranscript.sink { shown.append($0) }
+        defer { watch.cancel() }
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+        await env.session.handleDeactivate()
+
+        #expect(shown.allSatisfy { $0.isEmpty })
+        #expect(env.session.hasLastTranscript)
+    }
+
     // MARK: - Last-transcript retention (planning 0019)
 
     @MainActor

@@ -48,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RecordingIndicatorCoordinator(appState: appState)
     }()
 
+    private(set) lazy var transcriptPanel: TranscriptPanelCoordinator = {
+        TranscriptPanelCoordinator(appState: appState)
+    }()
+
     private(set) lazy var soundFeedback: SoundFeedbackController = {
         SoundFeedbackController(appState: appState, settings: settings)
     }()
@@ -61,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.bind(microphone: microphone)
         onboarding.start()
         recordingIndicator.start()
+        transcriptPanel.start()
         soundFeedback.start()
         updater.start()
         Task { @MainActor in

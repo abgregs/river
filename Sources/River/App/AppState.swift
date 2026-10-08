@@ -30,6 +30,9 @@ final class AppState {
     /// Whether the session has retained a transcript for recovery (planning 0019).
     /// Availability only — content stays in the session, never in the UI layer.
     private(set) var hasLastTranscript: Bool = false
+    /// The current recording's streaming transcript (0025 prototype), shown in the
+    /// transcript panel. Empty when streaming is off or nothing has been decoded yet.
+    private(set) var liveTranscript: String = ""
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private let scheduleToastDismiss: ToastScheduler
@@ -54,6 +57,9 @@ final class AppState {
             .store(in: &cancellables)
         session.lastTranscriptAvailable
             .sink { [weak self] available in self?.apply(hasLastTranscript: available) }
+            .store(in: &cancellables)
+        session.liveTranscript
+            .sink { [weak self] text in self?.liveTranscript = text }
             .store(in: &cancellables)
     }
 

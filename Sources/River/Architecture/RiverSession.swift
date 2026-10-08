@@ -49,6 +49,12 @@ final class RiverSession {
     }
     private let lastTranscriptAvailableSubject = CurrentValueSubject<Bool, Never>(false)
 
+    // The recording's live transcription when streaming is on (0025 prototype); nil otherwise.
+    private var stream: DictationStream?
+    // The text transcribed so far for the transcript panel. Unlike `lastTranscript` this
+    // content does reach the UI layer: showing it is the point. Still never logged.
+    private let liveTranscriptSubject = CurrentValueSubject<String, Never>("")
+
     private var isStarted = false
     private var cancellables = Set<AnyCancellable>()
     // A list, not a single slot: two settings (key + mode) can both be deferred
@@ -86,6 +92,8 @@ final class RiverSession {
     var lastTranscriptAvailable: AnyPublisher<Bool, Never> { lastTranscriptAvailableSubject.eraseToAnyPublisher() }
     // internal for testability — availability only, never the content.
     var hasLastTranscript: Bool { lastTranscript != nil }
+    // The streaming transcript of the current recording, for the transcript panel.
+    var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
 
     init(
         accessibility: AccessibilityCapability,
@@ -187,8 +195,20 @@ final class RiverSession {
         }
         stateSubject.send(.recording)
         logger.info("State -> recording")
+        liveTranscriptSubject.send("")
+        let stream = settings.value(for: Settings.streamingDictation) ? makeStream() : nil
+        self.stream = stream
         let audio = self.audio
-        Task { @MainActor in await audio.startRecording() }
+        Task { @MainActor in
+            await audio.startRecording(onSamples: stream.map { stream in { stream.append($0) } })
+        }
+    }
+
+    private func makeStream() -> DictationStream {
+        let transcription = self.transcription
+        let stream = DictationStream { samples in try await transcription.transcribe(audioSamples: samples) }
+        stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
+        return stream
     }
 
     // internal for testability — full cycle: `.recording` → `.processing` →
@@ -203,10 +223,27 @@ final class RiverSession {
         }
         stateSubject.send(.processing)
         logger.info("State -> processing")
+        let stream = self.stream
+        self.stream = nil
+        let released = ContinuousClock.now
         do {
             let samples = try await audio.stopRecording()
             logger.info("Captured \(samples.count, privacy: .public) samples")
-            if samples.isEmpty {
+            if let stream, stream.cutCount > 0 {
+                // Streaming: the segments are already decoded; only the tail is left.
+                let outcome = await stream.finish()
+                logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s")
+                if let error = outcome.error {
+                    errorSubject.send(.transcription(underlying: error))
+                }
+                if outcome.text.isEmpty {
+                    logger.info("Stream found no speech; skipping paste")
+                } else {
+                    liveTranscriptSubject.send(outcome.text)
+                    await deliver(outcome.text)
+                }
+            } else if samples.isEmpty {
+                stream?.cancel()
                 // Buffers arrived but the silence trim removed everything: an
                 // all-silence recording (a stray key-brush, an accidental tap). The
                 // user said nothing — NOT a failure. Drop silently: don't decode
@@ -218,19 +255,16 @@ final class RiverSession {
                 // throws `.emptyTranscription` below and surfaces loudly.
                 logger.info("Recording was all silence after trim; skipping decode")
             } else {
+                // No pause long enough to cut (or streaming off): the one-shot decode,
+                // after any provisional decode still running, so the two never overlap.
+                if let stream {
+                    await stream.cancelAndWait()
+                    logger.info("Stream made no cut (\(stream.provisionalCount, privacy: .public) provisional); decoding in one piece")
+                }
                 do {
                     let text = try await transcription.transcribe(audioSamples: samples)
                     logger.info("Transcribed \(text.count, privacy: .public) chars")
-                    // Retain before the paste attempt: recovery is available even
-                    // when insertion fails (planning 0019 AC1). Content is never
-                    // logged — only its count is; see logging.md anti-pattern #4.
-                    lastTranscript = text
-                    do {
-                        try await textInsertion.insertText(text)
-                    } catch {
-                        logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-                        errorSubject.send(.textInsertion(underlying: error))
-                    }
+                    await deliver(text)
                 } catch TranscriptionError.noSpeechDetected {
                     // Decode heard only non-speech (breath, room tone, music the
                     // trim didn't catch): same policy as the all-silence branch
@@ -245,6 +279,7 @@ final class RiverSession {
                 }
             }
         } catch {
+            stream?.cancel()
             logger.error("Audio capture failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             errorSubject.send(.audioCapture(underlying: error))
         }
@@ -252,6 +287,24 @@ final class RiverSession {
         logger.info("State -> idle")
         applyPendingReconfigurations()
         applyPendingModelSwitch()
+    }
+
+    // Retains the transcript, then types it at the cursor. Retained before the paste
+    // attempt: recovery is available even when insertion fails (planning 0019 AC1).
+    // Content is never logged — only its count is; see logging.md anti-pattern #4.
+    private func deliver(_ text: String) async {
+        lastTranscript = text
+        do {
+            try await textInsertion.insertText(text)
+        } catch {
+            logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+            errorSubject.send(.textInsertion(underlying: error))
+        }
+    }
+
+    private static func seconds(since start: ContinuousClock.Instant) -> Double {
+        let elapsed = ContinuousClock.now - start
+        return Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
     }
 
     // internal for testability — the first known-denied required capability, or nil
@@ -285,6 +338,9 @@ final class RiverSession {
             return
         }
         logger.info("Cancel: discarding in-flight recording (no transcription, no paste)")
+        stream?.cancel()
+        stream = nil
+        liveTranscriptSubject.send("")
         let audio = self.audio
         Task { @MainActor in await audio.discardRecording() }
         stateSubject.send(.idle)

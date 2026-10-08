@@ -35,6 +35,13 @@ enum Settings {
         name: "playFeedbackSounds",
         defaultValue: false
     )
+    // Transcribe while the user speaks and show the text above the indicator (0025
+    // prototype). Insertion still happens once, at release. Read at the start of each
+    // recording. Off restores the one-shot decode, for comparison.
+    static let streamingDictation = SettingKey<Bool>(
+        name: "streamingDictation",
+        defaultValue: true
+    )
 }
 
 @MainActor

@@ -13,6 +13,8 @@ struct SettingsView: View {
     private var playFeedbackSounds: Bool = Settings.playFeedbackSounds.defaultValue
     @AppStorage(Settings.selectedModel.name)
     private var selectedModel: String = Settings.selectedModel.defaultValue
+    @AppStorage(Settings.streamingDictation.name)
+    private var streamingDictation: Bool = Settings.streamingDictation.defaultValue
 
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "app")
 
@@ -66,6 +68,10 @@ struct SettingsView: View {
             // decision: fast switch-back over reclaiming ~150 MB–1.6 GB; the Homebrew cask
             // `zap` clears the whole cache dir, so there's no in-app cleanup UI).
             Text("Changing the model downloads it the first time and briefly shows a loading status in the menu bar.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Toggle("Transcribe while I speak", isOn: $streamingDictation)
+            Text("Shows the text above the indicator as you talk. It is typed when you stop, as before.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
