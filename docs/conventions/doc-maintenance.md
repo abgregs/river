@@ -35,10 +35,11 @@
   - landed work whose planning status is stale (`current-focus.md`, `_index.md` markers).
 - **Flag, never edit:**
   - partial migrations — both patterns coexist; surface the conflict, don't average it;
-  - drift against the docs-authoritative set below — code drifting from those docs is a suspected regression to report, never a doc update;
+  - drift against the platform invariants below — code drifting from those docs is a suspected regression to report, never a doc update;
+  - code that departs from a project convention or decision — `AGENTS.md` rules 3–5, [anti-patterns.md](anti-patterns.md), anything under `docs/decisions/` — reported with its evidence and presumed wrong on neither side; the maintainer decides whether the code or the doc changes;
   - doc deletions beyond line-level edits;
   - anything whose intent cannot be evidenced.
-- **The docs-authoritative set**, enumerated by location, not adjective: `AGENTS.md`'s numbered load-bearing rules; everything under `docs/decisions/`; [../architecture/threading-invariant.md](../architecture/threading-invariant.md); [anti-patterns.md](anti-patterns.md). Everywhere else, merged code is the source of truth and the docs follow it. Doubt about whether something belongs to the set is itself a flag.
+- **The platform invariants**, enumerated by location, not adjective: `AGENTS.md` rules 1–2; [../architecture/threading-invariant.md](../architecture/threading-invariant.md). They describe macOS behavior that fails silently, so code is presumed wrong when it drifts from them. Everywhere else, merged code is the source of truth and the docs follow it, except that conventions and decisions are flagged rather than edited (above). Doubt about whether something is a platform invariant is itself a flag.
 - The routine never edits code, never force-pushes, never creates tags, and never merges or approves its own PRs.
 
 ## PR format and lifecycle
@@ -58,4 +59,5 @@
 
 - [../planning/0015_automated-doc-sync.md](../planning/0015_automated-doc-sync.md) — why this exists; credential scope and the decisions behind the design
 - [git.md](git.md) — branch naming (the reserved `docs/doc-sync-*` prefix), commit format, and the PR skeleton
-- [anti-patterns.md](anti-patterns.md) + [../architecture/threading-invariant.md](../architecture/threading-invariant.md) — two members of the docs-authoritative set
+- [../architecture/threading-invariant.md](../architecture/threading-invariant.md) — a platform invariant
+- [anti-patterns.md](anti-patterns.md) — conventions the routine flags rather than edits

@@ -1,6 +1,6 @@
 # Conventions: Anti-Patterns
 
-Explicit "do not do this" list, with the why. Each entry exists because the pattern looks reasonable in isolation and has a sharp edge that has bitten this kind of app before.
+Explicit "do not do this" list, with the why. Each entry exists because the pattern looks reasonable in isolation and has a sharp edge that has bitten this kind of app before. These are current conventions, not permanent law: when a change has a better answer, it updates the entry in the same PR.
 
 Some entries below are marked **structurally impossible** — the architecture makes them not just forbidden but unreachable. They're kept in this doc so a contributor encountering an unfamiliar piece of code understands the rule that shaped its design.
 

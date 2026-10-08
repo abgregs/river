@@ -4,7 +4,7 @@ import SwiftUI
 
 /// A borderless panel that can *never* become key or main. Surfacing it during a
 /// recording therefore cannot pull focus off the user's frontmost text field, so
-/// the paste still lands (planning 0002 acceptance criterion 3 — the load-bearing
+/// the paste still lands (planning 0002 acceptance criterion 3 — the
 /// "never steal focus" constraint). Focus safety is structural: these overrides
 /// plus `.nonactivatingPanel` in the style mask, plus the coordinator never calling
 /// `makeKey`/`activate` (it uses `orderFrontRegardless` only).

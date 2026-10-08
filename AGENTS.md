@@ -34,12 +34,14 @@ Three deep modules carry most of the design:
 
 Read the three docs above before adding code that touches the cycle, a permission, or a setting.
 
-## Load-bearing rules that must not regress
+## Architecture rules
+
+Rules 1 and 2 are facts about macOS: break one and the app fails silently, so they hold unless the platform changes. Rules 3–5 are the project's current conventions. Each has a reason, and each can change: a change that departs from one says so in its PR and updates the rule and its doc in the same change.
 
 1. **Event tap thread invariant** — owned by `InputMonitoringCapability`. The CFRunLoop runs on a dedicated `com.river.eventtap` background thread with QoS `.userInteractive`. Never on the main run loop. See [docs/architecture/threading-invariant.md](docs/architecture/threading-invariant.md).
 2. **Bundle integrity** — `Info.plist` and `--entitlements` are mandatory at sign time, and `Contents/Resources` must carry the app icon and the menu bar glyphs. `make verify` (run by `make install` and the release workflow) asserts the bundle identifier, the icon plus its `CFBundleIconFile` key, and every glyph file, and fails loudly. There is no runtime detector for a malformed bundle or a missing asset, so neither must ever get past the build. See [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md) item #3 and [docs/conventions/test-harnesses.md](docs/conventions/test-harnesses.md).
-3. **One source of truth for OS API calls.** `CGEvent.post`, `AVAudioEngine.start`, and `CGEvent.tapCreate` are each called in exactly one place — the corresponding capability. Adding a second call site defeats the design.
-4. **One source of truth for `UserDefaults` key strings.** Each key appears in exactly one `SettingKey` declaration. `@AppStorage` references it via `Settings.x.name`. Inline string literals are a regression. See [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md) item #8.
+3. **One source of truth for OS API calls.** `CGEvent.post`, `AVAudioEngine.start`, and `CGEvent.tapCreate` are each called in exactly one place — the corresponding capability. A second call site means a second place that has to check the permission.
+4. **One source of truth for `UserDefaults` key strings.** Each key appears in exactly one `SettingKey` declaration. `@AppStorage` references it via `Settings.x.name`. An inline string literal can drift from the declared key without any error. See [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md) item #8.
 5. **Compile-time vs. runtime config** — user-facing settings live in `SettingsStore` from day 1, not in `Constants.swift`. `Constants` holds defaults that `Settings` keys reference, plus internal tunables.
 
-The previous-generation app's worst bugs (silent paste failure, mid-recording state corruption, lying permission checks, onboarding too late) became *structurally impossible* under this architecture — not via discipline, but because there is no code path that can produce them. Keep it that way.
+The previous-generation app's worst bugs (silent paste failure, mid-recording state corruption, lying permission checks, onboarding too late) have no code path in this architecture — not through discipline, but by design. A change that would reopen one should be a deliberate decision, not a side effect.
