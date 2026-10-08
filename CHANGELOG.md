@@ -11,11 +11,16 @@ workflow extracts a section as everything between its header and the next one, a
 Sparkle renders those notes literally in a <pre>, where stray link definitions would
 show as raw text. -->
 
-[Unreleased]: https://github.com/abgregs/river/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/abgregs/river/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/abgregs/river/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/abgregs/river/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/abgregs/river/releases/tag/v0.1.0
 
 ## [Unreleased]
+
+## [0.2.1] - 2026-10-08
+
+A smaller app that starts without a network, and taps that no longer get lost.
 
 ### Changed
 
@@ -26,6 +31,16 @@ show as raw text. -->
 - The model picker's sizes now match the download. The larger models were listed at less than half their real size: Small is about 490 MB, Distil Large v3 about 1.5 GB, and Large v3 Turbo about 1.6 GB.
 - In Single Tap and Double Tap modes, a tap River turns down no longer swallows your next one. Tapping while the model was still preparing, while a permission was missing, or while the last dictation was still transcribing used to make the following tap do nothing.
 - River no longer goes online every time it starts. When the speech model is already downloaded, River loads it straight from disk, so "Preparing model" finishes sooner and River works without a network connection. Before, an offline start with the model already downloaded failed until River was relaunched.
+
+### Known issues
+
+- **First recording with AirPods can come back empty.** With AirPods connected, the first dictation after launch can capture nothing: opening the microphone switches the AirPods to their call mode, and the recording stops hearing you. The next dictation works.
+- **A word spoken the instant you press can lose its first sound.** Recording starts a fraction of a second after the key press; pause for a beat before speaking.
+- **Trailing invented text.** After real speech, the model can append a plausible sentence that you never said — most often when a dictation ends with silence or breath. Silence trimming and no-speech gating reduce it; they do not eliminate it. Check what lands before sending it.
+- **Switching models mid-download.** A model still downloading in the background can make a cached model look unavailable, and a failed load needs a relaunch to retry.
+- **Permissions may need a Refresh.** After granting a permission in System Settings, onboarding does not always notice on its own; press Refresh, and on a first launch after an update you may need to relaunch River.
+- **Apple Silicon and macOS 14+ only.** There is no Intel build.
+- **English only.** The shipped models are the `.en` family.
 
 ## [0.2.0] - 2026-09-27
 
