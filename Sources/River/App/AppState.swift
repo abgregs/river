@@ -28,7 +28,7 @@ final class AppState {
     /// whenever not recording, so the HUD meter sits still outside a capture.
     private(set) var inputLevel: Float = 0
     /// Whether the session has retained a transcript for recovery (planning 0019).
-    /// Availability only — content stays in the session, never in the UI layer.
+    /// Availability only — the retained transcript itself stays in the session.
     private(set) var hasLastTranscript: Bool = false
     /// The current recording's streaming transcript (0025 prototype), shown in the
     /// transcript panel. Empty when streaming is off or nothing has been decoded yet.
