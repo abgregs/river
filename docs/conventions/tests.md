@@ -62,6 +62,7 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `HotkeyManager.handle(_:)` / `bindEventStream()` — interpretation and Combine binding seams, exercised by feeding synthetic `TapEvent`s
 - `InputMonitoringCapability.decode(_:)` — pure `CGEvent` → `TapEvent` decoder, `nonisolated` so the C tap callback can call it without crossing an actor boundary
 - `InputMonitoringCapability.publishForTest(_:)` — pushes a synthetic `TapEvent` into the stream, bypassing the real tap (which requires an Input Monitoring grant on the running process)
+- `RecordingIndicatorCoordinator.panel` — read-only, so `RecordingIndicatorCoordinatorTests` can check which real panel is up across a show and fade (planning 0030); the tests make each panel transparent so nothing flashes on screen
 - `MicrophoneCapability.publishForTest(_:)` — pushes a synthetic `AVAudioPCMBuffer` into the stream, bypassing the real engine
 - `MicrophoneCapability.skipEngineForTesting` — flag that turns `startEngine()` into a no-op. Required because the test runner usually *does* have Microphone permission, so without it the real engine starts and silent audio races with `publishForTest` buffers (M4 got this for free because `tapCreate` returns nil without IM grant; mic capture has no natural skip)
 - `AudioCaptureManager.convert(_:from:toSampleRate:)` — pure buffer-list → 16 kHz `[Float]` conversion via `AVAudioConverter`, exercised on synthetic 44.1 kHz buffers

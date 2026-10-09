@@ -23,7 +23,8 @@ final class NonActivatingPanel: NSPanel {
 @MainActor
 final class RecordingIndicatorCoordinator {
     private let appState: AppState
-    private var panel: NSPanel?
+    // internal for testability — read-only, so a test can see which panel is up.
+    private(set) var panel: NSPanel?
     private var orderOutWork: DispatchWorkItem?
 
     init(appState: AppState) {
@@ -83,11 +84,23 @@ final class RecordingIndicatorCoordinator {
     // Delay the actual `orderOut` so the SwiftUI opacity fade completes on screen
     // before the window is removed (planning 0002: "the fade must outlive the state
     // change; animate-then-remove").
+    //
+    // A panel that has been on screen is then replaced by a new one that hasn't
+    // (planning 0030). When a full-screen Space closes, the window server can take a
+    // shown panel off every Space, and ordering it front again never puts it back, so
+    // the HUD stays invisible until relaunch. A panel that has never been shown joins
+    // every current Space the first time it is ordered in.
     private func scheduleOrderOut() {
         guard panel != nil, orderOutWork == nil else { return }
         let work = DispatchWorkItem { [weak self] in
-            self?.panel?.orderOut(nil)
-            self?.orderOutWork = nil
+            guard let self, let panel = self.panel else { return }
+            self.orderOutWork = nil
+            let wasShown = panel.isVisible
+            panel.orderOut(nil)
+            if wasShown {
+                panel.close()
+                self.panel = self.makePanel()
+            }
         }
         orderOutWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Constants.hudFadeSeconds, execute: work)
