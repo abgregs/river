@@ -49,7 +49,7 @@ struct RiverIndicatorSnapshotTests {
                 .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
                 .padding(.vertical, Constants.indicatorPanelVerticalPadding)
                 .background {
-                    HUDSurface(shape: RoundedRectangle(cornerRadius: Constants.indicatorPanelCornerRadius, style: .continuous))
+                    HUDSurface(cornerRadius: Constants.indicatorPanelCornerRadius)
                 }
                 .padding(Constants.hudShadowMargin)
                 .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.92))

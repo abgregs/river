@@ -137,17 +137,17 @@ final class RecordingIndicatorCoordinator {
 
     // Fixed position (no caret anchoring, so no AX dependency): bottom-center of the
     // active screen's visible frame (planning 0002 "fixed-position, not caret-anchored").
-    // The capsule sits a fixed distance below the panel's top edge, so anchoring its
-    // bottom edge is arithmetic on constants — a message can never move it.
+    // The mark is the bottom of the content, one shadow margin above the panel's bottom
+    // edge, so anchoring it is arithmetic on constants — a message can never move it. The
+    // transparent margin below may overlap the Dock; the panel ignores the mouse.
     private func positionPanel(_ panel: NSPanel) {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let size = Self.panelSize
-        let capsuleBottomInPanel = size.height - Constants.hudShadowMargin - Constants.indicatorPanelHeight
         panel.setFrame(
             NSRect(
                 x: visible.midX - size.width / 2,
-                y: visible.minY + CGFloat(Constants.hudBottomMargin) - capsuleBottomInPanel,
+                y: visible.minY + CGFloat(Constants.hudBottomMargin) - Constants.hudShadowMargin,
                 width: size.width, height: size.height),
             display: false)
     }

@@ -175,41 +175,48 @@ enum Constants {
     // this outlives the return to `.idle`, so the fade animation completes on screen
     // before the window is removed (planning 0002 acceptance criterion 2).
     static let hudFadeSeconds: Double = 0.22
-    // Gap between the HUD panel and the bottom of the active screen's visible frame.
-    static let hudBottomMargin: Double = 120
+    // Gap between the mark's panel and the bottom of the active screen's visible frame (the
+    // Dock's top edge, or the screen's bottom when the Dock hides): about the gap between
+    // Dock icons, so the mark sits just above the Dock like one more tile.
+    static let hudBottomMargin: Double = 8
 
     // The pixel mark (planning 0029). Every number was tuned on the study page
     // (docs/design/studies/pixel-identity.html) and is ported as is, except the meter's
     // level reference, which is calibrated on device.
 
-    // Geometry: 5 pt cells and 2 pt gaps make a 40 pt mark whose edges land on whole
-    // pixels at 1x and 2x (the page's 4.5 pt cells fall on half pixels at 1x). The panel
-    // keeps the 56 pt height of the river capsule it replaces and never changes size.
-    static let pixelCell: Double = 5
+    // Geometry: 4 pt cells and 2 pt gaps make a 34 pt mark whose edges land on whole
+    // pixels at 1x and 2x. The panel is a 48 pt square, a little smaller than a Dock icon
+    // at the default tile size, and never changes size.
+    static let pixelCell: Double = 4
     static let pixelGap: Double = 2
     static let pixelMarkSize: Double = 6 * pixelCell + 5 * pixelGap
     // Cell corners are this fraction of the cell at every size, so the mark keeps one roundness.
     static let pixelCornerFraction: Double = 0.16
-    static let indicatorPanelHorizontalPadding: Double = 12
-    static let indicatorPanelVerticalPadding: Double = 8
+    static let indicatorPanelHorizontalPadding: Double = 7
+    static let indicatorPanelVerticalPadding: Double = 7
     static let indicatorPanelWidth: Double = pixelMarkSize + 2 * indicatorPanelHorizontalPadding
     static let indicatorPanelHeight: Double = pixelMarkSize + 2 * indicatorPanelVerticalPadding
-    // The approved page's panel corner; a square mark takes a rounded square, not a capsule.
-    static let indicatorPanelCornerRadius: Double = 13
+    // About a Dock icon's corner at this size, so the mark reads as one more tile.
+    static let indicatorPanelCornerRadius: Double = 11
 
-    // The HUD surface: near-opaque charcoal, no material (a material flips the palette
-    // per desktop). Dark appearance adds a hairline where the shadow vanishes.
-    static let hudFillOpacityLight: Double = 0.96
-    static let hudFillOpacityDark: Double = 0.94
-    static let hudHairlineOpacity: Double = 0.07
+    // The HUD surface every floating shape shares, matched to a native dark HUD window
+    // (Raycast Notes, measured 2026-10-09): the desktop behind blurred dark, a deep charcoal tint,
+    // a light inner hairline that brightens along the top edge, and a dark outer line that
+    // holds the edge over light desktops. The blur is forced dark, so the palette never flips
+    // per desktop. Reduce Transparency swaps blur and tint for a near-opaque fill. Measured on
+    // screen 2026-10-09: over black the ground is #131315 (Raycast's is #151719); over a white
+    // page, the lightest ground the blur produces, ink holds 9.65:1 and the accent 7.27:1.
+    static let hudTintOpacity: Double = 0.72
+    static let hudSolidFillOpacity: Double = 0.96
     static let hudHairlineWidth: Double = 1
-    // The CSS shadows `0 1 2` at 20% and `0 10 24` at 24%; the radius equals the CSS blur, matched side by side.
-    static let hudNearShadowOffset: Double = 1
-    static let hudNearShadowRadius: Double = 2
-    static let hudNearShadowOpacity: Double = 0.20
-    static let hudFarShadowOffset: Double = 10
-    static let hudFarShadowRadius: Double = 24
-    static let hudFarShadowOpacity: Double = 0.24
+    static let hudHairlineOpacity: Double = 0.2
+    static let hudHairlineTopOpacity: Double = 0.35
+    static let hudOuterLineWidth: Double = 0.5
+    static let hudOuterLineOpacity: Double = 0.8
+    // One soft shadow, drawn outside the edge only: the blur hides whatever lies beneath it.
+    static let hudShadowRadius: Double = 18
+    static let hudShadowOffset: Double = 8
+    static let hudShadowOpacity: Double = 0.3
     // Transparent margin around the HUD content so the far shadow is not clipped by the panel.
     static let hudShadowMargin: Double = 48
     // Enter rises and exit drops by this much over `hudFadeSeconds`; Reduce Motion drops the rise.
@@ -220,7 +227,8 @@ enum Constants {
     static let hudMessagePadding: Double = 12
     static let hudMessageWidth: Double = 260
     static let hudStackSpacing: Double = 8
-    // Space always reserved below the capsule for that rectangle. The panel is this one
+    // Space always reserved above the mark for that rectangle, which grows upward from the
+    // mark so the Dock never covers it. The panel is this one
     // fixed size whatever it shows, so the capsule's position is arithmetic and a message
     // appearing or leaving can never move it (the shift the maintainer saw on cancel,
     // 2026-09-17, when a notice grew the content inside an already-sized panel).
@@ -230,6 +238,7 @@ enum Constants {
     // the mark's panel. Bare prototype UI; scrolls when the text outgrows it.
     static let transcriptPanelWidth: Double = 440
     static let transcriptPanelHeight: Double = 176
+    static let transcriptPanelCornerRadius: Double = 12
     static let transcriptPanelHorizontalPadding: Double = 16
     static let transcriptPanelVerticalPadding: Double = 14
     static let transcriptFontSize: Double = 14
@@ -281,13 +290,14 @@ enum Constants {
     static let pixelCrestPeriod: Double = 2.0
     static let pixelCrestBase: Double = 0.55
     // Preparing (the model getting ready at launch): the same crest, slower and over a dimmer
-    // base, so it reads as waiting rather than working on your words.
+    // base, so it reads as waiting rather than working on your words. The base carries the
+    // state, so it clears 3:1 on the HUD's lightest ground (3.08:1 over a white page).
     static let pixelPreparingCrestPeriod: Double = 3.0
-    static let pixelPreparingCrestBase: Double = 0.4
+    static let pixelPreparingCrestBase: Double = 0.42
     // The static Transcribing reading (menu bar, and the panel under Reduce Motion): every
     // other pixel dimmed. Removing them breaks the r apart; brighter reads as Ready.
     static let pixelDitherInk: Double = 0.3
-    static let pixelIncreasedContrastInkFloor: Double = 0.4
+    static let pixelIncreasedContrastInkFloor: Double = 0.42
 
     // Menu bar glyphs (planning 0029): the pixel r in an 18 pt template image, drawn denser
     // than the panel because 1 pt gaps at this size read as dots. Every cell edge lands on a
