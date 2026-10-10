@@ -10,9 +10,9 @@ Charcoal and ink carry everything; one turquoise accent means **on**: River hear
 
 | Token | Value | OKLCH | Role |
 |---|---|---|---|
-| `charcoal` | `#23262B` | 26.8% 0.010 261 | The app icon's ground; the HUD's fill under Reduce Transparency (96%) |
+| `charcoal` | `#23262B` | 26.8% 0.010 261 | The app icon's ground |
 | `raisedCharcoal` | `#2E3238` | 31.6% 0.012 258 | A fill nested on charcoal |
-| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The HUD's tint (72%) over its blur: charcoal's hue, darker |
+| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The HUD's tint (72%) over its blur, and its opaque fill under Reduce Transparency: charcoal's hue, darker |
 | `ink` | `#ECEEF1` | 94.8% 0.005 258 | Every mark and all text on charcoal |
 | `accentDark` | `#00E7E9` | 84.1% 0.143 196 | The accent on dark surfaces; the HUD always uses it |
 | `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces |
@@ -59,19 +59,19 @@ Every floating surface (the mark's panel, the message rectangle, the transcript 
 | 50% gray | `#262729` | 12.86:1 | 9.69:1 |
 | White, the lightest case | `#3A3B3D` | 9.65:1 | 7.27:1 |
 
-Under Reduce Transparency, `charcoal` at 96% replaces the blur and the tint.
+Under Reduce Transparency, `deepCharcoal`, opaque, replaces the blur and the tint, so the surface reads as the same dark panel as the blurred one over dark content.
 
 ## The mark's inks
 
-Measured over the HUD surface's lightest ground (`#3A3B3D`, over a white page) and over charcoal (the Reduce Transparency fill); a graphic that carries meaning needs 3:1 on both.
+Measured over the HUD surface's lightest ground (`#3A3B3D`, over a white page) and over `deepCharcoal` (the Reduce Transparency fill); a graphic that carries meaning needs 3:1 on both.
 
-| Ink | Lightest ground | Charcoal | Carries |
+| Ink | Lightest ground | `deepCharcoal` | Carries |
 |---|---|---|---|
-| Lit meter, `accentDark` at 95% | 6.71:1 | 9.00:1 | Your voice |
-| Crest base, ink at 55% | 4.15:1 | 4.99:1 | Transcribing |
-| Preparing base and the Increase Contrast floor, ink at 42% | 3.08:1 | 3.52:1 | Preparing |
-| Dither's dim cells, ink at 30% | 2.28:1 | 2.48:1 | Texture |
-| Unlit meter cells, ink at 16% | 1.57:1 | 1.60:1 | Texture |
+| Lit meter, `accentDark` at 95% | 6.71:1 | 11.02:1 | Your voice |
+| Crest base, ink at 55% | 4.15:1 | 5.49:1 | Transcribing |
+| Preparing base and the Increase Contrast floor, ink at 42% | 3.08:1 | 3.69:1 | Preparing |
+| Dither's dim cells, ink at 30% | 2.28:1 | 2.47:1 | Texture |
+| Unlit meter cells, ink at 16% | 1.57:1 | 1.53:1 | Texture |
 
 Dim cells sit below 3:1 on purpose: they are texture, and every state is carried by the bright cells and the shape (the r, the meter, the dithered r). Under Increase Contrast every cell is lifted to at least 42%, which clears 3:1. The preparing base rose from 40% to 42% on 2026-10-09, when the blurred surface's lighter ground took 40% to 2.94:1.
 

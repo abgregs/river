@@ -192,7 +192,7 @@ private final class PixelMarkEngine {
 /// transcript panel), built like a native dark HUD window: the desktop behind it blurred
 /// dark under a charcoal tint, a light inner hairline that brightens along the top edge
 /// where light would catch it, a dark outer line that keeps the edge crisp over light
-/// desktops, and one soft shadow. Under Reduce Transparency, a near-opaque fill replaces
+/// desktops, and one soft shadow. Under Reduce Transparency, an opaque fill of the tint replaces
 /// the blur and the tint.
 struct HUDSurface: View {
     let cornerRadius: Double
@@ -202,7 +202,7 @@ struct HUDSurface: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         ZStack {
             if reduceTransparency {
-                shape.fill(Color(nsColor: Palette.charcoal).opacity(Constants.hudSolidFillOpacity))
+                shape.fill(Color(nsColor: Palette.deepCharcoal))
             } else {
                 BackdropBlur(cornerRadius: cornerRadius)
                 shape.fill(Color(nsColor: Palette.deepCharcoal).opacity(Constants.hudTintOpacity))

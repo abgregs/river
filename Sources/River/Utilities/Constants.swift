@@ -203,11 +203,10 @@ enum Constants {
     // (Raycast Notes, measured 2026-10-09): the desktop behind blurred dark, a deep charcoal tint,
     // a light inner hairline that brightens along the top edge, and a dark outer line that
     // holds the edge over light desktops. The blur is forced dark, so the palette never flips
-    // per desktop. Reduce Transparency swaps blur and tint for a near-opaque fill. Measured on
+    // per desktop. Reduce Transparency swaps blur and tint for the tint, opaque. Measured on
     // screen 2026-10-09: over black the ground is #131315 (Raycast's is #151719); over a white
     // page, the lightest ground the blur produces, ink holds 9.65:1 and the accent 7.27:1.
     static let hudTintOpacity: Double = 0.72
-    static let hudSolidFillOpacity: Double = 0.96
     static let hudHairlineWidth: Double = 1
     static let hudHairlineOpacity: Double = 0.2
     static let hudHairlineTopOpacity: Double = 0.35
