@@ -1,6 +1,6 @@
 # Design: Color
 
-The roles River's colors play, what the one accent means, and how a new surface chooses color. The tokens live in `Palette` (`Sources/River/Views/Palette.swift`); every value below was measured on 2026-09-26 (WCAG 2.x contrast; OKLCH from the sRGB hex). Read before adding color to any surface.
+The roles River's colors play, what the one accent means, and how a new surface chooses color. The tokens live in `Palette` (`Sources/River/Views/Palette.swift`); every value below was measured on 2026-09-26, the HUD surface and the dark accent on 2026-10-09 (WCAG 2.x contrast; OKLCH from the sRGB hex). Read before adding color to any surface.
 
 ## The system in one sentence
 
@@ -10,10 +10,11 @@ Charcoal and ink carry everything; one turquoise accent means **on**: River hear
 
 | Token | Value | OKLCH | Role |
 |---|---|---|---|
-| `charcoal` | `#23262B` | 26.8% 0.010 261 | The HUD surface (94% opacity on dark desktops, 96% on light); the app icon's ground |
+| `charcoal` | `#23262B` | 26.8% 0.010 261 | The app icon's ground; the HUD's fill under Reduce Transparency (96%) |
 | `raisedCharcoal` | `#2E3238` | 31.6% 0.012 258 | A fill nested on charcoal |
+| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The HUD's tint (72%) over its blur: charcoal's hue, darker |
 | `ink` | `#ECEEF1` | 94.8% 0.005 258 | Every mark and all text on charcoal |
-| `accentDark` | `#31C8CA` | 75.9% 0.120 196 | The accent on dark surfaces; the HUD always uses it |
+| `accentDark` | `#00E7E9` | 84.1% 0.143 196 | The accent on dark surfaces; the HUD always uses it |
 | `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces |
 | `accent` | dynamic | — | Resolves to the light or dark value per appearance; the tint of the Settings and onboarding windows |
 | `onAccent` | dynamic | — | Text on an accent fill: white on the light value, charcoal on the dark |
@@ -38,29 +39,41 @@ The accent marks something that is **on right now because of you**. It answers "
 
 ## Which value to use
 
-- **The HUD** is charcoal on every desktop, so it uses `accentDark` directly: 7.40:1 on charcoal, 6.29:1 on raised charcoal.
+- **The HUD** is dark on every desktop, so it uses `accentDark` directly: 7.27:1 on its lightest ground (see The HUD surface below), 9.83:1 on charcoal.
 - **App windows** (Settings, onboarding, menus) follow the system appearance, so they use the dynamic `accent`: `accentLight` measures 4.61:1 on white.
-- **Text on an accent fill** uses `onAccent`: white on `accentLight` is 4.61:1; on `accentDark` white is 2.05:1 and fails, so the dark value takes charcoal (7.40:1).
+- **Text on an accent fill** uses `onAccent`: white on `accentLight` is 4.61:1; on `accentDark` white is 1.54:1 and fails, so the dark value takes charcoal (9.83:1).
 - Never `accentLight` on charcoal or `accentDark` on white; measure any new pairing before shipping it.
 
 ## Neutrals and text
 
-- **HUD:** `ink` text on `charcoal` measures 13.06:1 (11.09:1 on raised charcoal). Secondary text uses the system `.secondary` under the HUD's forced dark scheme (a system value, not measured here).
+- **HUD:** `ink` text measures 9.65:1 on the surface's lightest ground and 13.06:1 on charcoal (11.09:1 on raised charcoal). Secondary text uses the system `.secondary` under the HUD's forced dark scheme (a system value, not measured here).
 - **App windows:** platform label colors (`.primary`, `.secondary`) on system backgrounds. Do not paint windows charcoal; platform first ([direction.md](direction.md)).
+
+## The HUD surface
+
+Every floating surface (the mark's panel, the message rectangle, the transcript panel) is one `HUDSurface`, built like a native dark HUD window and matched to Raycast Notes on 2026-10-09: the desktop behind it blurred by a forced-dark `NSVisualEffectView`, `deepCharcoal` at 72% over the blur, a 1 pt inner hairline of white at 20% that brightens to 35% along the top edge, a 0.5 pt outer line of black at 80%, and one soft shadow outside the edge. Because the blur lets the desktop through, the ground varies with what is behind it. Measured on screen:
+
+| Behind the surface | Ground | `ink` | `accentDark` |
+|---|---|---|---|
+| Black | `#131315` | 15.96:1 | 12.02:1 |
+| 50% gray | `#262729` | 12.86:1 | 9.69:1 |
+| White, the lightest case | `#3A3B3D` | 9.65:1 | 7.27:1 |
+
+Under Reduce Transparency, `charcoal` at 96% replaces the blur and the tint.
 
 ## The mark's inks
 
-Measured over charcoal; a graphic that carries meaning needs 3:1.
+Measured over the HUD surface's lightest ground (`#3A3B3D`, over a white page) and over charcoal (the Reduce Transparency fill); a graphic that carries meaning needs 3:1 on both.
 
-| Ink | Contrast | Carries |
-|---|---|---|
-| Lit meter, `accentDark` at 95% | 6.82:1 | Your voice |
-| Crest base, ink at 55% | 4.99:1 | Transcribing |
-| Preparing base and the Increase Contrast floor, ink at 40% | 3.33:1 | Preparing |
-| Dither's dim cells, ink at 30% | 2.48:1 | Texture |
-| Unlit meter cells, ink at 16% | 1.60:1 | Texture |
+| Ink | Lightest ground | Charcoal | Carries |
+|---|---|---|---|
+| Lit meter, `accentDark` at 95% | 6.71:1 | 9.00:1 | Your voice |
+| Crest base, ink at 55% | 4.15:1 | 4.99:1 | Transcribing |
+| Preparing base and the Increase Contrast floor, ink at 42% | 3.08:1 | 3.52:1 | Preparing |
+| Dither's dim cells, ink at 30% | 2.28:1 | 2.48:1 | Texture |
+| Unlit meter cells, ink at 16% | 1.57:1 | 1.60:1 | Texture |
 
-Dim cells sit below 3:1 on purpose: they are texture, and every state is carried by the bright cells and the shape (the r, the meter, the dithered r). Under Increase Contrast every cell is lifted to at least 40%, which clears 3:1.
+Dim cells sit below 3:1 on purpose: they are texture, and every state is carried by the bright cells and the shape (the r, the meter, the dithered r). Under Increase Contrast every cell is lifted to at least 42%, which clears 3:1. The preparing base rose from 40% to 42% on 2026-10-09, when the blurred surface's lighter ground took 40% to 2.94:1.
 
 ## Status colors
 

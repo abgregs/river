@@ -19,10 +19,10 @@ These were confirmed in [identity-studies.md](identity-studies.md). They are rev
 | Earlier rule | Now |
 |---|---|
 | "State changes by ink, never by the shape growing or shrinking"; "structure is the identity and must not change" | The r and the meter are different shapes. The bounding box and the panel never change size. |
-| "Uniform ink on marks"; 0028: "the accent never touches the mark" | The lit meter is the dark accent `#31C8CA`. The resting r, the transcribing crest, the menu bar, and the icon stay ink. |
+| "Uniform ink on marks"; 0028: "the accent never touches the mark" | The lit meter is the dark accent (`#31C8CA`, brightened to `#00E7E9` on 2026-10-09). The resting r, the transcribing crest, the menu bar, and the icon stay ink. |
 | "The app icon and any r-based glyph are dropped"; the slat glyph accepted as the menu bar mark | The pixel r is the mark on every surface. The dropped work was drawing letterforms from curves and fonts; a letter built on a pixel grid is a different method. |
 
-Still in force: charcoal plus vivid turquoise, concentric radii, no word or timer in the panel, the near-opaque charcoal surface, Reduce Motion degrading to a crossfade, and state never carried by color alone (the r, the meter's shape, and the r with moving ink differ without it).
+Still in force: charcoal plus vivid turquoise, concentric radii, no word or timer in the panel, Reduce Motion degrading to a crossfade, and state never carried by color alone (the r, the meter's shape, and the r with moving ink differ without it). Revised 2026-10-09: the near-opaque charcoal surface gave way to a blurred surface with a deep charcoal tint, and the panel shrank to a 48 pt square just above the Dock ([color.md](color.md), The HUD surface).
 
 ## Rejected, with reasons
 
