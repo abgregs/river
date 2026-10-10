@@ -48,9 +48,17 @@ final class TranscriptPanelCoordinator {
             panel.orderFrontRegardless()
         } else {
             guard panel != nil, orderOutWork == nil else { return }
+            // Replaced once it has been on screen, like the indicator's panel: a shown
+            // panel can lose every Space when a full-screen Space closes (planning 0030).
             let work = DispatchWorkItem { [weak self] in
-                self?.panel?.orderOut(nil)
-                self?.orderOutWork = nil
+                guard let self, let panel = self.panel else { return }
+                self.orderOutWork = nil
+                let wasShown = panel.isVisible
+                panel.orderOut(nil)
+                if wasShown {
+                    panel.close()
+                    self.panel = self.makePanel()
+                }
             }
             orderOutWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + Constants.hudFadeSeconds, execute: work)
