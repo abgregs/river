@@ -103,16 +103,16 @@ struct PixelMarkTests {
 
 @Suite("Indicator panel geometry")
 struct IndicatorPanelGeometryTests {
-    // The panel keeps the river capsule's height, so the window, the toast below it, and its
-    // position on screen are unchanged.
-    @Test("the panel is the 40 pt mark plus 12 pt at the sides and 8 pt above and below")
+    // A square a little smaller than a Dock icon at the default tile size, so the mark reads
+    // as one more tile sitting just above the Dock.
+    @Test("the panel is a 48 pt square: the 34 pt mark plus 7 pt on every side")
     func panelGeometry() {
-        #expect(Constants.pixelMarkSize == 40)
-        #expect(Constants.indicatorPanelWidth == 64)
-        #expect(Constants.indicatorPanelHeight == 56)
+        #expect(Constants.pixelMarkSize == 34)
+        #expect(Constants.indicatorPanelWidth == 48)
+        #expect(Constants.indicatorPanelHeight == 48)
     }
 
-    // 5 pt cells with 2 pt gaps put every resting edge on a whole pixel, so the r is sharp on
+    // 4 pt cells with 2 pt gaps put every resting edge on a whole pixel, so the r is sharp on
     // 1x displays as well as 2x.
     @Test("the resting mark's cell edges land on device pixels", arguments: [1, 2])
     func restingMarkIsCrisp(scale: Int) {

@@ -6,16 +6,21 @@ import SwiftUI
 enum Palette {
     static let charcoal = NSColor(srgbHex: 0x23262B)
     static let raisedCharcoal = NSColor(srgbHex: 0x2E3238)
+    // Charcoal's hue, darker (OKLCH lightness 0.18): the floating UI's tint over its blur.
+    // Charcoal itself is lighter than the blur over dark desktops, so it would lift them.
+    static let deepCharcoal = NSColor(srgbHex: 0x101215)
     static let ink = NSColor(srgbHex: 0xECEEF1)
 
-    // Vivid turquoise, OKLCH hue 196: 4.61:1 on white, 7.40:1 on charcoal.
+    // Vivid turquoise, OKLCH hue 196: 4.61:1 on white. The dark value is the hue's most vivid
+    // at lightness 0.84: 9.83:1 on charcoal, and 7.27:1 on the HUD's blurred surface over a
+    // white page, its lightest ground.
     static let accentLight = NSColor(srgbHex: 0x148284)
-    static let accentDark = NSColor(srgbHex: 0x31C8CA)
+    static let accentDark = NSColor(srgbHex: 0x00E7E9)
     static let accent = NSColor(name: "RiverAccent") { appearance in
         isDark(appearance) ? accentDark : accentLight
     }
     // Text on an accent ground: white passes on the light value; on the dark value it
-    // measures 2.05:1, so charcoal instead.
+    // measures 1.54:1, so charcoal instead.
     static let onAccent = NSColor(name: "RiverOnAccent") { appearance in
         isDark(appearance) ? charcoal : .white
     }

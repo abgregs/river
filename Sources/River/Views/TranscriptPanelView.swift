@@ -17,7 +17,7 @@ struct TranscriptPanelView: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Constants.hudMessageCornerRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Constants.transcriptPanelCornerRadius, style: .continuous)
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
@@ -37,8 +37,8 @@ struct TranscriptPanelView: View {
         .frame(width: Constants.transcriptPanelWidth, height: Constants.transcriptPanelHeight)
         .clipShape(shape)
         .foregroundStyle(Color(nsColor: Palette.ink))
-        .background { HUDSurface(shape: shape) }
-        // The surface is charcoal on every desktop, so it takes the dark appearance's colors.
+        .background { HUDSurface(cornerRadius: Constants.transcriptPanelCornerRadius) }
+        // The surface is dark on every desktop, so it takes the dark appearance's colors.
         .environment(\.colorScheme, .dark)
         .opacity(isVisible ? 1 : 0)
         .offset(y: isVisible || reduceMotion ? 0 : Constants.hudFadeRise)

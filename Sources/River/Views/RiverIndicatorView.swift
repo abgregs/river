@@ -13,18 +13,22 @@ struct RiverIndicatorView: View {
 
     var body: some View {
         // Fixed geometry: the mark's panel keeps its place whether or not a message is on
-        // screen, and the window never resizes under an animating transition.
-        VStack(spacing: Constants.hudStackSpacing) {
+        // screen, and the window never resizes under an animating transition. The mark sits
+        // just above the Dock. A message sits above the mark while the mark shows, and on the
+        // mark's own baseline once it has gone, so a toast left after the cycle never floats
+        // over an empty gap.
+        ZStack(alignment: .bottom) {
             MarkPanel(activity: activity, inputLevel: Double(appState.inputLevel))
-                .modifier(HUDFade(isVisible: activity != .rest, reduceMotion: reduceMotion))
-            ZStack(alignment: .top) {
-                if hasMessage {
-                    messages
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise)))
-                }
+                .modifier(HUDFade(isVisible: isMarkShown, reduceMotion: reduceMotion))
+            if hasMessage {
+                messages
+                    .offset(y: isMarkShown ? -(Constants.indicatorPanelHeight + Constants.hudStackSpacing) : 0)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise)))
             }
-            .frame(width: Constants.hudMessageWidth, height: Constants.hudMessageReservedHeight, alignment: .top)
         }
+        .frame(width: Constants.hudMessageWidth,
+               height: Constants.hudMessageReservedHeight + Constants.hudStackSpacing + Constants.indicatorPanelHeight,
+               alignment: .bottom)
         .padding(Constants.hudShadowMargin)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.toast)
@@ -48,6 +52,8 @@ struct RiverIndicatorView: View {
     private var notice: String? {
         appState.state == .recording ? appState.notice : nil
     }
+
+    private var isMarkShown: Bool { activity != .rest }
 
     private var hasMessage: Bool {
         appState.toast != nil || loadingLabel != nil || notice != nil
@@ -77,7 +83,7 @@ struct RiverIndicatorView: View {
         // notices keep the full width their wrapped prose needs.
         .frame(width: isPreparingLabelOnly ? nil : Constants.hudMessageWidth, alignment: .leading)
         .foregroundStyle(Color(nsColor: Palette.ink))
-        .background { HUDSurface(shape: RoundedRectangle(cornerRadius: Constants.hudMessageCornerRadius, style: .continuous)) }
+        .background { HUDSurface(cornerRadius: Constants.hudMessageCornerRadius) }
         // The surface is charcoal on every desktop, so its text takes the dark appearance's
         // colors regardless of the system's.
         .environment(\.colorScheme, .dark)
@@ -98,9 +104,7 @@ private struct MarkPanel: View {
             PixelMarkView(activity: activity, inputLevel: inputLevel, date: context.date)
                 .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
                 .padding(.vertical, Constants.indicatorPanelVerticalPadding)
-                .background {
-                    HUDSurface(shape: RoundedRectangle(cornerRadius: Constants.indicatorPanelCornerRadius, style: .continuous))
-                }
+                .background { HUDSurface(cornerRadius: Constants.indicatorPanelCornerRadius) }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(activity == .transcribing ? "Transcribing" : "Listening")
                 .accessibilityValue(activity == .listening ? elapsed(at: context.date) : "")
@@ -184,25 +188,88 @@ private final class PixelMarkEngine {
     var frame = PixelMarkFrame()
 }
 
-/// The charcoal surface both HUD shapes share: near-opaque fill, two shadows, and on
-/// dark appearance a hairline where the shadow disappears into dark windows.
-struct HUDSurface<S: InsettableShape>: View {
-    let shape: S
-    @Environment(\.colorScheme) private var colorScheme
+/// The surface every floating shape shares (the mark's panel, the message rectangle, the
+/// transcript panel), built like a native dark HUD window: the desktop behind it blurred
+/// dark under a charcoal tint, a light inner hairline that brightens along the top edge
+/// where light would catch it, a dark outer line that keeps the edge crisp over light
+/// desktops, and one soft shadow. Under Reduce Transparency, a near-opaque fill replaces
+/// the blur and the tint.
+struct HUDSurface: View {
+    let cornerRadius: Double
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        let isDark = colorScheme == .dark
-        shape
-            .fill(Color(nsColor: Palette.charcoal).opacity(isDark ? Constants.hudFillOpacityDark : Constants.hudFillOpacityLight))
-            .overlay {
-                if isDark {
-                    shape.strokeBorder(.white.opacity(Constants.hudHairlineOpacity), lineWidth: Constants.hudHairlineWidth)
-                }
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        ZStack {
+            if reduceTransparency {
+                shape.fill(Color(nsColor: Palette.charcoal).opacity(Constants.hudSolidFillOpacity))
+            } else {
+                BackdropBlur(cornerRadius: cornerRadius)
+                shape.fill(Color(nsColor: Palette.deepCharcoal).opacity(Constants.hudTintOpacity))
             }
-            .shadow(color: .black.opacity(Constants.hudNearShadowOpacity),
-                    radius: Constants.hudNearShadowRadius, y: Constants.hudNearShadowOffset)
-            .shadow(color: .black.opacity(Constants.hudFarShadowOpacity),
-                    radius: Constants.hudFarShadowRadius, y: Constants.hudFarShadowOffset)
+        }
+        .overlay { shape.strokeBorder(Self.hairline, lineWidth: Constants.hudHairlineWidth) }
+        .overlay {
+            shape.inset(by: -Constants.hudOuterLineWidth)
+                .strokeBorder(.black.opacity(Constants.hudOuterLineOpacity), lineWidth: Constants.hudOuterLineWidth)
+        }
+        .background { Self.shadow(shape) }
+    }
+
+    private static let hairline = LinearGradient(
+        stops: [.init(color: .white.opacity(Constants.hudHairlineTopOpacity), location: 0),
+                .init(color: .white.opacity(Constants.hudHairlineOpacity), location: 0.15)],
+        startPoint: .top, endPoint: .bottom)
+
+    // The shadow with the shape cut out of it, so it only ever shows outside the edge and
+    // never darkens the blur or the tint.
+    private static func shadow(_ shape: RoundedRectangle) -> some View {
+        shape.fill(.black)
+            .shadow(color: .black.opacity(Constants.hudShadowOpacity), radius: Constants.hudShadowRadius, y: Constants.hudShadowOffset)
+            .mask {
+                Rectangle()
+                    .padding(-Constants.hudShadowMargin)
+                    .overlay { shape.blendMode(.destinationOut) }
+                    .compositingGroup()
+            }
+    }
+}
+
+/// A window-server blur of whatever is behind the panel. River is never the active app, so
+/// the view is forced active (an inactive one draws flat gray), and forced dark so the blur
+/// matches the charcoal palette on every desktop. A behind-window blur ignores layer masks;
+/// only `maskImage` shapes it, drawn here with the same continuous corner as the tint.
+private struct BackdropBlur: NSViewRepresentable {
+    let cornerRadius: Double
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: .darkAqua)
+        view.maskImage = Self.mask(cornerRadius: cornerRadius)
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+
+    // A stretchable image of the corner: a continuous corner starts curving about 1.53 radii
+    // from the corner, so the cap insets hold the whole curve.
+    static func mask(cornerRadius: Double) -> NSImage {
+        let cap = (cornerRadius * 1.6).rounded(.up)
+        let side = 2 * cap + 1
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            let path = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.addPath(path.cgPath)
+            context.setFillColor(NSColor.black.cgColor)
+            context.fillPath()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: cap, left: cap, bottom: cap, right: cap)
+        image.resizingMode = .stretch
+        return image
     }
 }
 
