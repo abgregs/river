@@ -15,11 +15,17 @@ enum TextInsertionError: Error, LocalizedError {
 
 @MainActor
 final class TextInsertionManager {
+    /// Waits between keystroke chunks. Injected so tests record the gaps instead of
+    /// sleeping (the injectable-clock pattern of `TapStateMachine`).
+    typealias Pause = @MainActor (_ seconds: Double) async -> Void
+
     private let accessibility: AccessibilityCapability
+    private let pause: Pause
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "insert")
 
-    init(accessibility: AccessibilityCapability) {
+    init(accessibility: AccessibilityCapability, pause: Pause? = nil) {
         self.accessibility = accessibility
+        self.pause = pause ?? { seconds in try? await Task.sleep(for: .seconds(seconds)) }
     }
 
     /// Inserts `text` at the cursor by synthesizing Unicode key events — the app
@@ -42,7 +48,10 @@ final class TextInsertionManager {
         let chunks = Self.chunk(text, maxUnits: Constants.keystrokeChunkUnits)
         logger.info("insertText: injecting \(text.count, privacy: .public) chars in \(chunks.count, privacy: .public) chunk(s)")
         do {
-            for chunk in chunks {
+            for (index, chunk) in chunks.enumerated() {
+                // Paced, so a terminal hands the target a few chunks per read rather than
+                // the whole transcript at once (planning 0031).
+                if index > 0 { await pause(Constants.keystrokeChunkGapSeconds) }
                 try accessibility.postKeyEvent(Self.makeUnicodeKeyEvent(chunk, keyDown: true))
                 try accessibility.postKeyEvent(Self.makeUnicodeKeyEvent(chunk, keyDown: false))
             }

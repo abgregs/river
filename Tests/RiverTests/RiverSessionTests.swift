@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import Combine
 import CoreGraphics
@@ -766,6 +767,30 @@ struct RiverSessionTests {
         await env.session.handleDeactivate()
 
         #expect(env.session.hasLastTranscript)
+    }
+
+    @MainActor
+    @Test("the text typed at the cursor is exactly the text Copy last transcription copies")
+    func typedTextMatchesCopiedText() async throws {
+        // The two deliveries of one transcript must never diverge: the copy is the
+        // recovery path when typing goes wrong, so it has to hold what was meant to be
+        // typed, and typing has to hold all of it (planning 0031). A private pasteboard
+        // keeps the user's clipboard out of the test.
+        let transcript = String(repeating: "Dictated in one go: café, naïve 👍🏽, \"quotes\" — and more. ", count: 12)
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = transcript
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        env.session.copyLastTranscript(to: pasteboard)
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(typed == transcript)
+        #expect(pasteboard.string(forType: .string) == typed)
     }
 
     @MainActor

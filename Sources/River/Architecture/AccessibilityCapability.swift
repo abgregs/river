@@ -51,6 +51,11 @@ final class AccessibilityCapability: Capability {
     // the real `CGEvent.post` firing into the running session.
     private(set) var postedEventCountForTesting = 0
 
+    // internal for testability — the text each key-down would have typed, in order,
+    // when `skipPostForTesting` is set. Lets tests compare what insertion typed with
+    // the transcript itself, not just how many events it took.
+    private(set) var postedKeyDownTextForTesting: [String] = []
+
     // internal for testability — drives `status` synchronously without going
     // through `recheck()` (which reads the host TCC state and is non-
     // deterministic across runners). Used to lock the gate in `postKeyEvent`
@@ -104,6 +109,7 @@ final class AccessibilityCapability: Capability {
         }
         if skipPostForTesting {
             postedEventCountForTesting += 1
+            if event.type == .keyDown { postedKeyDownTextForTesting.append(Self.unicodeString(of: event)) }
             return
         }
         event.post(tap: .cghidEventTap)
@@ -227,5 +233,14 @@ final class AccessibilityCapability: Capability {
     /// internal for testability (the OS call above can't be exercised in CI).
     static func map(isTrusted: Bool) -> CapabilityStatus {
         isTrusted ? .granted : .denied
+    }
+
+    // The string a Unicode key event carries (`keyboardSetUnicodeString`).
+    private static func unicodeString(of event: CGEvent) -> String {
+        var length = 0
+        event.keyboardGetUnicodeString(maxStringLength: 0, actualStringLength: &length, unicodeString: nil)
+        var units = [UniChar](repeating: 0, count: length)
+        event.keyboardGetUnicodeString(maxStringLength: length, actualStringLength: &length, unicodeString: &units)
+        return String(utf16CodeUnits: units, count: length)
     }
 }
