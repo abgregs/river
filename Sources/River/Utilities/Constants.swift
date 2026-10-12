@@ -93,6 +93,13 @@ enum Constants {
     // chunked because that call is unreliable past ~20 units in some apps. Internal
     // tunable, validated on-device. See planning/0011_keystroke-injection.md.
     static let keystrokeChunkUnits: Int = 20
+    // Pause between keystroke chunks, so the target reads the transcript a few chunks
+    // at a time instead of in one burst. Posted back to back, a long transcript reached
+    // Claude Code's TUI as reads of 800+ characters, which it treats as unmarked pastes:
+    // it showed `[Pasted text #N]` placeholders and dropped about 2 KB of a 3,000-character
+    // insert in 4 of 5 runs. 1 ms between chunks was enough in every run; 4 ms leaves
+    // room for a busy target, and adds about 0.2 s per 1,000 characters (planning 0031).
+    static let keystrokeChunkGapSeconds: Double = 0.004
 
     // Silence-trim energy gate: a 16 kHz window whose RMS is below this (linear
     // amplitude, not dBFS) is treated as silence and dropped from the ends of the

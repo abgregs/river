@@ -132,21 +132,21 @@ final class RiverSession {
         logger.info("RiverSession stopped")
     }
 
-    /// Writes the last retained transcription to the general pasteboard.
-    /// No-op when no transcription has been retained yet.
+    /// Writes the last retained transcription to the general pasteboard (a test passes
+    /// a private one). No-op when no transcription has been retained yet.
     ///
     /// User-initiated only — the automated insertion cycle never touches the
     /// clipboard (planning 0011). Applies nspasteboard.org marker types so
     /// well-behaved clipboard managers skip recording the dictated content.
-    func copyLastTranscript() {
+    func copyLastTranscript(to pasteboard: NSPasteboard = .general) {
         guard let text = lastTranscript else { return }
         let item = NSPasteboardItem()
         item.setString(text, forType: .string)
         for rawType in Constants.pasteboardMarkerTypes {
             item.setData(Data(), forType: NSPasteboard.PasteboardType(rawType))
         }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects([item])
+        pasteboard.clearContents()
+        pasteboard.writeObjects([item])
         // Content is never logged — only its count; see logging.md anti-pattern #4.
         logger.info("Copied last transcript to pasteboard (\(text.count, privacy: .public) chars)")
     }

@@ -111,3 +111,70 @@ struct TextInsertionManagerTests {
         }
     }
 }
+
+@Suite("TextInsertionManager fidelity and pacing")
+struct TextInsertionFidelityTests {
+    // A long transcript posted back to back reached Claude Code's TUI as one burst: it
+    // split the burst into unmarked "pastes" and dropped about 2 KB of a 3,000-character
+    // insert (planning 0031). These pin the two halves of the fix: every character is
+    // typed, in order, and consecutive chunks are spaced out.
+
+    // Long prose with the characters most likely to break at a chunk boundary: emoji
+    // (surrogate pairs), a combining accent, and punctuation.
+    static let transcript: String = {
+        let sentence = "River typed this, word for word: café, naïve 👍🏽, and \"quotes\" — every one. "
+        return String(repeating: sentence, count: 40)
+    }()
+
+    @MainActor
+    @Test("the typed text is the whole transcript, in order")
+    func typesEveryCharacter() async throws {
+        let accessibility = AccessibilityCapability()
+        accessibility.skipPostForTesting = true
+        accessibility.setStatusForTesting(.granted)
+        accessibility.focusedTargetForTesting = .editable
+        let manager = TextInsertionManager(accessibility: accessibility, pause: { _ in })
+
+        try await manager.insertText(Self.transcript)
+        #expect(accessibility.postedKeyDownTextForTesting.joined() == Self.transcript)
+    }
+
+    @MainActor
+    @Test("chunks are spaced out, so no target receives the transcript as one burst")
+    func pacesChunks() async throws {
+        let accessibility = AccessibilityCapability()
+        accessibility.skipPostForTesting = true
+        accessibility.setStatusForTesting(.granted)
+        accessibility.focusedTargetForTesting = .editable
+        // Each pause records how many events were posted before it, which shows the
+        // pauses fall between chunks: never before the first, never after the last.
+        var postedAtPause: [Int] = []
+        var gaps: [Double] = []
+        let manager = TextInsertionManager(accessibility: accessibility, pause: { seconds in
+            gaps.append(seconds)
+            postedAtPause.append(accessibility.postedEventCountForTesting)
+        })
+
+        try await manager.insertText(Self.transcript)
+        let chunks = TextInsertionManager.chunk(Self.transcript, maxUnits: Constants.keystrokeChunkUnits).count
+        #expect(gaps.count == chunks - 1)
+        #expect(postedAtPause == (1..<chunks).map { $0 * 2 })
+        // 1 ms was the smallest gap that kept Claude Code lossless in every run.
+        #expect(gaps.allSatisfy { $0 >= 0.001 })
+    }
+
+    @MainActor
+    @Test("a single chunk is typed without any pause")
+    func shortTextHasNoPause() async throws {
+        let accessibility = AccessibilityCapability()
+        accessibility.skipPostForTesting = true
+        accessibility.setStatusForTesting(.granted)
+        accessibility.focusedTargetForTesting = .editable
+        var pauses = 0
+        let manager = TextInsertionManager(accessibility: accessibility, pause: { _ in pauses += 1 })
+
+        try await manager.insertText("short")
+        #expect(pauses == 0)
+        #expect(accessibility.postedKeyDownTextForTesting == ["short"])
+    }
+}
