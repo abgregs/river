@@ -13,13 +13,13 @@ final class NonActivatingPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Owns the recording-indicator HUD panel's lifetime, paralleling
-/// `OnboardingCoordinator`'s window-owning pattern so `AppDelegate` stays a thin
-/// shell. Observes the shared `AppState` seam (state + toast) and orders the panel
-/// in when there is something to show, out (after the fade) when there isn't. The
-/// hosted SwiftUI view renders the actual visuals and drives the opacity fade; this
-/// layer is deliberately thin — the only decidable logic (visibility) is the pure,
-/// unit-tested `RecordingIndicatorPresentation.isOnScreen`.
+/// Owns the one HUD window River floats above the Dock — the mark, its messages, and the
+/// streaming transcript, stacked by `RiverIndicatorView` — paralleling
+/// `OnboardingCoordinator`'s window-owning pattern so `AppDelegate` stays a thin shell.
+/// Observes the shared `AppState` seam and orders the panel in when there is something to
+/// show, out (after the fade) when there isn't. The hosted SwiftUI view renders the actual
+/// visuals and drives the fades; this layer is deliberately thin — the only decidable
+/// logic (visibility) is the pure, unit-tested `RecordingIndicatorPresentation.isOnScreen`.
 @MainActor
 final class RecordingIndicatorCoordinator {
     private let appState: AppState
@@ -48,6 +48,7 @@ final class RecordingIndicatorCoordinator {
             _ = appState.toast
             _ = appState.modelLoadState
             _ = appState.notice
+            _ = appState.liveTranscript
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -70,6 +71,9 @@ final class RecordingIndicatorCoordinator {
         } else {
             scheduleOrderOut()
         }
+        // The transcript scrolls, so the window takes the mouse while it shows; otherwise it
+        // stays out of the way of whatever is under it, as the indicator always has.
+        panel?.ignoresMouseEvents = !TranscriptPanelView.isVisible(state: appState.state, text: appState.liveTranscript)
     }
 
     private func showPanel() {
@@ -108,8 +112,8 @@ final class RecordingIndicatorCoordinator {
 
     private func makePanel() -> NSPanel {
         let panel = NonActivatingPanel(
-            // One fixed size for every state (the content reserves room for a message),
-            // so nothing the view shows can resize or reposition the panel.
+            // One fixed size for every state (room for the whole stack), so nothing the
+            // view shows can resize or reposition the panel.
             contentRect: NSRect(origin: .zero, size: Self.panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -130,16 +134,14 @@ final class RecordingIndicatorCoordinator {
     }
 
     static let panelSize = NSSize(
-        width: Constants.hudMessageWidth + 2 * Constants.hudShadowMargin,
-        height: Constants.hudShadowMargin * 2 + Constants.indicatorPanelHeight
-            + Constants.hudStackSpacing + Constants.hudMessageReservedHeight
+        width: RiverIndicatorView.contentSize.width + 2 * Constants.hudShadowMargin,
+        height: RiverIndicatorView.contentSize.height + 2 * Constants.hudShadowMargin
     )
 
     // Fixed position (no caret anchoring, so no AX dependency): bottom-center of the
     // active screen's visible frame (planning 0002 "fixed-position, not caret-anchored").
-    // The mark is the bottom of the content, one shadow margin above the panel's bottom
-    // edge, so anchoring it is arithmetic on constants — a message can never move it. The
-    // transparent margin below may overlap the Dock; the panel ignores the mouse.
+    // The stack's bottom is one shadow margin above the panel's bottom edge, so anchoring it
+    // is arithmetic on constants. The transparent margin below may overlap the Dock.
     private func positionPanel(_ panel: NSPanel) {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
