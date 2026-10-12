@@ -87,6 +87,24 @@ struct RiverIndicatorSnapshotTests {
                 state.apply(RiverError.transcription(underlying: Failure()))
             }),
             ("idle-loading", { state in state.apply(modelLoadState: .loading) }),
+            ("recording-transcript", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
+            }),
+            ("recording-transcript-notice", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
+                state.apply(notice: "Activation key changed. Tap Right Command to stop this recording.")
+            }),
+            ("processing-transcript-toast", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
+                state.apply(.processing)
+                state.apply(RiverError.transcription(underlying: Failure()))
+            }),
         ]
         for scenario in scenarios {
             let appState = AppState(scheduleToastDismiss: { _, _ in AnyCancellable {} })

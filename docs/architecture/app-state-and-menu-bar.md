@@ -59,7 +59,7 @@ A pending error overrides **only the `.idle` icon** with `exclamationmark.triang
 
 ## The seam is reusable
 
-`AppState` is the shared observation seam: the recording indicator ([../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md), rebuilt as the river indicator in [0028](../planning/0028_identity-implementation.md)) is just another observer of the same `state`, `toast`, `notice`, `inputLevel`, and `modelLoadState` — not a new path into the session.
+`AppState` is the shared observation seam: the recording indicator ([../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md), rebuilt as the river indicator in [0028](../planning/0028_identity-implementation.md)) is just another observer of the same `state`, `toast`, `notice`, `inputLevel`, `modelLoadState`, and `liveTranscript` — not a new path into the session. The mark, its messages, and the streaming transcript render as one bottom-anchored stack in one window ([../decisions/0003-floating-ui-one-window-stack.md](../decisions/0003-floating-ui-one-window-stack.md)).
 
 A notice belongs to the recording it describes. `apply(_:)` clears it both when a recording **starts** and when one ends. **Why:** `handleCancel` sends `.idle` and *then* the cancel notice, so clearing only on the way out cannot catch it, and the message rode into the next recording (planning [0017](../planning/0017_cancel-recording.md)'s canceled-notice bleed, seen on device 2026-09-17).
 
@@ -68,5 +68,6 @@ A notice belongs to the recording it describes. `apply(_:)` clears it both when 
 - [river-session.md](river-session.md) — the UI-agnostic cycle owner whose `state`/`errors` publishers this bridges
 - [river-pipeline.md](river-pipeline.md) — where `RiverError` is emitted per stage
 - [../decisions/0002-log-redaction-over-debug-flag.md](../decisions/0002-log-redaction-over-debug-flag.md) — why the error message is path-redacted at this boundary
+- [../decisions/0003-floating-ui-one-window-stack.md](../decisions/0003-floating-ui-one-window-stack.md) — why the floating surfaces share one window and one stack
 - [../requirements/core-feature.md](../requirements/core-feature.md) — item 5, the visible-feedback requirement this satisfies
 - [../conventions/tests.md](../conventions/tests.md) — the `apply` / `visual` test seams

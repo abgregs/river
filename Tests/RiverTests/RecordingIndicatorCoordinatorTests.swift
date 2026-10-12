@@ -53,6 +53,31 @@ struct RecordingIndicatorCoordinatorTests {
         #expect(coordinator.panel === first)
     }
 
+    // The window spans the whole stack, far wider and taller than the mark. Taking the mouse
+    // outside the transcript would put a dead zone above the Dock over whatever the user
+    // is working in.
+    @Test("the window takes the mouse only while the transcript shows")
+    func takesMouseOnlyForTranscript() async throws {
+        let appState = AppState()
+        appState.apply(modelLoadState: .ready)
+        let coordinator = RecordingIndicatorCoordinator(appState: appState)
+        coordinator.start()
+        let panel = try #require(coordinator.panel)
+        panel.alphaValue = 0
+
+        appState.apply(.recording)
+        try await waitForObservation()
+        #expect(panel.ignoresMouseEvents)
+
+        appState.apply(liveTranscript: "The first words")
+        try await waitForObservation()
+        #expect(!panel.ignoresMouseEvents)
+
+        appState.apply(.idle)
+        try await waitForObservation()
+        #expect(panel.ignoresMouseEvents)
+    }
+
     // The coordinator re-reads `AppState` on a main-actor hop after each change.
     private func waitForObservation() async throws {
         try await Task.sleep(for: .milliseconds(50))

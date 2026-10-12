@@ -1,39 +1,58 @@
 import AppKit
 import SwiftUI
 
-/// The recording indicator's SwiftUI content (planning 0028, mark replaced in 0029): the
-/// pixel mark's panel, which carries only the recording state, and below it one rounded
-/// rectangle for the error toast (0018), the model-loading label (0004), and the
-/// live-reconfiguration notice. It observes `AppState` only; every number that shapes the
-/// motion lives in the pure `PixelMarkPresentation`, and panel and focus behavior live in
-/// the coordinator.
+/// Everything River floats above the Dock, as one bottom-anchored stack (planning 0028,
+/// mark replaced in 0029): the pixel mark's panel, which carries only the recording state;
+/// above it one rounded rectangle for the error toast (0018), the model-loading label
+/// (0004), and the live-reconfiguration notice; and above that the streaming transcript
+/// (0025). It observes `AppState` only; every number that shapes the motion lives in the
+/// pure `PixelMarkPresentation`, and panel and focus behavior live in the coordinator.
 struct RiverIndicatorView: View {
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The stack at its tallest: transcript, message, and mark. The window is this plus the
+    /// shadow margin and never resizes, so nothing on screen moves under a transition.
+    static let contentSize = CGSize(
+        width: max(Constants.transcriptPanelWidth, Constants.hudMessageWidth),
+        height: Constants.transcriptPanelHeight + Constants.hudStackSpacing
+            + Constants.hudMessageReservedHeight + Constants.hudStackSpacing + Constants.indicatorPanelHeight
+    )
+
     var body: some View {
-        // Fixed geometry: the mark's panel keeps its place whether or not a message is on
-        // screen, and the window never resizes under an animating transition. The mark sits
-        // just above the Dock. A message sits above the mark while the mark shows, and on the
-        // mark's own baseline once it has gone, so a toast left after the cycle never floats
-        // over an empty gap.
-        ZStack(alignment: .bottom) {
-            MarkPanel(activity: activity, inputLevel: Double(appState.inputLevel))
-                .modifier(HUDFade(isVisible: isMarkShown, reduceMotion: reduceMotion))
+        // Each surface takes space only while it shows, so the ones above close the gap: a
+        // toast left after the cycle drops to where the mark was, and a message never lands on
+        // the transcript. The bottom of the stack sits just above the Dock.
+        VStack(spacing: Constants.hudStackSpacing) {
+            if isTranscriptShown {
+                TranscriptPanelView(text: appState.liveTranscript)
+                    .transition(fade)
+            }
             if hasMessage {
                 messages
-                    .offset(y: isMarkShown ? -(Constants.indicatorPanelHeight + Constants.hudStackSpacing) : 0)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise)))
+                    .transition(fade)
+            }
+            if isMarkShown {
+                MarkPanel(activity: activity, inputLevel: Double(appState.inputLevel))
+                    .transition(fade)
             }
         }
-        .frame(width: Constants.hudMessageWidth,
-               height: Constants.hudMessageReservedHeight + Constants.hudStackSpacing + Constants.indicatorPanelHeight,
-               alignment: .bottom)
+        .frame(width: Self.contentSize.width, height: Self.contentSize.height, alignment: .bottom)
         .padding(Constants.hudShadowMargin)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.toast)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.modelLoadState)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.notice)
+        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: isTranscriptShown)
+    }
+
+    // Enter and exit: opacity with a 6 pt rise, ease-out both ways; a plain fade under Reduce Motion.
+    private var fade: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise))
+    }
+
+    private var isTranscriptShown: Bool {
+        TranscriptPanelView.isVisible(state: appState.state, text: appState.liveTranscript)
     }
 
     // Loading only matters while idle: the model is ready before recording is permitted.
@@ -93,7 +112,7 @@ struct RiverIndicatorView: View {
 
 /// The panel around the mark, and the mark's accessible name: the pixels are decorative,
 /// so the panel speaks the state and, while listening, the elapsed time. While preparing,
-/// the label below speaks instead.
+/// the label above speaks instead.
 private struct MarkPanel: View {
     let activity: PixelMarkActivity
     let inputLevel: Double
@@ -192,7 +211,7 @@ private final class PixelMarkEngine {
 /// transcript panel), built like a native dark HUD window: the desktop behind it blurred
 /// dark under a charcoal tint, a light inner hairline that brightens along the top edge
 /// where light would catch it, a dark outer line that keeps the edge crisp over light
-/// desktops, and one soft shadow. Under Reduce Transparency, a near-opaque fill replaces
+/// desktops, and one soft shadow. Under Reduce Transparency, an opaque fill of the tint replaces
 /// the blur and the tint.
 struct HUDSurface: View {
     let cornerRadius: Double
@@ -202,7 +221,7 @@ struct HUDSurface: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         ZStack {
             if reduceTransparency {
-                shape.fill(Color(nsColor: Palette.charcoal).opacity(Constants.hudSolidFillOpacity))
+                shape.fill(Color(nsColor: Palette.deepCharcoal))
             } else {
                 BackdropBlur(cornerRadius: cornerRadius)
                 shape.fill(Color(nsColor: Palette.deepCharcoal).opacity(Constants.hudTintOpacity))
@@ -270,18 +289,6 @@ private struct BackdropBlur: NSViewRepresentable {
         image.capInsets = NSEdgeInsets(top: cap, left: cap, bottom: cap, right: cap)
         image.resizingMode = .stretch
         return image
-    }
-}
-
-/// Enter and exit: opacity with a 6 pt rise, ease-out both ways; a plain fade under Reduce Motion.
-private struct HUDFade: ViewModifier {
-    let isVisible: Bool
-    let reduceMotion: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible || reduceMotion ? 0 : Constants.hudFadeRise)
     }
 }
 

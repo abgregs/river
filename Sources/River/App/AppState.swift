@@ -59,7 +59,7 @@ final class AppState {
             .sink { [weak self] available in self?.apply(hasLastTranscript: available) }
             .store(in: &cancellables)
         session.liveTranscript
-            .sink { [weak self] text in self?.liveTranscript = text }
+            .sink { [weak self] text in self?.apply(liveTranscript: text) }
             .store(in: &cancellables)
     }
 
@@ -149,6 +149,12 @@ final class AppState {
     // the content stays in the session.
     func apply(hasLastTranscript available: Bool) {
         hasLastTranscript = available
+    }
+
+    // internal for testability — the streaming transcript entry point (also used by
+    // `bind`), so a test can show the transcript panel without a live session.
+    func apply(liveTranscript text: String) {
+        liveTranscript = text
     }
 
     // internal for testability — clears the toast when its timer fires. Separate so

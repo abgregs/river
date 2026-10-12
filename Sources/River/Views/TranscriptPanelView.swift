@@ -1,15 +1,10 @@
 import SwiftUI
 
-/// The streaming transcript (0025 prototype): the text decoded so far, on the HUD's charcoal
-/// surface, a fixed size, scrolling when the text outgrows it and following the newest line.
-/// Bare by intent: it exists to watch streaming work, not as a designed surface.
+/// The streaming transcript (0025 prototype): the text decoded so far, on the HUD surface, a
+/// fixed size, scrolling when the text outgrows it and following the newest line. The top of
+/// the indicator's stack; `RiverIndicatorView` decides when it shows and fades it.
 struct TranscriptPanelView: View {
-    let appState: AppState
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var isVisible: Bool {
-        TranscriptPanelView.isVisible(state: appState.state, text: appState.liveTranscript)
-    }
+    let text: String
 
     // Shown from the first decoded segment until the cycle returns to idle.
     static func isVisible(state: RiverState, text: String) -> Bool {
@@ -21,7 +16,7 @@ struct TranscriptPanelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    Text(appState.liveTranscript)
+                    Text(text)
                         .font(.system(size: Constants.transcriptFontSize))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -30,7 +25,7 @@ struct TranscriptPanelView: View {
                 .padding(.horizontal, Constants.transcriptPanelHorizontalPadding)
                 .padding(.vertical, Constants.transcriptPanelVerticalPadding)
             }
-            .onChange(of: appState.liveTranscript) { _, _ in
+            .onChange(of: text) { _, _ in
                 proxy.scrollTo(Self.endID, anchor: .bottom)
             }
         }
@@ -40,10 +35,6 @@ struct TranscriptPanelView: View {
         .background { HUDSurface(cornerRadius: Constants.transcriptPanelCornerRadius) }
         // The surface is dark on every desktop, so it takes the dark appearance's colors.
         .environment(\.colorScheme, .dark)
-        .opacity(isVisible ? 1 : 0)
-        .offset(y: isVisible || reduceMotion ? 0 : Constants.hudFadeRise)
-        .padding(Constants.hudShadowMargin)
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: isVisible)
         .accessibilityLabel("Transcript")
     }
 
