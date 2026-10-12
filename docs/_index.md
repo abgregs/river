@@ -24,6 +24,9 @@ What the app should look, move, and sound like: the identity brief and the princ
 ### [decisions/](decisions/_index.md)
 Decision records — why specific refactors were or weren't taken, and when to revisit them. Read before re-suggesting a known-deferred change.
 
+### [research/](research/_index.md)
+Primary-source investigations behind a fix or a decision, each with numbered sources. Read the one a bug record or decision cites before re-researching its question.
+
 ## Cross-cutting axes
 
 Concerns that cut across categories, where two rules can each be accurate yet conflict. A doc review audits one axis at a time, reading every rule that touches it together.
