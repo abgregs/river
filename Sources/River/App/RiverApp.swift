@@ -28,6 +28,8 @@ struct RiverApp: App {
 
 private struct MenuBarLabel: View {
     let appState: AppState
+    // The menu bar's own appearance, which picks the Active glyph's light or dark image.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         switch MenuBarPresentation.visual(
@@ -36,8 +38,8 @@ private struct MenuBarLabel: View {
             modelLoadState: appState.modelLoadState
         ).icon {
         case .glyph(let glyph):
-            // A template PNG has no name of its own, unlike the SF Symbol it replaces.
-            Image(nsImage: MenuBarGlyphImages.image(for: glyph))
+            // A glyph PNG has no name of its own, unlike the SF Symbol it replaces.
+            Image(nsImage: MenuBarGlyphImages.image(for: glyph, dark: colorScheme == .dark))
                 .accessibilityLabel("River")
         case .symbol(let name):
             Image(systemName: name)
@@ -45,26 +47,27 @@ private struct MenuBarLabel: View {
     }
 }
 
-/// The slat glyph's template images, loaded once from the bundle's Resources, where
-/// `make bundle` copies them and `make verify` asserts they ship.
+/// The mark's menu bar images, loaded once from the bundle's Resources, where `make bundle`
+/// copies them and `make verify` asserts they ship.
 @MainActor
 private enum MenuBarGlyphImages {
     private static let logger = Logger(subsystem: Constants.loggingSubsystem, category: "menu-bar")
-    private static var cache: [MenuBarPresentation.Glyph: NSImage] = [:]
+    private static var cache: [String: NSImage] = [:]
 
-    static func image(for glyph: MenuBarPresentation.Glyph) -> NSImage {
-        if let cached = cache[glyph] { return cached }
+    static func image(for glyph: MenuBarPresentation.Glyph, dark: Bool) -> NSImage {
+        let name = glyph.assetName(dark: dark)
+        if let cached = cache[name] { return cached }
         let image: NSImage
-        if let loaded = Bundle.main.image(forResource: glyph.rawValue) {
-            loaded.isTemplate = true
+        if let loaded = Bundle.main.image(forResource: name) {
+            loaded.isTemplate = glyph.isTemplate
             image = loaded
         } else {
             // Only an unbundled `swift run` gets here; a bundle without the glyphs fails `make verify`.
-            logger.fault("Menu bar glyph \(glyph.rawValue, privacy: .public) missing from the bundle")
+            logger.fault("Menu bar glyph \(name, privacy: .public) missing from the bundle")
             image = NSImage(systemSymbolName: "mic", accessibilityDescription: nil) ?? NSImage()
             image.isTemplate = true
         }
-        cache[glyph] = image
+        cache[name] = image
         return image
     }
 }
