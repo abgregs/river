@@ -9,10 +9,11 @@
 ```swift
 @MainActor
 final class RiverSession {
-    var state: AnyPublisher<RiverState, Never> { get }   // observable for UI
-    var currentState: RiverState { get }                 // sync accessor for tests
-    var errors: AnyPublisher<RiverError, Never> { get }  // per-stage cycle failures
-    var notices: AnyPublisher<String, Never> { get }        // recording-context notices
+    var state: AnyPublisher<RiverState, Never> { get }            // observable for UI
+    var currentState: RiverState { get }                          // sync accessor for tests
+    var errors: AnyPublisher<RiverError, Never> { get }           // per-stage cycle failures
+    var notices: AnyPublisher<String, Never> { get }              // recording-context notices
+    var liveTranscript: AnyPublisher<String, Never> { get }       // streaming text for the panel
 
     func start() async throws        // begin listening; idempotent
     func stop() async                // tear down cleanly; idempotent
