@@ -1,5 +1,7 @@
 # Design: Pixel identity (round ten, 2026-09-24)
 
+> **Superseded 2026-10-14** on every surface (panel, menu bar, app icon) by the stones identity ([stones-identity.md](stones-identity.md)). The working rules below still inform identity work.
+
 The identity round that replaced the 0028 marks with one pixel-grid lowercase **r**: what the maintainer approved, which earlier confirmed rules it deliberately revises, every rejected attempt with its reason, and the working rules the round taught. [identity-studies.md](identity-studies.md) holds rounds one to nine; read both before proposing icon, glyph, indicator, or palette work. The reference implementation is [studies/pixel-identity.html](studies/pixel-identity.html) (serve the folder over localhost; the microphone needs a secure context). The native build is [../planning/0029_pixel-identity.md](../planning/0029_pixel-identity.md).
 
 ## Approved by the maintainer

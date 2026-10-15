@@ -4,7 +4,7 @@ The roles River's colors play, what the one accent means, and how a new surface 
 
 ## The system in one sentence
 
-Charcoal and ink carry everything; one turquoise accent means **on**: River hearing your voice, or a control you have switched on or are acting on. There is no second hue.
+Charcoal and ink carry everything; one turquoise accent means **on**: River recording or transcribing your dictation, or a control you have switched on or are acting on. There is no second hue.
 
 ## Tokens
 
@@ -21,25 +21,27 @@ Charcoal and ink carry everything; one turquoise accent means **on**: River hear
 
 ## What the accent means: on
 
-The accent marks something that is **on right now because of you**. It answers "what is live, what is engaged, what did I turn on", and nothing else.
+The accent marks something that is **on right now**: a dictation River is working on, or a control you turned on. It answers "what is live, what is engaged, what did I turn on", and nothing else.
 
 **Where it appears**
 
-- **The listening meter.** Your voice, live. This is the only place the accent appears in a mark.
+- **The mark while River is active** ([stones-identity.md](stones-identity.md)). In the panel, the stones and the bars from the press until the panel fades; in the menu bar, the bars, for Listening and Transcribing alike.
+  **Why:** revised 2026-10-14 with the stones identity. The rule was "your voice": only the live meter took the accent, and River's own work (transcribing) stayed ink. The maintainer reads one color for "River is on"; the panel's motion, not its color, tells listening from transcribing.
 - **Controls, through the SwiftUI tint** (`RiverApp`, `OnboardingCoordinator`): a switch that is on, a selected row or segment, the one primary button in a view, links. The color stays as long as the state holds; it is the state, not an event.
 - **Platform-drawn progress** in the app's windows, which macOS tints from the same accent.
 
 **Where it never appears**
 
-- **River's own work.** Transcribing, preparing, and any future download progress in the mark stay ink. Color separates you (accent) from River (ink): the meter turns turquoise because you are speaking, and returns to ink the moment River takes over.
+- **River getting ready.** Preparing the model and any download stay ink: in the panel the r held still in ink, in the menu bar their SF Symbols. Nothing is being dictated yet.
 - **Status.** Errors, warnings, and success are not "on". See Status below.
 - **Confirmation flashes.** A setting that was just changed does not flash turquoise; the switch staying on is the confirmation.
-- **The resting mark, the menu bar, and the app icon.** Menu bar glyphs are template images the system tints; the icon is ink on charcoal "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
+- **The menu bar at rest, and the app icon.** The Ready glyph is a template image the system tints; the icon is ink on charcoal "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
 - **Decoration.** No accent backgrounds, gradients, section headers, large fills, or static text. Accent text that does nothing reads as clickable.
 
 ## Which value to use
 
 - **The HUD** is dark on every desktop, so it uses `accentDark` directly: 7.27:1 on its lightest ground (see The HUD surface below), 9.83:1 on charcoal.
+- **The menu bar's Active glyph** is not a template image, so it ships one image per menu bar appearance: `accentLight` on a light menu bar (3.69:1 against an opaque `#E6E6E6`), `accentDark` on a dark one (10.06:1 against `#232427`). The real menu bar is translucent, so these are approximations; a test holds both above 3:1.
 - **App windows** (Settings, onboarding, menus) follow the system appearance, so they use the dynamic `accent`: `accentLight` measures 4.61:1 on white.
 - **Text on an accent fill** uses `onAccent`: white on `accentLight` is 4.61:1; on `accentDark` white is 1.54:1 and fails, so the dark value takes charcoal (9.83:1).
 - Never `accentLight` on charcoal or `accentDark` on white; measure any new pairing before shipping it.
@@ -61,19 +63,16 @@ Every floating surface (the mark's panel, the message rectangle, the transcript 
 
 Under Reduce Transparency, `deepCharcoal`, opaque, replaces the blur and the tint, so the surface reads as the same dark panel as the blurred one over dark content.
 
-## The mark's inks
+## The mark's colors
 
 Measured over the HUD surface's lightest ground (`#3A3B3D`, over a white page) and over `deepCharcoal` (the Reduce Transparency fill); a graphic that carries meaning needs 3:1 on both.
 
-| Ink | Lightest ground | `deepCharcoal` | Carries |
+| Color | Lightest ground | `deepCharcoal` | Carries |
 |---|---|---|---|
-| Lit meter, `accentDark` at 95% | 6.71:1 | 11.02:1 | Your voice |
-| Crest base, ink at 55% | 4.15:1 | 5.49:1 | Transcribing |
-| Preparing base and the Increase Contrast floor, ink at 42% | 3.08:1 | 3.69:1 | Preparing |
-| Dither's dim cells, ink at 30% | 2.28:1 | 2.47:1 | Texture |
-| Unlit meter cells, ink at 16% | 1.57:1 | 1.53:1 | Texture |
+| `accentDark` | 7.27:1 | 12.16:1 | River active: the stones and the bars |
+| `ink` | 9.65:1 | 16.14:1 | Preparing: the r held still |
 
-Dim cells sit below 3:1 on purpose: they are texture, and every state is carried by the bright cells and the shape (the r, the meter, the dithered r). Under Increase Contrast every cell is lifted to at least 42%, which clears 3:1. The preparing base rose from 40% to 42% on 2026-10-09, when the blurred surface's lighter ground took 40% to 2.94:1.
+The mark is solid: the pixel identity's dimmed cells, crest base, and dither are gone, so nothing in it sits below 3:1 and Increase Contrast needs no floor ([pixel-identity.md](pixel-identity.md) recorded those values).
 
 ## Status colors
 
@@ -81,7 +80,7 @@ River has none today: error toasts are plain prose and the menu bar warning is a
 
 ## Adding a color
 
-Only when two things must be told apart at a glance and shape, text, or position cannot do it. Record the decision here as a revision, as round ten did for the meter ([pixel-identity.md](pixel-identity.md)). A new hue sits more than 15° from 196 and is measured against every surface it renders on. Color is never the only cue.
+Only when two things must be told apart at a glance and shape, text, or position cannot do it. Record the decision here as a revision, as round ten did for the meter ([pixel-identity.md](pixel-identity.md)) and the stones identity did for the accent's meaning ([stones-identity.md](stones-identity.md)). A new hue sits more than 15° from 196 and is measured against every surface it renders on. Color is never the only cue.
 
 ## Future surfaces
 
@@ -91,11 +90,12 @@ Only when two things must be told apart at a glance and shape, text, or position
 | Snippets | Platform selection; no per-snippet color coding |
 | Streaming text in the panel | Ink. A candidate that fits the rule: words still being recognized in the accent (your voice, live), turning ink once committed |
 | History | Neutral; platform selection |
-| Download progress | In the mark, ink (River's work); in a window, the platform progress bar |
+| Download progress | In the menu bar, its SF Symbol; in a window, the platform progress bar |
 | Toasts and warnings | Prose in ink; a status glyph, if added, takes system red or orange |
 
 ## Related
 
+- [stones-identity.md](stones-identity.md) — the identity that widened the accent to "River is on"
 - [pixel-identity.md](pixel-identity.md) — the round that put the accent on the live meter
 - [identity-studies.md](identity-studies.md) — how the turquoise was chosen, and the measured variants
 - [direction.md](direction.md) — the principles this serves: platform first, quiet by default

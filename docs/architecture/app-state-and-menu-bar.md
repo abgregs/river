@@ -47,11 +47,11 @@ Mapping (per [../requirements/core-feature.md](../requirements/core-feature.md) 
 
 | State | Icon | Label |
 |---|---|---|
-| `.idle` | pixel r glyph, Ready | Ready |
-| `.recording` | pixel r glyph, Listening | Recording... |
-| `.processing` | pixel r glyph, Transcribing | Processing... |
+| `.idle` | the r (`MenuBarReady`, template) | Ready |
+| `.recording` | the bars in the accent (`MenuBarActive`) | Recording... |
+| `.processing` | the bars in the accent (`MenuBarActive`) | Processing... |
 
-The three cycle states draw River's own pixel-r template images (planning [0029](../planning/0029_pixel-identity.md), replacing 0028's slats); every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
+The cycle states draw River's own mark ([../design/stones-identity.md](../design/stones-identity.md), replacing planning 0029's pixel r): Ready is a template image the system tints; Listening and Transcribing share one image of the bars in the accent, not a template, shipped once per menu bar appearance (`MenuBarActive`, `MenuBarActiveDark`) and picked by the label's color scheme. Every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
 
 A pending error overrides **only the `.idle` icon** with `exclamationmark.triangle`; an active state's icon always wins (errors surface at end-of-cycle, so a live `.recording`/`.processing` glyph is never masked by a stale error). The label always reflects the raw state.
 
