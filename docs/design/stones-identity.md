@@ -31,7 +31,7 @@ Rules the study taught:
 
 In the panel the mark is `accentDark` from the press until the panel fades, the r included; while the model is preparing, the r waits in `ink`, since nothing is being dictated. In the menu bar, Ready is the r as a template image (ink); Listening and Transcribing are the same frozen reading of the bars in the accent: `accentLight` on a light menu bar (3.69:1 against `#E6E6E6`), `accentDark` on a dark one (10.06:1 against `#232427`). **Why:** the accent now means **River is on**, recording or transcribing, a revision of [color.md](color.md)'s earlier "your voice" rule; the maintainer reads one color for "River is active", and the panel's motion, not its color, tells listening from transcribing.
 
-The warning, downloading, and loading states keep their SF Symbols (maintainer, 2026-10-14). The app icon is the r at rest in `ink` on the charcoal squircle (maintainer, 2026-10-15), drawn from the same shapes. At 16 px the cuts close to under a pixel, so the smallest Finder sizes read as a solid r.
+The Active image is picked from `NSApp.effectiveAppearance`, which follows a Light/Dark switch; the menu bar label's SwiftUI color scheme keeps its launch value and showed the bright image on a light menu bar until this was fixed (spike and maintainer's on-device check, 2026-10-15). The warning, downloading, and loading states keep their SF Symbols (maintainer, 2026-10-14). The app icon is the r at rest in `ink` on the charcoal squircle (maintainer, 2026-10-15), drawn from the same shapes. At 16 px the cuts close to under a pixel, so the smallest Finder sizes read as a solid r.
 
 ## Panel interaction (spike, 2026-10-14)
 
@@ -39,7 +39,7 @@ Run twice on device by the maintainer while typing in Notes: a panel configured 
 
 ## Open
 
-- **On-device check.** The Active glyph's light or dark image is picked from `NSApp.effectiveAppearance`, which a spike showed following a Light/Dark switch while the label's SwiftUI color scheme stayed at its launch value (2026-10-15). The installed build is not yet confirmed showing the deep turquoise on a light menu bar.
+Nothing from this build. Next on the roadmap: the live view (word ticker, expanded panel, word count), which uses the panel interaction above.
 
 ## Related
 
