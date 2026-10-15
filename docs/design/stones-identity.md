@@ -39,7 +39,7 @@ Run twice on device by the maintainer while typing in Notes: a panel configured 
 
 ## Open
 
-- **On-device checks.** The Active glyph's light or dark image follows the menu bar label's color scheme, which is not yet confirmed to track the menu bar's own appearance over every wallpaper.
+- **On-device check.** The Active glyph's light or dark image is picked from `NSApp.effectiveAppearance`, which a spike showed following a Light/Dark switch while the label's SwiftUI color scheme stayed at its launch value (2026-10-15). The installed build is not yet confirmed showing the deep turquoise on a light menu bar.
 
 ## Related
 

@@ -28,8 +28,8 @@ struct RiverApp: App {
 
 private struct MenuBarLabel: View {
     let appState: AppState
-    // The menu bar's own appearance, which picks the Active glyph's light or dark image.
-    @Environment(\.colorScheme) private var colorScheme
+    // Picks the Active glyph's light or dark image.
+    @State private var appearance = SystemAppearance()
 
     var body: some View {
         switch MenuBarPresentation.visual(
@@ -39,10 +39,28 @@ private struct MenuBarLabel: View {
         ).icon {
         case .glyph(let glyph):
             // A glyph PNG has no name of its own, unlike the SF Symbol it replaces.
-            Image(nsImage: MenuBarGlyphImages.image(for: glyph, dark: colorScheme == .dark))
+            Image(nsImage: MenuBarGlyphImages.image(for: glyph, dark: appearance.isDark))
                 .accessibilityLabel("River")
         case .symbol(let name):
             Image(systemName: name)
+        }
+    }
+}
+
+/// Whether the system is in Dark mode, kept current. The menu bar label's SwiftUI color scheme
+/// stays at its launch value when the system switches between Light and Dark, and a drawing
+/// handler is not re-run either, so the Active glyph kept the dark image on a light menu bar;
+/// `NSApp.effectiveAppearance` follows the switch (measured on device, 2026-10-15).
+@MainActor
+@Observable
+private final class SystemAppearance {
+    private(set) var isDark = Palette.isDark(NSApplication.shared.effectiveAppearance)
+    @ObservationIgnored private var observation: NSKeyValueObservation?
+
+    init() {
+        observation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] app, _ in
+            let dark = Palette.isDark(app.effectiveAppearance)
+            Task { @MainActor in self?.isDark = dark }
         }
     }
 }
