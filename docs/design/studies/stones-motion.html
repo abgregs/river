@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>River r motion</title>
+<style>
+  :root {
+    --page: #0b0c0e;
+    --card: #15171b;
+    --line: #262a30;
+    --ground: #101215;
+    --ink: #eceef1;
+    --muted: #8a919c;
+    --accent: #00e7e9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { padding: 16px 24px 4px; }
+  h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 72ch; }
+  .controls {
+    position: sticky; top: 0; z-index: 1;
+    display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center;
+    padding: 12px 24px;
+    background: rgba(11, 12, 14, 0.88);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+  }
+  .group { display: flex; gap: 8px; align-items: center; }
+  .group > span { font-size: 12px; color: var(--muted); }
+  .segmented { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); }
+  .segmented button {
+    font: inherit; font-size: 13px; color: var(--muted);
+    background: none; border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  .segmented button[aria-pressed="true"] { background: #2a2f36; color: var(--ink); }
+  input[type="range"] { width: 120px; accent-color: var(--accent); }
+  label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+  output { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); min-width: 3.5ch; }
+  main { padding: 20px 24px 40px; display: grid; gap: 20px; }
+  .stage { display: grid; gap: 16px; grid-template-columns: minmax(0, 420px); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .hero { background: var(--ground); aspect-ratio: 1 / 1; display: grid; place-items: center; }
+  .hero svg { width: 70%; height: 70%; overflow: visible; }
+  .row { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+  .desk { width: 72px; height: 64px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, #5b6f86, #c9b79c); }
+  .tile {
+    width: 48px; height: 48px; border-radius: 11px; display: grid; place-items: center;
+    background: rgba(16, 18, 21, 0.86);
+    box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.8), 0 8px 18px rgba(0, 0, 0, 0.3);
+  }
+  .tile svg { height: 34px; width: 34px; overflow: visible; }
+  .text { padding: 12px 14px 14px; border-top: 1px solid var(--line); }
+  .text h2 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+  .text p { margin: 0; color: var(--muted); }
+  .status { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  section h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--muted); }
+  .strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .frame { background: var(--ground); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 6px; justify-items: center; }
+  .frame svg { width: 100%; aspect-ratio: 1 / 1; overflow: visible; }
+  .frame span { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .menubar-set { display: grid; gap: 8px; }
+  .menubar-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .menubar { height: 24px; padding: 0 9px; border-radius: 6px; display: flex; align-items: center; gap: 12px; }
+  .menubar svg { height: 16px; width: 16px; }
+  .menubar.light { background: #e6e6e6; color: #000; }
+  .menubar.dark { background: #232427; color: #fff; }
+  .note { color: var(--muted); font-size: 12px; max-width: 80ch; }
+  @media (max-width: 700px) { .strip { grid-template-columns: repeat(3, 1fr); } main, .controls, header { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>River · mark motion study</h1>
+  <p>Stones and water, decided 2026-10-14. The panel opens on River's mark, holds it 350 ms, then morphs the three stones into level bars, 40 ms apart from left to right; the bars follow the voice and hold still at their floor in pauses. On release the morph runs in reverse, right to left, the mark holds 350 ms, and the panel fades. Bar tops are slanted 35°, like the stem cut.</p>
+</header>
+<div class="controls">
+  <div class="group"><span>State</span>
+    <div class="segmented" id="mode">
+      <button data-value="auto">Auto cycle</button>
+      <button data-value="preparing">Preparing</button>
+      <button data-value="listening">Listening</button>
+      <button data-value="finishing">Finishing</button>
+    </div>
+  </div>
+  <div class="group"><span>Speed</span>
+    <div class="segmented" id="speed">
+      <button data-value="1">1×</button>
+      <button data-value="0.25">0.25×</button>
+      <button data-value="0.1">0.1×</button>
+    </div>
+  </div>
+  <div class="group"><label class="check"><input type="checkbox" id="scrub"> Scrub</label><input type="range" id="scrub-t" min="0" max="1" step="0.01"><output id="scrub-out"></output></div>
+  <div class="group"><label class="check"><input type="checkbox" id="reduce"> Reduce Motion</label></div>
+  <div class="group"><span>Level</span>
+    <div class="segmented" id="source">
+      <button data-value="sim">Simulated</button>
+      <button data-value="mic">Microphone</button>
+    </div>
+  </div>
+  <span class="status" id="status"></span>
+</div>
+<main>
+  <div class="stage" id="stage"></div>
+  <div id="strips"></div>
+  <section>
+    <h2>Menu bar, 16 pt, static</h2>
+    <div class="menubar-set" id="menubar"></div>
+    <p class="note">Static, never animated. Ready is the mark in ink (a template image the system tints). Listening and Transcribing are the same three bars in turquoise: <code>accentLight</code> <code>#148284</code> on a light menu bar (3.69:1), <code>accentDark</code> <code>#00E7E9</code> on a dark one (10.06:1). Turquoise means River is active, recording or transcribing (decided 2026-10-14).</p>
+  </section>
+</main>
+<script src="stones-mark.js"></script>
+<script>
+// ---------- Geometry ----------
+const MARK = window.RIVER_MARK;
+const STEM = MARK.stem;                  // 126 units
+const BASELINE = 521;                    // font y = 0, in SVG units (y down)
+const BAR_W = STEM;
+const BAR_GAP = (467 - 3 * BAR_W) / 2;   // three bars span the r's own width, 78…545
+const BAR_X0 = 78;
+const H_MAX = 509;
+const H_MIN = STEM * 0.95;               // at silence the bars sit about as tall as wide: stones
+const RADIUS = Math.round(0.2 * STEM);   // the pieces' own corner radius
+const SLANT = Math.tan(35 * Math.PI / 180);
+const N_EDGE = 48;                       // points per side; 4 sides per outline
+const VIEW = "38 -40 547 601";
+
+function parse(d) {
+  return d.replace(/Z$/, "").slice(1).split("L").map(p => p.split(",").map(Number));
+}
+function signedArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+    a += x1 * y2 - x2 * y1;
+  }
+  return a / 2;
+}
+function clockwise(pts) { return signedArea(pts) > 0 ? pts : pts.slice().reverse(); }
+function dist(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
+
+// Resample the closed outline from anchor i to anchor j (exclusive) to n points by arc length.
+function resampleArc(pts, i, j, n) {
+  const arc = [];
+  for (let k = i; ; k = (k + 1) % pts.length) { arc.push(pts[k]); if (k === j) break; }
+  const cum = [0];
+  for (let k = 1; k < arc.length; k++) cum.push(cum[k - 1] + dist(arc[k - 1], arc[k]));
+  const total = cum[cum.length - 1], out = [];
+  let seg = 0;
+  for (let s = 0; s < n; s++) {
+    const target = total * s / n;
+    while (seg < cum.length - 2 && cum[seg + 1] < target) seg++;
+    const span = cum[seg + 1] - cum[seg] || 1, u = (target - cum[seg]) / span;
+    out.push([arc[seg][0] + (arc[seg + 1][0] - arc[seg][0]) * u, arc[seg][1] + (arc[seg + 1][1] - arc[seg][1]) * u]);
+  }
+  return out;
+}
+
+// Four anchors (the points nearest the bounding box's corners, clockwise from top-left)
+// give piece and bar a shared frame, so each side of the piece becomes the matching side
+// of its bar instead of points sliding around the outline.
+function anchored(pts, corners) {
+  pts = clockwise(pts);
+  const idx = corners.map(c => pts.reduce((best, p, k) => dist(p, c) < dist(pts[best], c) ? k : best, 0));
+  let out = [];
+  for (let s = 0; s < 4; s++) out = out.concat(resampleArc(pts, idx[s], idx[(s + 1) % 4], N_EDGE));
+  return out;
+}
+function bboxCorners(pts) {
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+}
+function pieceOutlines() {
+  return MARK.parts.map(d => {
+    const pts = parse(d);
+    return anchored(pts, bboxCorners(pts));
+  });
+}
+
+// A bar with filleted corners, sampled with the same four-anchor frame.
+function fillet(poly, r, steps = 10) {
+  const out = [], mids = [];
+  for (let i = 0; i < poly.length; i++) {
+    const P = poly[i], A = poly[(i + poly.length - 1) % poly.length], C = poly[(i + 1) % poly.length];
+    const la = dist(A, P), lc = dist(C, P);
+    const u = [(A[0] - P[0]) / la, (A[1] - P[1]) / la], v = [(C[0] - P[0]) / lc, (C[1] - P[1]) / lc];
+    const theta = Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1])));
+    let d = r / Math.tan(theta / 2);
+    d = Math.min(d, la / 2, lc / 2);
+    const rr = d * Math.tan(theta / 2);
+    const T1 = [P[0] + u[0] * d, P[1] + u[1] * d], T2 = [P[0] + v[0] * d, P[1] + v[1] * d];
+    const bis = [u[0] + v[0], u[1] + v[1]], bl = Math.hypot(...bis);
+    const k = rr / Math.sin(theta / 2);
+    const O = [P[0] + bis[0] / bl * k, P[1] + bis[1] / bl * k];
+    let a1 = Math.atan2(T1[1] - O[1], T1[0] - O[0]), a2 = Math.atan2(T2[1] - O[1], T2[0] - O[0]);
+    let delta = a2 - a1;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    for (let s = 0; s <= steps; s++) {
+      const a = a1 + delta * s / steps;
+      out.push([O[0] + rr * Math.cos(a), O[1] + rr * Math.sin(a)]);
+      if (s === steps / 2) mids.push(out.length - 1);
+    }
+  }
+  return { pts: out, mids };
+}
+function barOutline(i, level) {
+  const x0 = BAR_X0 + i * (BAR_W + BAR_GAP), x1 = x0 + BAR_W;
+  const h = H_MIN + (H_MAX - H_MIN) * level;
+  const rise = SLANT * BAR_W / 2;   // tops slanted 35°, like the stem cut
+  const poly = [[x0, BASELINE - h + rise], [x1, BASELINE - h - rise], [x1, BASELINE], [x0, BASELINE]];
+  const { pts, mids } = fillet(poly, RADIUS);
+  let out = [];
+  for (let s = 0; s < 4; s++) out = out.concat(resampleArc(pts, mids[s], mids[(s + 1) % 4], N_EDGE));
+  return out;
+}
+
+// ---------- Morph ----------
+// Linear blend of matched points. No ripple (dropped 2026-10-14): a ripple suits motion that
+// spreads outward or attacks, not a shape condensing smoothly into a low bar.
+// X and Y run on separate schedules: sideways motion leads, growth lags. The foot and the
+// hook start stacked in the stem's column, so if both moved together the hook would grow
+// down into the foot before the foot had slid out of the way (they merged into one lump at
+// mid-morph). Leading with X clears the column first; going back, growth unwinds first.
+function blend(piece, bar, t) {
+  const tx = 1 - (1 - t) * (1 - t), ty = t * t;
+  return piece.map((p, k) => [p[0] + (bar[k][0] - p[0]) * tx, p[1] + (bar[k][1] - p[1]) * ty]);
+}
+// The bars reach the voice's level only as the morph lands, and leave it as the morph back
+// starts: a bar's height is the level times t⁴. Without this the foot, growing into a tall
+// bar, rose into the hook's underside mid-morph (an overlap of 35–70 ms whenever the level
+// was above about 0.2, measured 2026-10-14). With it, every level keeps the clearance of
+// silence: at least 5.8 units between the stones throughout.
+function morphLevel(level, t) { return level * t * t * t * t; }
+function crossfade(piece, bar, t) { return t < 0.5 ? piece : bar; }
+function toPath(pts) { return "M" + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join("L") + "Z"; }
+
+// ---------- Views ----------
+function makeSvg(cls) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<svg viewBox="${VIEW}" class="${cls || ""}" aria-hidden="true">` +
+    [0, 1, 2].map(() => `<path fill="#00e7e9"/>`).join("") + `</svg>`;
+  const svg = wrap.firstChild;
+  return { svg, paths: [...svg.querySelectorAll("path")] };
+}
+const SUBJECTS = [
+  { title: "River's mark", note: "Three stones inspired by a bold lowercase r, cut at 35° and 70°, corner radius 0.2 × stem.", pieces: pieceOutlines() },
+];
+const views = [];
+const stage = document.getElementById("stage");
+for (const subject of SUBJECTS) {
+  const hero = makeSvg(), tile = makeSvg();
+  const card = document.createElement("article");
+  card.className = "card";
+  card.innerHTML = `<div class="hero"></div><div class="row"><div class="desk"><div class="tile"></div></div><span class="status">48 pt panel, 34 pt mark</span></div>` +
+    `<div class="text"><h2>${subject.title}</h2><p>${subject.note}</p></div>`;
+  card.querySelector(".hero").appendChild(hero.svg);
+  card.querySelector(".tile").appendChild(tile.svg);
+  stage.appendChild(card);
+  views.push({ subject, targets: [hero, tile] });
+}
+
+// ---------- State ----------
+const params = new URLSearchParams(location.search);
+const state = {
+  mode: params.get("mode") || "auto",
+  speed: Number(params.get("speed") || 1),
+  scrub: params.has("t"),
+  scrubT: Number(params.get("t") || 0),
+  reduce: params.has("reduce"),
+  source: "sim",
+};
+// Each piece's morph runs on its own critically damped spring (Apple's damping 1.0), so a
+// state change mid-morph retargets from where the shape is, with no jump. Pieces start
+// `stagger` apart: left to right into bars, right to left back to the r, so the exit
+// retraces the entrance.
+const RESPONSE = 0.24;
+const HOLD = 350;      // ms the r holds, before the morph and after it (decided 2026-10-14)
+const STAGGER = 40;    // ms between pieces starting to morph (decided 2026-10-14)
+const springs = [0, 1, 2].map(() => ({ x: 0, v: 0 }));
+let morph = { target: 0, at: -1 };   // already settled on the mark at load
+let cycle = { phase: "hidden", until: 0 };
+// In pauses the bars hold still at their floor: motion means sound, so a dead or muted mic
+// shows as bars that don't move while you talk (decided 2026-10-14, replacing a gentle bob).
+let clock = 0, levels = [0, 0, 0], shown = 1;
+
+const bars = [0, 1, 2].map(i => ({ value: 0, next: 0, at: 0, gain: [0.82, 1, 0.9][i], hold: 0 }));
+let sim = { gateOn: true, gateUntil: 0 };
+function simulatedLevel(t) {
+  if (t > sim.gateUntil) {
+    sim.gateOn = !sim.gateOn;
+    sim.gateUntil = t + (sim.gateOn ? 1.4 + Math.random() * 1.6 : 0.35 + Math.random() * 0.5);
+  }
+  if (!sim.gateOn) return 0;   // a quiet room sits below the meter floor
+  const syllable = Math.abs(Math.sin(Math.PI * 4.6 * t + Math.sin(t * 1.7) * 2));
+  return Math.min(1, 0.35 + 0.6 * syllable * (0.75 + 0.25 * Math.random()));
+}
+let analyser = null, buffer = null;
+function micLevel() {
+  analyser.getFloatTimeDomainData(buffer);
+  let sum = 0;
+  for (const s of buffer) sum += s * s;
+  const db = 20 * Math.log10(Math.sqrt(sum / buffer.length) || 1e-9);
+  return Math.max(0, Math.min(1, (db + 50) / 22));   // floor -50 dBFS, ceiling -28, as the app
+}
+// Each bar is its own readout: own sampling clock, fast rise, slow fall.
+function updateLevels(t, dt, listening) {
+  const input = listening ? (state.source === "mic" && analyser ? micLevel() : simulatedLevel(t)) : 0;
+  bars.forEach((b, i) => {
+    if (t >= b.at) { b.next = input * b.gain * (0.85 + 0.3 * Math.random()); b.at = t + 0.06 + Math.random() * 0.05; }
+    const rate = b.next > b.value ? 1 / 0.05 : 1 / 0.25;
+    b.value += (b.next - b.value) * Math.min(1, dt * rate);
+    levels[i] = Math.max(0, Math.min(1, b.value));
+  });
+}
+
+// The auto cycle: preparing is the r's opening hold; finishing is the morph back plus the
+// closing hold; hidden is the gap between dictations.
+function modeNow(t) {
+  if (state.mode !== "auto") return state.mode;
+  if (t >= cycle.until) {
+    const settle = RESPONSE + 2 * STAGGER / 1000;
+    const order = {
+      hidden: ["preparing", HOLD / 1000],
+      preparing: ["listening", 5.0],
+      listening: ["finishing", settle + HOLD / 1000],
+      finishing: ["hidden", 0.8],
+    };
+    const [next, length] = order[cycle.phase];
+    cycle = { phase: next, until: t + length };
+  }
+  return cycle.phase;
+}
+
+// ---------- Frame ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000) * state.speed;
+  last = now;
+  clock += dt;
+  const mode = modeNow(clock);
+  const listening = mode === "listening";
+  updateLevels(clock, dt, listening);
+
+  const target = listening ? 1 : 0;
+  if (target !== morph.target) morph = { target, at: clock };
+  const ts = springs.map((s, i) => {
+    if (state.scrub) return state.scrubT;
+    const order = morph.target === 1 ? i : 2 - i;
+    const goal = clock - morph.at >= order * STAGGER / 1000 ? morph.target : 1 - morph.target;
+    const w = 2 * Math.PI / RESPONSE;
+    s.v += (-w * w * (s.x - goal) - 2 * w * s.v) * dt;
+    s.x += s.v * dt;
+    return Math.max(0, Math.min(1, s.x));
+  });
+  // The panel's own fade, 0.22 s, for the gap between dictations.
+  shown += ((mode !== "hidden" ? 1 : 0) - shown) * Math.min(1, dt / 0.08);
+
+  for (const view of views) {
+    const shapes = view.subject.pieces.map((piece, i) => {
+      const bar = barOutline(i, state.reduce ? levels[i] : morphLevel(levels[i], ts[i]));
+      return state.reduce ? crossfade(piece, bar, ts[i]) : blend(piece, bar, ts[i]);
+    });
+    for (const target of view.targets) {
+      shapes.forEach((pts, i) => target.paths[i].setAttribute("d", toPath(pts)));
+      target.svg.style.opacity = shown.toFixed(3);
+    }
+  }
+  document.getElementById("status").textContent = `${mode} · morph ${ts.map(t => t.toFixed(2)).join(" ")}`;
+  requestAnimationFrame(frame);
+}
+
+// ---------- Static frames and menu bar ----------
+function renderStrips() {
+  const frames = [0, 0.2, 0.4, 0.6, 0.8, 1];
+  const steady = [0.55, 1, 0.75];
+  document.getElementById("strips").innerHTML = SUBJECTS.map(subject => {
+    const cells = frames.map(t => {
+      const d = subject.pieces.map((piece, i) => toPath(blend(piece, barOutline(i, morphLevel(steady[i], t)), t))).map(p => `<path d="${p}" fill="#00e7e9"/>`).join("");
+      return `<div class="frame"><svg viewBox="${VIEW}" aria-hidden="true">${d}</svg><span>t = ${t.toFixed(1)}</span></div>`;
+    }).join("");
+    return `<section><h2>${subject.title}: in-between frames, mark → bars</h2><div class="strip">${cells}</div></section>`;
+  }).join("");
+  const glyph = (inner, label) => `<svg viewBox="70 -8 483 537" role="img" aria-label="${label}">${inner}</svg>`;
+  const ready = glyph(SUBJECTS[0].pieces.map(p => `<path d="${toPath(p)}" fill="currentColor"/>`).join(""), "Ready");
+  const bars = (fill, label) => glyph([0.55, 1, 0.75].map((l, i) => `<path d="${toPath(barOutline(i, l))}" fill="${fill}"/>`).join(""), label);
+  const turquoise = { light: "#148284", dark: "#00e7e9" };
+  const row = k => ready + bars(turquoise[k], "Listening") + bars(turquoise[k], "Transcribing");
+  document.getElementById("menubar").innerHTML =
+    `<div class="menubar-row">` + ["light", "dark"].map(k => `<div class="menubar ${k}">${row(k)}</div>`).join("") + `</div>`;
+}
+
+// ---------- Controls ----------
+function bindSegmented(id, key, onChange) {
+  const el = document.getElementById(id);
+  const sync = () => [...el.children].forEach(b => b.setAttribute("aria-pressed", String(b.dataset.value) === String(state[key])));
+  el.addEventListener("click", e => {
+    const value = e.target.closest("button")?.dataset.value;
+    if (value == null) return;
+    state[key] = key === "speed" ? Number(value) : value;
+    sync();
+    onChange?.(value);
+  });
+  sync();
+}
+bindSegmented("mode", "mode", () => { cycle = { phase: "hidden", until: clock }; });
+bindSegmented("speed", "speed");
+bindSegmented("source", "source", async value => {
+  if (value !== "mic" || analyser) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new AudioContext();
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    buffer = new Float32Array(analyser.fftSize);
+    ctx.createMediaStreamSource(stream).connect(analyser);
+  } catch (error) {
+    state.source = "sim";
+    document.querySelector('#source button[data-value="sim"]').click();
+    alert("Microphone unavailable here. Serve the folder over http://localhost (see the note at the bottom).");
+  }
+});
+const scrub = document.getElementById("scrub"), scrubT = document.getElementById("scrub-t"), scrubOut = document.getElementById("scrub-out");
+scrub.checked = state.scrub; scrubT.value = state.scrubT; scrubOut.textContent = Number(state.scrubT).toFixed(2);
+scrub.addEventListener("change", () => { state.scrub = scrub.checked; springs.forEach(s => { s.x = Number(scrubT.value); s.v = 0; }); });
+scrubT.addEventListener("input", () => { state.scrubT = Number(scrubT.value); scrubOut.textContent = state.scrubT.toFixed(2); });
+const reduce = document.getElementById("reduce");
+reduce.checked = state.reduce;
+reduce.addEventListener("change", () => { state.reduce = reduce.checked; });
+
+renderStrips();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

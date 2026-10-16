@@ -4,35 +4,35 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// Renders the shipped pixel-mark drawing at held frames to PNGs, for the side-by-side
-/// check against the study page (planning 0029) and for PR screenshots. Env-gated like
-/// the eval harnesses: the normal suite never writes files.
+/// Renders the shipped stones-mark drawing at held frames to PNGs, for the side-by-side
+/// check against the study page (docs/design/studies/stones-motion.html) and for PR
+/// screenshots. Env-gated like the eval harnesses: the normal suite never writes files.
 @Suite("River indicator snapshots", .enabled(if: ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"] != nil))
 @MainActor
 struct RiverIndicatorSnapshotTests {
     // Held frames matching the study page's stages, run through the real engine with a fixed
-    // seed so the meter's reading is the same on every run.
-    static func frames() -> [(name: String, frame: PixelMarkFrame, increaseContrast: Bool)] {
+    // seed so the bars' reading is the same on every run.
+    static func frames() -> [(name: String, frame: StoneMarkFrame)] {
         let start = 1_000.0
         let speaking: (Double) -> Double = { inputLevel(decibels: speechDecibels + 5 * sin($0 * 9)) }
         let quiet: (Double) -> Double = { inputLevel(decibels: quietSpeechDecibels + 3 * sin($0 * 9)) }
-        let rest = PixelMarkFrame(seed: 11).running(.rest, from: start, for: 0.3).frame
-        let preparing = PixelMarkFrame(seed: 11).running(.preparing, from: start, for: 1.2).frame
-        let silence = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 1.5).frame
-        let quietTalking = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 2, level: quiet).frame
-        let (listening, end) = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 2, level: speaking)
-        let transcribing = listening.running(.transcribing, from: end, for: Constants.pixelReturnSeconds + 0.6).frame
-        let (reduced, reducedEnd) = PixelMarkFrame(seed: 11).running(.listening, from: start, for: 1, reduceMotion: true, level: speaking)
-        let reducedTranscribing = reduced.running(.transcribing, from: reducedEnd, for: 1, reduceMotion: true).frame
+        let rest = StoneMarkFrame(seed: 11).running(.rest, from: start, for: 0.3).frame
+        let preparing = StoneMarkFrame(seed: 11).running(.preparing, from: start, for: 1.2).frame
+        let morphing = StoneMarkFrame(seed: 11).running(.listening, from: start, for: Constants.markHoldSeconds + 0.12, fps: 120).frame
+        let silence = StoneMarkFrame(seed: 11).running(.listening, from: start, for: 1.5).frame
+        let quietTalking = StoneMarkFrame(seed: 11).running(.listening, from: start, for: 2, level: quiet).frame
+        let (listening, end) = StoneMarkFrame(seed: 11).running(.listening, from: start, for: 2, level: speaking)
+        let transcribing = listening.running(.transcribing, from: end, for: 0.8).frame
+        let reduced = StoneMarkFrame(seed: 11).running(.listening, from: start, for: 2, reduceMotion: true, level: speaking).frame
         return [
-            ("rest", rest, false),
-            ("preparing", preparing, false),
-            ("listening-silence", silence, false),
-            ("listening-silence-contrast", silence, true),
-            ("listening-quiet", quietTalking, false),
-            ("listening-speaking", listening, false),
-            ("transcribing", transcribing, false),
-            ("transcribing-reduce-motion", reducedTranscribing, false),
+            ("rest", rest),
+            ("preparing", preparing),
+            ("morphing", morphing),
+            ("listening-silence", silence),
+            ("listening-quiet", quietTalking),
+            ("listening-speaking", listening),
+            ("transcribing", transcribing),
+            ("listening-reduce-motion", reduced),
         ]
     }
 
@@ -42,10 +42,10 @@ struct RiverIndicatorSnapshotTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for held in Self.frames() {
             for scheme in [ColorScheme.light, .dark] {
-                let view = Canvas { context, _ in
-                    PixelMarkRenderer.draw(held.frame, increaseContrast: held.increaseContrast, in: &context)
+                let view = Canvas { context, size in
+                    StoneMarkRenderer.draw(held.frame, in: &context, size: size)
                 }
-                .frame(width: Constants.pixelMarkSize, height: Constants.pixelMarkSize)
+                .frame(width: Constants.indicatorMarkSize, height: Constants.indicatorMarkSize)
                 .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
                 .padding(.vertical, Constants.indicatorPanelVerticalPadding)
                 .background {

@@ -36,7 +36,7 @@ private struct MenuBarLabel: View {
             modelLoadState: appState.modelLoadState
         ).icon {
         case .glyph(let glyph):
-            // A template PNG has no name of its own, unlike the SF Symbol it replaces.
+            // A glyph PNG has no name of its own, unlike the SF Symbol it replaces.
             Image(nsImage: MenuBarGlyphImages.image(for: glyph))
                 .accessibilityLabel("River")
         case .symbol(let name):
@@ -45,8 +45,10 @@ private struct MenuBarLabel: View {
     }
 }
 
-/// The slat glyph's template images, loaded once from the bundle's Resources, where
-/// `make bundle` copies them and `make verify` asserts they ship.
+/// The mark's menu bar images, loaded once from the bundle's Resources, where `make bundle`
+/// copies them and `make verify` asserts they ship. Template images, because the menu bar
+/// takes its look from the wallpaper behind it, not from Light or Dark mode: a fixed color
+/// picked from the system appearance measured about 1.5:1 on a tinted bar (2026-10-15).
 @MainActor
 private enum MenuBarGlyphImages {
     private static let logger = Logger(subsystem: Constants.loggingSubsystem, category: "menu-bar")
@@ -56,14 +58,13 @@ private enum MenuBarGlyphImages {
         if let cached = cache[glyph] { return cached }
         let image: NSImage
         if let loaded = Bundle.main.image(forResource: glyph.rawValue) {
-            loaded.isTemplate = true
             image = loaded
         } else {
             // Only an unbundled `swift run` gets here; a bundle without the glyphs fails `make verify`.
             logger.fault("Menu bar glyph \(glyph.rawValue, privacy: .public) missing from the bundle")
             image = NSImage(systemSymbolName: "mic", accessibilityDescription: nil) ?? NSImage()
-            image.isTemplate = true
         }
+        image.isTemplate = true
         cache[glyph] = image
         return image
     }

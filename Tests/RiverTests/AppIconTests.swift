@@ -5,8 +5,8 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// Renders the app icon — the pixel r in ink on a charcoal squircle — through the same
-/// drawing the menu bar glyphs use. The checked-in script:
+/// Renders the app icon — the stones r in ink on a charcoal squircle, from the same shapes
+/// as the panel and the menu bar (docs/design/stones-identity.md). The checked-in script:
 /// `RIVER_WRITE_ICON=1 swift test --filter AppIcon` regenerates `River.icns`; the normal
 /// suite checks the shipped file still carries every size macOS asks for.
 enum AppIconRenderer {
@@ -38,15 +38,16 @@ enum AppIconRenderer {
         context.setFillColor(Palette.charcoal.cgColor)
         context.fillPath()
 
-        // The r at rest, at the panel's cell-to-gap proportion: the icon carries no cycle state.
-        let markWidth = side * Constants.appIconMarkFraction
-        let gapRatio = Constants.pixelGap / Constants.pixelCell
-        let cell = markWidth / (Double(PixelMark.size) + Double(PixelMark.size - 1) * gapRatio)
-        context.saveGState()
-        context.translateBy(x: (Constants.appIconCanvas - markWidth) / 2, y: (Constants.appIconCanvas - markWidth) / 2)
-        MenuBarGlyphRenderer.drawPixelMark(PixelMark.staticCells(for: .ready), cell: cell, gap: cell * gapRatio,
-                                           color: Palette.ink.cgColor, in: context)
-        context.restoreGState()
+        // The r at rest in ink, centered on its own shape: the icon carries no cycle state.
+        let height = side * Constants.appIconMarkFraction
+        let box = StoneMark.boundingBox(StoneMark.pieces)
+        let width = box.width * height / box.height
+        let transform = StoneMark.transform(fitting: box, into: CGRect(x: (Constants.appIconCanvas - width) / 2,
+                                                                       y: (Constants.appIconCanvas - height) / 2,
+                                                                       width: width, height: height))
+        context.setFillColor(Palette.ink.cgColor)
+        for piece in StoneMark.pieces { context.addPath(StoneMark.path(piece, transform: transform)) }
+        context.fillPath()
 
         guard let image = context.makeImage() else { throw ContextUnavailable() }
         return image

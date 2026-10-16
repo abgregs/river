@@ -1,12 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// Everything River floats above the Dock, as one bottom-anchored stack (planning 0028,
-/// mark replaced in 0029): the pixel mark's panel, which carries only the recording state;
+/// Everything River floats above the Dock, as one bottom-anchored stack (planning 0028; the
+/// mark is the stones of docs/design/stones-identity.md): the mark's panel, which carries only
+/// the recording state;
 /// above it one rounded rectangle for the error toast (0018), the model-loading label
 /// (0004), and the live-reconfiguration notice; and above that the streaming transcript
 /// (0025). It observes `AppState` only; every number that shapes the motion lives in the
-/// pure `PixelMarkPresentation`, and panel and focus behavior live in the coordinator.
+/// pure `StoneMarkPresentation`, and panel and focus behavior live in the coordinator.
 struct RiverIndicatorView: View {
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -60,9 +61,9 @@ struct RiverIndicatorView: View {
         appState.state == .idle ? RecordingIndicatorPresentation.loadingLabel(for: appState.modelLoadState) : nil
     }
 
-    // While the model gets ready the mark shows the waiting crest, not a spinner.
-    private var activity: PixelMarkActivity {
-        PixelMarkActivity.of(state: appState.state, isModelPreparing: loadingLabel != nil)
+    // While the model gets ready the mark holds the r, not a spinner.
+    private var activity: MarkActivity {
+        MarkActivity.of(state: appState.state, isModelPreparing: loadingLabel != nil)
     }
 
     // A notice belongs to the recording it describes: showing one at `.idle` would put
@@ -110,17 +111,17 @@ struct RiverIndicatorView: View {
     }
 }
 
-/// The panel around the mark, and the mark's accessible name: the pixels are decorative,
+/// The panel around the mark, and the mark's accessible name: the stones are decorative,
 /// so the panel speaks the state and, while listening, the elapsed time. While preparing,
 /// the label above speaks instead.
 private struct MarkPanel: View {
-    let activity: PixelMarkActivity
+    let activity: MarkActivity
     let inputLevel: Double
     @State private var recordingStart = Date()
 
     var body: some View {
         TimelineView(.animation(paused: activity == .rest)) { context in
-            PixelMarkView(activity: activity, inputLevel: inputLevel, date: context.date)
+            StoneMarkView(activity: activity, inputLevel: inputLevel, date: context.date)
                 .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
                 .padding(.vertical, Constants.indicatorPanelVerticalPadding)
                 .background { HUDSurface(cornerRadius: Constants.indicatorPanelCornerRadius) }
@@ -140,71 +141,54 @@ private struct MarkPanel: View {
     }
 }
 
-/// The pixel mark, drawn per display frame from the pure presentation functions.
-private struct PixelMarkView: View {
-    let activity: PixelMarkActivity
+/// The stones mark, drawn per display frame from the pure presentation functions.
+private struct StoneMarkView: View {
+    let activity: MarkActivity
     let inputLevel: Double
     let date: Date
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
-    @State private var engine = PixelMarkEngine()
+    @State private var engine = StoneMarkEngine()
 
     var body: some View {
-        Canvas { context, _ in
+        Canvas { context, size in
             let now = date.timeIntervalSinceReferenceDate
             let frame = engine.frame.advanced(to: now, activity: activity, inputLevel: inputLevel, reduceMotion: reduceMotion)
             engine.frame = frame
-            PixelMarkRenderer.draw(frame, increaseContrast: contrast == .increased, in: &context)
+            StoneMarkRenderer.draw(frame, in: &context, size: size)
         }
-        .frame(width: Constants.pixelMarkSize, height: Constants.pixelMarkSize)
+        .frame(width: Constants.indicatorMarkSize, height: Constants.indicatorMarkSize)
         .accessibilityHidden(true)
         // A new cycle starts from the r at rest, not from wherever the last one was left
         // when the timeline paused at idle.
         .onChange(of: activity) { oldActivity, _ in
-            if oldActivity == .rest { engine.frame = PixelMarkFrame() }
+            if oldActivity == .rest { engine.frame = StoneMarkFrame() }
         }
     }
 }
 
-/// Draws the sixteen pixels for one frame. Shared by the live mark and the snapshot
-/// harness, so a held frame is the shipped drawing, not a copy of it.
-enum PixelMarkRenderer {
-    static func draw(_ frame: PixelMarkFrame, increaseContrast: Bool, in context: inout GraphicsContext) {
+/// Draws the three stones for one frame. Shared by the live mark and the snapshot harness,
+/// so a held frame is the shipped drawing, not a copy of it.
+enum StoneMarkRenderer {
+    // The accent means River is on, so while it records or transcribes the mark takes the dark
+    // accent (the panel is charcoal on every desktop). Preparing the model is not a dictation:
+    // the r waits in ink.
+    static func draw(_ frame: StoneMarkFrame, in context: inout GraphicsContext, size: CGSize) {
         context.opacity = frame.opacity
-        let radius = PixelMark.cornerRadius(cell: Constants.pixelCell)
-        for (index, cell) in PixelMark.cells.enumerated() {
-            let offset = frame.offset(ofCell: index)
-            let rect = PixelMark.cellRect(x: Double(cell.x) + offset.x, y: Double(cell.y) + offset.y,
-                                          cell: Constants.pixelCell, gap: Constants.pixelGap)
-            let ink = PixelMarkPresentation.displayInk(frame.ink[index], increaseContrast: increaseContrast)
-            context.fill(Path(roundedRect: rect, cornerRadius: radius),
-                         with: .color(color(accentMix: frame.accentMix[index]).opacity(ink)))
+        let color = Color(nsColor: frame.activity == .preparing ? Palette.ink : Palette.accentDark)
+        let height = Constants.indicatorMarkHeight
+        let transform = CGAffineTransform(translationX: frame.centering, y: 0).concatenating(
+            StoneMark.transform(fitting: StoneMark.bounds,
+                                into: CGRect(x: 0, y: (size.height - height) / 2, width: size.width, height: height)))
+        for index in StoneMark.pieces.indices {
+            context.fill(Path(StoneMark.path(frame.outline(ofPiece: index), transform: transform)), with: .color(color))
         }
-    }
-
-    // The panel is charcoal on every desktop, so the lit meter takes the dark accent.
-    private static let inkComponents = components(Palette.ink)
-    private static let accentComponents = components(Palette.accentDark)
-
-    static func color(accentMix: Double) -> Color {
-        let ink = inkComponents, accent = accentComponents
-        let mix = min(1, max(0, accentMix))
-        return Color(.sRGB,
-                     red: ink.red + (accent.red - ink.red) * mix,
-                     green: ink.green + (accent.green - ink.green) * mix,
-                     blue: ink.blue + (accent.blue - ink.blue) * mix)
-    }
-
-    private static func components(_ color: NSColor) -> (red: Double, green: Double, blue: Double) {
-        let srgb = color.usingColorSpace(.sRGB) ?? color
-        return (srgb.redComponent, srgb.greenComponent, srgb.blueComponent)
     }
 }
 
 /// Holds the engine's frame between renders. A reference so the renderer can advance it
 /// without invalidating the view; nothing observes it.
-private final class PixelMarkEngine {
-    var frame = PixelMarkFrame()
+private final class StoneMarkEngine {
+    var frame = StoneMarkFrame()
 }
 
 /// The surface every floating shape shares (the mark's panel, the message rectangle, the

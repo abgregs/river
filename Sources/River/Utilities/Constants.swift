@@ -187,22 +187,21 @@ enum Constants {
     // Dock icons, so the mark sits just above the Dock like one more tile.
     static let hudBottomMargin: Double = 8
 
-    // The pixel mark (planning 0029). Every number was tuned on the study page
-    // (docs/design/studies/pixel-identity.html) and is ported as is, except the meter's
-    // level reference, which is calibrated on device.
+    // River's mark: three stones inspired by a bold lowercase r that morph into level bars
+    // (docs/design/stones-identity.md). Every number was tuned on the study page
+    // (docs/design/studies/stones-motion.html) and is ported as is. The shapes themselves live in
+    // `StoneMark`, in their own design units.
 
-    // Geometry: 4 pt cells and 2 pt gaps make a 34 pt mark whose edges land on whole
-    // pixels at 1x and 2x. The panel is a 48 pt square, a little smaller than a Dock icon
-    // at the default tile size, and never changes size.
-    static let pixelCell: Double = 4
-    static let pixelGap: Double = 2
-    static let pixelMarkSize: Double = 6 * pixelCell + 5 * pixelGap
-    // Cell corners are this fraction of the cell at every size, so the mark keeps one roundness.
-    static let pixelCornerFraction: Double = 0.16
+    // The mark is drawn 30 pt tall, centered in a 34 pt square, so it keeps 9 pt of room above
+    // and below inside the panel (filling the square read as crammed, maintainer 2026-10-14).
+    // The panel is a 48 pt square, a little smaller than a Dock icon at the default tile size,
+    // and never changes size.
+    static let indicatorMarkSize: Double = 34
+    static let indicatorMarkHeight: Double = 30
     static let indicatorPanelHorizontalPadding: Double = 7
     static let indicatorPanelVerticalPadding: Double = 7
-    static let indicatorPanelWidth: Double = pixelMarkSize + 2 * indicatorPanelHorizontalPadding
-    static let indicatorPanelHeight: Double = pixelMarkSize + 2 * indicatorPanelVerticalPadding
+    static let indicatorPanelWidth: Double = indicatorMarkSize + 2 * indicatorPanelHorizontalPadding
+    static let indicatorPanelHeight: Double = indicatorMarkSize + 2 * indicatorPanelVerticalPadding
     // About a Dock icon's corner at this size, so the mark reads as one more tile.
     static let indicatorPanelCornerRadius: Double = 11
 
@@ -249,82 +248,53 @@ enum Constants {
     static let transcriptPanelVerticalPadding: Double = 14
     static let transcriptFontSize: Double = 14
 
-    // Motion. The drop and the return move all sixteen pixels at once on a strong ease-out;
-    // the return is the quicker of the two, as an exit should be.
-    static let pixelDropSeconds: Double = 0.26
-    static let pixelReturnSeconds: Double = 0.24
-    static let pixelEaseOut = (x1: 0.23, y1: 1.0, x2: 0.32, y2: 1.0)
-    // Reduce Motion: no travel; the mark dips out and back while the layout swaps.
-    static let pixelFadeThroughSeconds: Double = 0.24
-    // Each pixel's ink and tint follow their target at this rate per second (about 0.17 s).
-    static let pixelInkRate: Double = 18
-    // The smoothed level Reduce Motion's meter follows: the river's attack and release.
-    static let pixelLevelAttackRate: Double = 10
-    static let pixelLevelReleaseRate: Double = 5
+    // Motion. The panel opens on the r and holds it, then each stone morphs into its bar on its
+    // own critically damped spring, the three starting a stagger apart, left to right. On
+    // release the morph runs back right to left, and the r holds until the panel fades.
+    static let markHoldSeconds: Double = 0.35
+    static let markStaggerSeconds: Double = 0.04
+    // The spring's response: the period it would ring at without damping.
+    static let markMorphResponse: Double = 0.24
+    // Reduce Motion: no morph; the mark dips out and back while the r and the bars swap.
+    static let markFadeThroughSeconds: Double = 0.24
+    // The smoothed level Reduce Motion's bars follow.
+    static let markLevelAttackRate: Double = 10
+    static let markLevelReleaseRate: Double = 5
     // Longest frame interval the engine advances by, so a resumed timeline does not leap.
-    static let pixelMaxFrameInterval: Double = 0.05
+    static let markMaxFrameInterval: Double = 0.05
 
-    // The meter: four columns, each its own readout, reading loudness in decibels of full
-    // scale (dBFS); a linear scale left quiet speech invisible on a built-in mic
-    // (maintainer's smoke, 2026-09-24). The floor is the capture trim's floor, so the meter
-    // never lights for a recording the trim then discards as silence: a meter that moved
-    // for a dictation River threw away would claim it heard you. The ceiling fills a
-    // column. Display only: the meter reads `inputLevel`, which the capture path never uses.
-    static let pixelMeterFloorDecibels: Double = 20 * log10(Double(silenceTrimFloor))
-    static let pixelMeterCeilingDecibels: Double = -28
-    // Silence keeps the bottom row half lit, so a quiet listening state never looks like rest.
-    static let pixelMeterPilot: Double = 0.5
-    // A slight center bias keeps the block balanced.
-    static let pixelMeterGains: [Double] = [0.85, 1, 1, 0.85]
-    // Each column re-reads the voice on its own clock, at a random interval in this range,
-    // hearing it this late (shuffled, so syllables ripple through rather than sweep).
-    static let pixelMeterTickRange: ClosedRange<Double> = 0.12...0.26
-    static let pixelMeterHearDelays: [Double] = [0.06, 0, 0.12, 0.03]
-    static let pixelMeterHistorySeconds: Double = 0.3
-    // Each reading lands between this fraction and one more of the loudness's reach.
-    static let pixelMeterSpreadFloor: Double = 0.25
-    // Columns rise fast and fall slowly, like a level meter.
-    static let pixelBarAttackRate: Double = 22
-    static let pixelBarReleaseRate: Double = 6
-    static let pixelUnlitInk: Double = 0.16
-    static let pixelLitInk: Double = 0.95
+    // The bars read loudness in decibels of full scale (dBFS); a linear scale left quiet
+    // speech invisible on a built-in mic (maintainer's smoke, 2026-09-24). The floor is the
+    // capture trim's floor, so the bars never move for a recording the trim then discards as
+    // silence: bars that moved for a dictation River threw away would claim it heard you. Below
+    // the floor they hold still at their resting height, so motion always means sound. The
+    // ceiling is a full bar. Display only: the bars read `inputLevel`, which the capture path
+    // never uses.
+    static let markMeterFloorDecibels: Double = 20 * log10(Double(silenceTrimFloor))
+    static let markMeterCeilingDecibels: Double = -28
+    // Each bar is its own readout: it re-reads the voice on its own clock, at a random interval
+    // in this range, at its own gain and a random spread, so the three move out of step.
+    static let markBarSampleInterval: ClosedRange<Double> = 0.06...0.11
+    static let markBarGains: [Double] = [0.82, 1, 0.9]
+    static let markBarSpread: ClosedRange<Double> = 0.85...1.15
+    // Bars rise fast and fall slowly, like a level meter (about 0.05 s up, 0.25 s down).
+    static let markBarRiseRate: Double = 20
+    static let markBarFallRate: Double = 4
 
-    // Transcribing: a raised-cosine crest of full ink runs the stroke over a dimmed base,
-    // the approved river crest carried over (its width is a fraction of the stroke here).
-    static let pixelCrestHalfWidth: Double = 0.32
-    static let pixelCrestRest: Double = 0.12
-    static let pixelCrestPeriod: Double = 2.0
-    static let pixelCrestBase: Double = 0.55
-    // Preparing (the model getting ready at launch): the same crest, slower and over a dimmer
-    // base, so it reads as waiting rather than working on your words. The base carries the
-    // state, so it clears 3:1 on the HUD's lightest ground (3.08:1 over a white page).
-    static let pixelPreparingCrestPeriod: Double = 3.0
-    static let pixelPreparingCrestBase: Double = 0.42
-    // The static Transcribing reading (menu bar, and the panel under Reduce Motion): every
-    // other pixel dimmed. Removing them breaks the r apart; brighter reads as Ready.
-    static let pixelDitherInk: Double = 0.3
-    static let pixelIncreasedContrastInkFloor: Double = 0.42
-
-    // Menu bar glyphs (planning 0029): the pixel r in an 18 pt template image, drawn denser
-    // than the panel because 1 pt gaps at this size read as dots. Every cell edge lands on a
-    // device pixel, so the grid sits at the box's origin rather than a half pixel off center.
+    // Menu bar glyphs: the mark in an 18 pt image, 16 pt tall. Ready is the r as a template
+    // image the system tints; Listening and Transcribing are one frozen reading of the bars in
+    // the accent, an image per menu bar appearance.
     static let menuBarGlyphSize: Double = 18
-    static let menuBarGlyphCell1x: Double = 2
-    static let menuBarGlyphGap1x: Double = 1
-    static let menuBarGlyphCell2x: Double = 2.5
-    static let menuBarGlyphGap2x: Double = 0.5
-    // Listening: a frozen meter reading with its bars out of step (2·3·4·1 reads as a
-    // signal-strength icon).
-    static let menuBarListeningHeights: [Int] = [3, 1, 4, 2]
+    static let menuBarMarkHeight: Double = 16
+    static let menuBarActiveLevels: [Double] = [0.55, 1, 0.75]
 
-    // App icon: the same pixel r in ink on a charcoal squircle, drawn on Apple's 1024
-    // grid where the rounded square occupies 824 of the canvas. The accent stays off it
-    // for now, so the icon matches the menu bar glyphs (maintainer, 2026-09-17).
+    // App icon: the stones r in ink on a charcoal squircle (maintainer, 2026-10-14), drawn on
+    // Apple's 1024 grid where the rounded square occupies 824 of the canvas.
     static let appIconCanvas: Double = 1024
     static let appIconSquircleInset: Double = 100
     static let appIconCornerRadius: Double = 185.4
-    // The mark's width as a fraction of the squircle's.
-    static let appIconMarkFraction: Double = 0.52
+    // The r's height as a fraction of the squircle's.
+    static let appIconMarkFraction: Double = 0.56
     static let appIconFileName = "River.icns"
 
     // How long an error toast stays on the HUD before auto-dismissing (planning

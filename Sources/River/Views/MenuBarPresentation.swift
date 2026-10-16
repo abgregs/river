@@ -3,16 +3,20 @@ import Foundation
 /// Pure mapping from cycle state to the menu-bar icon + status label, extracted
 /// so the icon/label contract is unit-tested without standing up SwiftUI.
 enum MenuBarPresentation {
-    // The slat glyph's three cycle states (planning 0028), shipped as template PNGs in
-    // the bundle's Resources under these names.
+    // The stones mark's menu bar glyphs (docs/design/stones-identity.md), shipped as PNGs in
+    // the bundle's Resources: Ready is the r; Active, for both Listening and Transcribing, is a
+    // frozen reading of the bars. Both are template images, which the system paints white or
+    // black to match the menu bar, as it does every other icon there.
     enum Glyph: String, CaseIterable {
         case ready = "MenuBarReady"
-        case listening = "MenuBarListening"
-        case transcribing = "MenuBarTranscribing"
+        case active = "MenuBarActive"
+
+        // Every file `make bundle` copies and `make verify` asserts, without the scale suffix.
+        static var assetNames: [String] { allCases.map(\.rawValue) }
     }
 
-    // The cycle states draw River's slat glyph; the warning, downloading, and loading
-    // states keep their SF Symbols.
+    // The cycle states draw River's mark; the warning, downloading, and loading states keep
+    // their SF Symbols.
     enum Icon: Equatable {
         case glyph(Glyph)
         case symbol(String)
@@ -23,8 +27,8 @@ enum MenuBarPresentation {
         let statusLabel: String
     }
 
-    // core-feature.md item 5: the slat glyph's Ready (.idle) / Listening (.recording) /
-    // Transcribing (.processing) states; labels "Ready" / "Recording..." / "Processing...".
+    // core-feature.md item 5: Ready (.idle) shows the r; Listening (.recording) and
+    // Transcribing (.processing) show the bars; labels "Ready" / "Recording..." / "Processing...".
     // A pending error overrides the *idle* icon with a warning glyph — errors
     // surface at end-of-cycle, so an active state's icon always wins.
     //
@@ -38,8 +42,7 @@ enum MenuBarPresentation {
             let glyph: Glyph
             switch state {
             case .idle: glyph = .ready  // unreachable (guard above), kept for exhaustiveness
-            case .recording: glyph = .listening
-            case .processing: glyph = .transcribing
+            case .recording, .processing: glyph = .active
             }
             let statusLabel: String
             switch state {

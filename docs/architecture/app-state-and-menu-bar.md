@@ -47,11 +47,11 @@ Mapping (per [../requirements/core-feature.md](../requirements/core-feature.md) 
 
 | State | Icon | Label |
 |---|---|---|
-| `.idle` | pixel r glyph, Ready | Ready |
-| `.recording` | pixel r glyph, Listening | Recording... |
-| `.processing` | pixel r glyph, Transcribing | Processing... |
+| `.idle` | the r (`MenuBarReady`, template) | Ready |
+| `.recording` | the bars in the accent (`MenuBarActive`) | Recording... |
+| `.processing` | the bars in the accent (`MenuBarActive`) | Processing... |
 
-The three cycle states draw River's own pixel-r template images (planning [0029](../planning/0029_pixel-identity.md), replacing 0028's slats); every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
+The cycle states draw River's own mark ([../design/stones-identity.md](../design/stones-identity.md), replacing planning 0029's pixel r): Ready is the r (`MenuBarReady`) and Listening and Transcribing share one image of the bars (`MenuBarActive`), both template images the system tints. **Why:** the menu bar takes its look from the wallpaper, not from Light or Dark mode, so only a template image follows it; a colored image per mode measured about 1.5:1 on a tinted bar (on device, 2026-10-15; [../design/color.md](../design/color.md)). Every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
 
 A pending error overrides **only the `.idle` icon** with `exclamationmark.triangle`; an active state's icon always wins (errors surface at end-of-cycle, so a live `.recording`/`.processing` glyph is never masked by a stale error). The label always reflects the raw state.
 
