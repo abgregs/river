@@ -259,8 +259,11 @@ private struct BackdropBlur: NSViewRepresentable {
         return view
     }
 
+    // Assigned only on a change: setting an appearance redraws the view, and SwiftUI calls this
+    // on every update of the panel.
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        let name: NSAppearance.Name = dark ? .darkAqua : .aqua
+        if view.appearance?.name != name { view.appearance = NSAppearance(named: name) }
     }
 
     // A stretchable image of the corner: a continuous corner starts curving about 1.53 radii
