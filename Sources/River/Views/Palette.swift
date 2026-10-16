@@ -11,6 +11,8 @@ enum Palette {
     // Charcoal itself is lighter than the blur over dark desktops, so it would lift them.
     static let deepCharcoal = NSColor(srgbHex: 0x101215)
     static let ink = NSColor(srgbHex: 0xECEEF1)
+    // Charcoal's cool hue at near white: the light floating UI's tint over its blur.
+    static let mist = NSColor(srgbHex: 0xF4F5F7)
 
     // Vivid turquoise, OKLCH hue 196: 4.61:1 on white. The dark value is the hue's most vivid
     // at lightness 0.84: 9.83:1 on charcoal, and 7.27:1 on the HUD's blurred surface over a
@@ -28,6 +30,33 @@ enum Palette {
 
     static func isDark(_ appearance: NSAppearance) -> Bool {
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    /// The floating UI's colors for one appearance (docs/design/color.md, The HUD surface). The
+    /// floating UI follows Light and Dark mode: dark is charcoal with ink and the bright accent,
+    /// light is the same build with the two swapped and the deep accent.
+    struct HUD {
+        let tint: NSColor
+        let tintOpacity: Double
+        // Text, and the r while the model prepares.
+        let text: NSColor
+        // The mark while River records or transcribes.
+        let accent: NSColor
+        // The inner hairline is white in both; the outer line black.
+        let hairlineOpacity: Double
+        let hairlineTopOpacity: Double
+        let outerLineOpacity: Double
+
+        static let dark = HUD(
+            tint: deepCharcoal, tintOpacity: Constants.hudDarkTintOpacity, text: ink, accent: accentDark,
+            hairlineOpacity: Constants.hudDarkHairlineOpacity,
+            hairlineTopOpacity: Constants.hudDarkHairlineTopOpacity, outerLineOpacity: Constants.hudDarkOuterLineOpacity)
+        static let light = HUD(
+            tint: mist, tintOpacity: Constants.hudLightTintOpacity, text: charcoal, accent: accentLight,
+            hairlineOpacity: Constants.hudLightHairlineOpacity,
+            hairlineTopOpacity: Constants.hudLightHairlineTopOpacity, outerLineOpacity: Constants.hudLightOuterLineOpacity)
+
+        static func `for`(_ scheme: ColorScheme) -> HUD { scheme == .dark ? dark : light }
     }
 }
 

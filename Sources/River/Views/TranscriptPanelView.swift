@@ -5,6 +5,7 @@ import SwiftUI
 /// the indicator's stack; `RiverIndicatorView` decides when it shows and fades it.
 struct TranscriptPanelView: View {
     let text: String
+    @Environment(\.colorScheme) private var colorScheme
 
     // Shown from the first decoded segment until the cycle returns to idle.
     static func isVisible(state: RiverState, text: String) -> Bool {
@@ -31,10 +32,8 @@ struct TranscriptPanelView: View {
         }
         .frame(width: Constants.transcriptPanelWidth, height: Constants.transcriptPanelHeight)
         .clipShape(shape)
-        .foregroundStyle(Color(nsColor: Palette.ink))
+        .foregroundStyle(Color(nsColor: Palette.HUD.for(colorScheme).text))
         .background { HUDSurface(cornerRadius: Constants.transcriptPanelCornerRadius) }
-        // The surface is dark on every desktop, so it takes the dark appearance's colors.
-        .environment(\.colorScheme, .dark)
         .accessibilityLabel("Transcript")
     }
 

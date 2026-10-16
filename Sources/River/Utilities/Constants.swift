@@ -206,18 +206,31 @@ enum Constants {
     static let indicatorPanelCornerRadius: Double = 11
 
     // The HUD surface every floating shape shares, matched to a native dark HUD window
-    // (Raycast Notes, measured 2026-10-09): the desktop behind blurred dark, a deep charcoal tint,
-    // a light inner hairline that brightens along the top edge, and a dark outer line that
-    // holds the edge over light desktops. The blur is forced dark, so the palette never flips
-    // per desktop. Reduce Transparency swaps blur and tint for the tint, opaque. Measured on
-    // screen 2026-10-09: over black the ground is #131315 (Raycast's is #151719); over a white
-    // page, the lightest ground the blur produces, ink holds 9.65:1 and the accent 7.27:1.
-    static let hudTintOpacity: Double = 0.72
+    // (Raycast Notes, measured 2026-10-09): the desktop behind blurred, a tint over it, a light
+    // inner hairline that brightens along the top edge, and a dark outer line that holds the
+    // edge over light desktops. It follows Light and Dark mode (`Palette.HUD`). Reduce
+    // Transparency swaps blur and tint for the tint, opaque. Dark, measured on screen
+    // 2026-10-09: over black the ground is #131315 (Raycast's is #151719); over a white page,
+    // the lightest ground the blur produces, ink holds 9.65:1 and the accent 7.27:1.
+    static let hudDarkTintOpacity: Double = 0.72
+    static let hudDarkHairlineOpacity: Double = 0.2
+    static let hudDarkHairlineTopOpacity: Double = 0.35
+    static let hudDarkOuterLineOpacity: Double = 0.8
+    // Light, 2026-10-15: at 0.72 a light panel over a black desktop leaves the deep accent at
+    // 2.13:1; 0.88 holds 3:1 with the blur ignored, the worst case. A white hairline only shows
+    // as sheen on a light tint, and a black outer line at the dark value would read as a frame.
+    // The lines are first values, to tune on device.
+    static let hudLightTintOpacity: Double = 0.88
+    static let hudLightHairlineOpacity: Double = 0.5
+    static let hudLightHairlineTopOpacity: Double = 0.9
+    static let hudLightOuterLineOpacity: Double = 0.12
+    // Secondary text on the HUD (a toast's hint, the notice): the text color at this opacity.
+    // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface and 3.71:1
+    // on the dark one's lightest measured ground. With the blur ignored, the worst case, the
+    // light surface needs 0.7 and the dark 0.8 for 4.5:1; one value keeps both above it.
+    static let hudSecondaryTextOpacity: Double = 0.8
     static let hudHairlineWidth: Double = 1
-    static let hudHairlineOpacity: Double = 0.2
-    static let hudHairlineTopOpacity: Double = 0.35
     static let hudOuterLineWidth: Double = 0.5
-    static let hudOuterLineOpacity: Double = 0.8
     // One soft shadow, drawn outside the edge only: the blur hides whatever lies beneath it.
     static let hudShadowRadius: Double = 18
     static let hudShadowOffset: Double = 8
@@ -281,9 +294,8 @@ enum Constants {
     static let markBarRiseRate: Double = 20
     static let markBarFallRate: Double = 4
 
-    // Menu bar glyphs: the mark in an 18 pt image, 16 pt tall. Ready is the r as a template
-    // image the system tints; Listening and Transcribing are one frozen reading of the bars in
-    // the accent, an image per menu bar appearance.
+    // Menu bar glyphs: the mark in an 18 pt image, 16 pt tall. Ready is the r; Listening and
+    // Transcribing are one frozen reading of the bars. Both are template images the system tints.
     static let menuBarGlyphSize: Double = 18
     static let menuBarMarkHeight: Double = 16
     static let menuBarActiveLevels: [Double] = [0.55, 1, 0.75]
