@@ -11,6 +11,7 @@ import SwiftUI
 struct RiverIndicatorView: View {
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     /// The stack at its tallest: transcript, message, and mark. The window is this plus the
     /// shadow margin and never resizes, so nothing on screen moves under a transition.
@@ -102,11 +103,8 @@ struct RiverIndicatorView: View {
         // The preparing label alone hugs its text and centers under the mark; toasts and
         // notices keep the full width their wrapped prose needs.
         .frame(width: isPreparingLabelOnly ? nil : Constants.hudMessageWidth, alignment: .leading)
-        .foregroundStyle(Color(nsColor: Palette.ink))
+        .foregroundStyle(Color(nsColor: Palette.HUD.for(colorScheme).text))
         .background { HUDSurface(cornerRadius: Constants.hudMessageCornerRadius) }
-        // The surface is charcoal on every desktop, so its text takes the dark appearance's
-        // colors regardless of the system's.
-        .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
     }
 }
@@ -147,6 +145,7 @@ private struct StoneMarkView: View {
     let inputLevel: Double
     let date: Date
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var engine = StoneMarkEngine()
 
     var body: some View {
@@ -154,7 +153,7 @@ private struct StoneMarkView: View {
             let now = date.timeIntervalSinceReferenceDate
             let frame = engine.frame.advanced(to: now, activity: activity, inputLevel: inputLevel, reduceMotion: reduceMotion)
             engine.frame = frame
-            StoneMarkRenderer.draw(frame, in: &context, size: size)
+            StoneMarkRenderer.draw(frame, in: &context, size: size, colors: .for(colorScheme))
         }
         .frame(width: Constants.indicatorMarkSize, height: Constants.indicatorMarkSize)
         .accessibilityHidden(true)
@@ -169,12 +168,11 @@ private struct StoneMarkView: View {
 /// Draws the three stones for one frame. Shared by the live mark and the snapshot harness,
 /// so a held frame is the shipped drawing, not a copy of it.
 enum StoneMarkRenderer {
-    // The accent means River is on, so while it records or transcribes the mark takes the dark
-    // accent (the panel is charcoal on every desktop). Preparing the model is not a dictation:
-    // the r waits in ink.
-    static func draw(_ frame: StoneMarkFrame, in context: inout GraphicsContext, size: CGSize) {
+    // The accent means River is on, so while it records or transcribes the mark takes the
+    // panel's accent. Preparing the model is not a dictation: the r waits in the text color.
+    static func draw(_ frame: StoneMarkFrame, in context: inout GraphicsContext, size: CGSize, colors: Palette.HUD) {
         context.opacity = frame.opacity
-        let color = Color(nsColor: frame.activity == .preparing ? Palette.ink : Palette.accentDark)
+        let color = Color(nsColor: frame.activity == .preparing ? colors.text : colors.accent)
         let height = Constants.indicatorMarkHeight
         let transform = CGAffineTransform(translationX: frame.centering, y: 0).concatenating(
             StoneMark.transform(fitting: StoneMark.bounds,
@@ -192,37 +190,41 @@ private final class StoneMarkEngine {
 }
 
 /// The surface every floating shape shares (the mark's panel, the message rectangle, the
-/// transcript panel), built like a native dark HUD window: the desktop behind it blurred
-/// dark under a charcoal tint, a light inner hairline that brightens along the top edge
-/// where light would catch it, a dark outer line that keeps the edge crisp over light
-/// desktops, and one soft shadow. Under Reduce Transparency, an opaque fill of the tint replaces
-/// the blur and the tint.
+/// transcript panel), built like a native HUD window in the system's appearance: the desktop
+/// behind it blurred under a tint (charcoal in Dark mode, mist in Light), a white inner
+/// hairline that brightens along the top edge where light would catch it, a dark outer line
+/// that keeps the edge crisp, and one soft shadow. Under Reduce Transparency, an opaque fill
+/// of the tint replaces the blur and the tint.
 struct HUDSurface: View {
     let cornerRadius: Double
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let colors = Palette.HUD.for(colorScheme)
         ZStack {
             if reduceTransparency {
-                shape.fill(Color(nsColor: Palette.deepCharcoal))
+                shape.fill(Color(nsColor: colors.tint))
             } else {
-                BackdropBlur(cornerRadius: cornerRadius)
-                shape.fill(Color(nsColor: Palette.deepCharcoal).opacity(Constants.hudTintOpacity))
+                BackdropBlur(cornerRadius: cornerRadius, dark: colorScheme == .dark)
+                shape.fill(Color(nsColor: colors.tint).opacity(colors.tintOpacity))
             }
         }
-        .overlay { shape.strokeBorder(Self.hairline, lineWidth: Constants.hudHairlineWidth) }
+        .overlay { shape.strokeBorder(Self.hairline(colors), lineWidth: Constants.hudHairlineWidth) }
         .overlay {
             shape.inset(by: -Constants.hudOuterLineWidth)
-                .strokeBorder(.black.opacity(Constants.hudOuterLineOpacity), lineWidth: Constants.hudOuterLineWidth)
+                .strokeBorder(.black.opacity(colors.outerLineOpacity), lineWidth: Constants.hudOuterLineWidth)
         }
         .background { Self.shadow(shape) }
     }
 
-    private static let hairline = LinearGradient(
-        stops: [.init(color: .white.opacity(Constants.hudHairlineTopOpacity), location: 0),
-                .init(color: .white.opacity(Constants.hudHairlineOpacity), location: 0.15)],
-        startPoint: .top, endPoint: .bottom)
+    private static func hairline(_ colors: Palette.HUD) -> LinearGradient {
+        LinearGradient(
+            stops: [.init(color: .white.opacity(colors.hairlineTopOpacity), location: 0),
+                    .init(color: .white.opacity(colors.hairlineOpacity), location: 0.15)],
+            startPoint: .top, endPoint: .bottom)
+    }
 
     // The shadow with the shape cut out of it, so it only ever shows outside the edge and
     // never darkens the blur or the tint.
@@ -239,23 +241,27 @@ struct HUDSurface: View {
 }
 
 /// A window-server blur of whatever is behind the panel. River is never the active app, so
-/// the view is forced active (an inactive one draws flat gray), and forced dark so the blur
-/// matches the charcoal palette on every desktop. A behind-window blur ignores layer masks;
-/// only `maskImage` shapes it, drawn here with the same continuous corner as the tint.
+/// the view is forced active (an inactive one draws flat gray). Its appearance is set from the
+/// same color scheme as the tint, so blur and tint always flip together. A behind-window blur
+/// ignores layer masks; only `maskImage` shapes it, drawn here with the same continuous corner
+/// as the tint.
 private struct BackdropBlur: NSViewRepresentable {
     let cornerRadius: Double
+    let dark: Bool
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = .hudWindow
         view.blendingMode = .behindWindow
         view.state = .active
-        view.appearance = NSAppearance(named: .darkAqua)
         view.maskImage = Self.mask(cornerRadius: cornerRadius)
+        updateNSView(view, context: context)
         return view
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+    }
 
     // A stretchable image of the corner: a continuous corner starts curving about 1.53 radii
     // from the corner, so the cap insets hold the whole curve.
