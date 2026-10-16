@@ -36,7 +36,7 @@ Concerns that cut across categories, where two rules can each be accurate yet co
 - **The cycle state seam** — `RiverState` transitions and every observer: menu bar, panel, sounds, hotkey. *last audited: 2026-10-12*
 - **User content privacy** — audio, transcripts, logs, the clipboard, the eval corpus, and release artifacts. *last audited: never*
 - **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: never*
-- **Bundle and release artifacts** — the Makefile, `make verify`, the release workflow's assets, the cask, and the appcast. *last audited: never*
+- **Bundle and release artifacts** — the Makefile, `make verify`, the release workflow's assets, the cask, and the appcast. *last audited: 2026-10-16*
 
 ## Conventions of these docs
 

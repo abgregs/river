@@ -1,6 +1,6 @@
 # Design: Color
 
-The roles River's colors play, what the one accent means, and how a new surface chooses color. The tokens live in `Palette` (`Sources/River/Views/Palette.swift`); every value below was measured on 2026-09-26, the HUD surface and the dark accent on 2026-10-09 (WCAG 2.x contrast; OKLCH from the sRGB hex). Read before adding color to any surface.
+The roles River's colors play, what the one accent means, and how a new surface chooses color. The tokens live in `Palette` (`Sources/River/Views/Palette.swift`); every value below was measured on 2026-09-26, the dark HUD surface and the dark accent on 2026-10-09, and the light HUD modelled on 2026-10-15 (WCAG 2.x contrast; OKLCH from the sRGB hex). Read before adding color to any surface.
 
 ## The system in one sentence
 
@@ -10,12 +10,13 @@ Charcoal and ink carry everything; one turquoise accent means **on**: River reco
 
 | Token | Value | OKLCH | Role |
 |---|---|---|---|
-| `charcoal` | `#23262B` | 26.8% 0.010 261 | The app icon's ground |
+| `charcoal` | `#23262B` | 26.8% 0.010 261 | The app icon's ground; text and the preparing r on the light HUD |
 | `raisedCharcoal` | `#2E3238` | 31.6% 0.012 258 | A fill nested on charcoal |
-| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The HUD's tint (72%) over its blur, and its opaque fill under Reduce Transparency: charcoal's hue, darker |
-| `ink` | `#ECEEF1` | 94.8% 0.005 258 | Every mark and all text on charcoal |
-| `accentDark` | `#00E7E9` | 84.1% 0.143 196 | The accent on dark surfaces; the HUD always uses it |
-| `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces |
+| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The dark HUD's tint (72%) over its blur, and its opaque fill under Reduce Transparency: charcoal's hue, darker |
+| `mist` | `#F4F5F7` | 97.0% 0.003 265 | The light HUD's tint (88%) over its blur, and its opaque fill under Reduce Transparency: charcoal's cool hue at near white |
+| `ink` | `#ECEEF1` | 94.8% 0.005 258 | Every mark and all text on charcoal, the dark HUD included |
+| `accentDark` | `#00E7E9` | 84.1% 0.143 196 | The accent on dark surfaces, the dark HUD included |
+| `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces, the light HUD included |
 | `accent` | dynamic | — | Resolves to the light or dark value per appearance; the tint of the Settings and onboarding windows |
 | `onAccent` | dynamic | — | Text on an accent fill: white on the light value, charcoal on the dark |
 
@@ -32,7 +33,7 @@ The accent marks something that is **on right now**: a dictation River is workin
 
 **Where it never appears**
 
-- **River getting ready.** Preparing the model and any download stay ink: in the panel the r held still in ink, in the menu bar their SF Symbols. Nothing is being dictated yet.
+- **River getting ready.** Preparing the model and any download stay neutral: in the panel the r held still in the HUD's text color (`ink` or `charcoal`), in the menu bar their SF Symbols. Nothing is being dictated yet.
 - **Status.** Errors, warnings, and success are not "on". See Status below.
 - **Confirmation flashes.** A setting that was just changed does not flash turquoise; the switch staying on is the confirmation.
 - **The menu bar, and the app icon.** Every menu bar glyph, the Active bars included, is a template image the system paints white or black like the icons beside it; the icon is ink on charcoal "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
@@ -73,7 +74,7 @@ Every floating surface (the mark's panel, the message rectangle, the transcript 
 | White | 14.04:1 | 4.26:1 |
 | `mist`, opaque | 13.91:1 | 4.23:1 |
 
-**Why 88%, not the dark surface's 72%:** a light panel over a dark desktop turns gray, and at 72% the deep accent fell to 2.13:1 over black. `PaletteTests` holds both appearances to 4.5:1 for text and 3:1 for the mark on this worst case, and fails at 72%. The hairline and outer-line values are first values, to tune on device.
+**Why 88%, not the dark surface's 72%:** a light panel over a dark desktop turns gray, and at 72% the deep accent fell to 2.13:1 over black. `PaletteTests` holds both appearances to 4.5:1 for text and 3:1 for the mark on this worst case, and fails at 72%. The hairline and outer-line values are first values; they passed the maintainer's on-device smoke on 2026-10-15 unchanged.
 
 Under Reduce Transparency, the tint, opaque, replaces the blur and the tint, so the surface reads as the same panel as the blurred one.
 
@@ -104,10 +105,10 @@ Only when two things must be told apart at a glance and shape, text, or position
 |---|---|
 | Settings window | Tint only: switches that are on, the selected sidebar row, one primary button per pane. Neutral section headers and icons |
 | Snippets | Platform selection; no per-snippet color coding |
-| Streaming text in the panel | Ink. A candidate that fits the rule: words still being recognized in the accent (your voice, live), turning ink once committed |
+| Streaming text in the panel | The HUD's text color (`ink` or `charcoal`). A candidate that fits the rule: words still being recognized in the accent (your voice, live), turning the text color once committed |
 | History | Neutral; platform selection |
 | Download progress | In the menu bar, its SF Symbol; in a window, the platform progress bar |
-| Toasts and warnings | Prose in ink; a status glyph, if added, takes system red or orange |
+| Toasts and warnings | Prose in the HUD's text color; a status glyph, if added, takes system red or orange |
 
 ## Related
 

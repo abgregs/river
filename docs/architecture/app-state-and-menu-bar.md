@@ -36,7 +36,7 @@ The icon/label contract is a pure function, extracted from the view so it's unit
 
 ```swift
 enum MenuBarPresentation {
-    enum Glyph: String, CaseIterable { case ready, listening, transcribing }   // asset names
+    enum Glyph: String, CaseIterable { case ready, active }   // asset names
     enum Icon: Equatable { case glyph(Glyph); case symbol(String) }
     struct Visual: Equatable { let icon: Icon; let statusLabel: String }
     static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState) -> Visual
@@ -48,8 +48,8 @@ Mapping (per [../requirements/core-feature.md](../requirements/core-feature.md) 
 | State | Icon | Label |
 |---|---|---|
 | `.idle` | the r (`MenuBarReady`, template) | Ready |
-| `.recording` | the bars in the accent (`MenuBarActive`) | Recording... |
-| `.processing` | the bars in the accent (`MenuBarActive`) | Processing... |
+| `.recording` | the bars (`MenuBarActive`, template) | Recording... |
+| `.processing` | the bars (`MenuBarActive`, template) | Processing... |
 
 The cycle states draw River's own mark ([../design/stones-identity.md](../design/stones-identity.md), replacing planning 0029's pixel r): Ready is the r (`MenuBarReady`) and Listening and Transcribing share one image of the bars (`MenuBarActive`), both template images the system tints. **Why:** the menu bar takes its look from the wallpaper, not from Light or Dark mode, so only a template image follows it; a colored image per mode measured about 1.5:1 on a tinted bar (on device, 2026-10-15; [../design/color.md](../design/color.md)). Every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
 

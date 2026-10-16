@@ -289,9 +289,8 @@ enum Constants {
     static let markBarRiseRate: Double = 20
     static let markBarFallRate: Double = 4
 
-    // Menu bar glyphs: the mark in an 18 pt image, 16 pt tall. Ready is the r as a template
-    // image the system tints; Listening and Transcribing are one frozen reading of the bars in
-    // the accent, an image per menu bar appearance.
+    // Menu bar glyphs: the mark in an 18 pt image, 16 pt tall. Ready is the r; Listening and
+    // Transcribing are one frozen reading of the bars. Both are template images the system tints.
     static let menuBarGlyphSize: Double = 18
     static let menuBarMarkHeight: Double = 16
     static let menuBarActiveLevels: [Double] = [0.55, 1, 0.75]
