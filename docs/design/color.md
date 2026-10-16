@@ -25,7 +25,7 @@ The accent marks something that is **on right now**: a dictation River is workin
 
 **Where it appears**
 
-- **The mark while River is active** ([stones-identity.md](stones-identity.md)). In the panel, the stones and the bars from the press until the panel fades; in the menu bar, the bars, for Listening and Transcribing alike.
+- **The mark while River is active** ([stones-identity.md](stones-identity.md)). In the panel, the stones and the bars from the press until the panel fades, for Listening and Transcribing alike.
   **Why:** revised 2026-10-14 with the stones identity. The rule was "your voice": only the live meter took the accent, and River's own work (transcribing) stayed ink. The maintainer reads one color for "River is on"; the panel's motion, not its color, tells listening from transcribing.
 - **Controls, through the SwiftUI tint** (`RiverApp`, `OnboardingCoordinator`): a switch that is on, a selected row or segment, the one primary button in a view, links. The color stays as long as the state holds; it is the state, not an event.
 - **Platform-drawn progress** in the app's windows, which macOS tints from the same accent.
@@ -35,13 +35,13 @@ The accent marks something that is **on right now**: a dictation River is workin
 - **River getting ready.** Preparing the model and any download stay ink: in the panel the r held still in ink, in the menu bar their SF Symbols. Nothing is being dictated yet.
 - **Status.** Errors, warnings, and success are not "on". See Status below.
 - **Confirmation flashes.** A setting that was just changed does not flash turquoise; the switch staying on is the confirmation.
-- **The menu bar at rest, and the app icon.** The Ready glyph is a template image the system tints; the icon is ink on charcoal "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
+- **The menu bar, and the app icon.** Every menu bar glyph, the Active bars included, is a template image the system paints white or black like the icons beside it; the icon is ink on charcoal "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
+  **Why:** revised 2026-10-15. The Active bars shipped in the accent, an image per Light and Dark mode, but the menu bar takes its look from the wallpaper behind it, not from the mode: in Light mode over a dark wallpaper the bar turned a mid blue-grey, every other icon went white, and the light accent measured about 1.5:1 there (white: 3.0:1). The maintainer chose to match the other icons.
 - **Decoration.** No accent backgrounds, gradients, section headers, large fills, or static text. Accent text that does nothing reads as clickable.
 
 ## Which value to use
 
 - **The HUD** is dark on every desktop, so it uses `accentDark` directly: 7.27:1 on its lightest ground (see The HUD surface below), 9.83:1 on charcoal.
-- **The menu bar's Active glyph** is not a template image, so it ships one image per menu bar appearance: `accentLight` on a light menu bar (3.69:1 against an opaque `#E6E6E6`), `accentDark` on a dark one (10.06:1 against `#232427`). The real menu bar is translucent, so these are approximations; a test holds both above 3:1.
 - **App windows** (Settings, onboarding, menus) follow the system appearance, so they use the dynamic `accent`: `accentLight` measures 4.61:1 on white.
 - **Text on an accent fill** uses `onAccent`: white on `accentLight` is 4.61:1; on `accentDark` white is 1.54:1 and fails, so the dark value takes charcoal (9.83:1).
 - Never `accentLight` on charcoal or `accentDark` on white; measure any new pairing before shipping it.
