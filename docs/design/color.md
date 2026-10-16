@@ -49,7 +49,8 @@ The accent marks something that is **on right now**: a dictation River is workin
 
 ## Neutrals and text
 
-- **HUD:** `ink` on the dark surface measures 9.65:1 on its lightest ground and 13.06:1 on charcoal (11.09:1 on raised charcoal); `charcoal` on the light surface, at least 10.6:1 by the worst-case model below. Secondary text (a toast's hint, the notice) uses `.secondary`, measured from a render as the text color at 50%: **below 4.5:1** on both surfaces, about 3.0:1 on the light one and 3.71:1 on the dark one's measured lightest ground. Open: the text at 70% would pass both (4.74:1 light worst case).
+- **HUD:** `ink` on the dark surface measures 9.65:1 on its lightest ground and 13.06:1 on charcoal (11.09:1 on raised charcoal); `charcoal` on the light surface, at least 10.6:1 by the worst-case model below. Secondary text (a toast's hint, the notice) is the text color at 80% (`hudSecondaryTextOpacity`), measured from a render: at least 4.85:1 on the dark surface and 6.26:1 on the light one in the worst case below. `PaletteTests` holds it to 4.5:1 with the text and the mark.
+  **Why:** revised 2026-10-16. It used the system `.secondary`, which renders the text color at 50%: about 3.0:1 on the light surface and 3.71:1 on the dark one's lightest measured ground. In the worst case the light surface needs 70% and the dark 80%, so one value covers both.
 - **App windows:** platform label colors (`.primary`, `.secondary`) on system backgrounds. Do not paint windows charcoal; platform first ([direction.md](direction.md)).
 
 ## The HUD surface
