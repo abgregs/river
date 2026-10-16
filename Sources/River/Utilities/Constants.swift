@@ -224,6 +224,11 @@ enum Constants {
     static let hudLightHairlineOpacity: Double = 0.5
     static let hudLightHairlineTopOpacity: Double = 0.9
     static let hudLightOuterLineOpacity: Double = 0.12
+    // Secondary text on the HUD (a toast's hint, the notice): the text color at this opacity.
+    // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface and 3.71:1
+    // on the dark one's lightest measured ground. With the blur ignored, the worst case, the
+    // light surface needs 0.7 and the dark 0.8 for 4.5:1; one value keeps both above it.
+    static let hudSecondaryTextOpacity: Double = 0.8
     static let hudHairlineWidth: Double = 1
     static let hudOuterLineWidth: Double = 0.5
     // One soft shadow, drawn outside the edge only: the blur hides whatever lies beneath it.

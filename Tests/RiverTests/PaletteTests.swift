@@ -33,14 +33,19 @@ struct PaletteTests {
     // panel can sit on. This models the worst case: the tint mixed straight over black, gray,
     // and white with the blur ignored (the blur pulls the ground toward the tint, so the
     // real panel only does better), plus the opaque tint Reduce Transparency draws. At the
-    // dark tint's 0.72 a light panel over black left the deep accent at 2.13:1.
+    // dark tint's 0.72 a light panel over black left the deep accent at 2.13:1. Secondary text
+    // is the text color at `hudSecondaryTextOpacity`, so it is mixed over the ground the same
+    // way; the system `.secondary` (0.5) measured about 3.0:1 here.
     @Test("the floating UI's text and mark hold contrast over any desktop",
           arguments: [("dark", Palette.HUD.dark), ("light", Palette.HUD.light)])
     func hudContrast(name: String, colors: Palette.HUD) {
         let tint = channels(colors.tint)
         let grounds = [0.0, 0.5, 1.0].map { desktop in tint.map { colors.tintOpacity * $0 + (1 - colors.tintOpacity) * desktop } } + [tint]
+        let alpha = Constants.hudSecondaryTextOpacity
         for ground in grounds {
+            let secondary = zip(channels(colors.text), ground).map { alpha * $0 + (1 - alpha) * $1 }
             #expect(contrast(channels(colors.text), ground) >= 4.5, "\(name) text on \(ground)")
+            #expect(contrast(secondary, ground) >= 4.5, "\(name) secondary text on \(ground)")
             #expect(contrast(channels(colors.accent), ground) >= 3, "\(name) accent on \(ground)")
         }
     }

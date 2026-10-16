@@ -95,7 +95,7 @@ struct RiverIndicatorView: View {
             if let notice {
                 Text(notice)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.foreground.opacity(Constants.hudSecondaryTextOpacity))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -295,7 +295,7 @@ private struct ToastRow: View {
             Text(toast.headline).font(.callout.weight(.semibold))
             Text(toast.hint)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.foreground.opacity(Constants.hudSecondaryTextOpacity))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
