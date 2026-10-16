@@ -24,7 +24,7 @@ ENTITLEMENTS := Sources/River/Resources/River.entitlements
 # SwiftPM has no asset pipeline for a hand-built bundle, so they are copied here.
 APP_ICON := Sources/River/Resources/River.icns
 MENU_BAR_GLYPHS := Sources/River/Resources/MenuBarGlyphs
-MENU_BAR_GLYPH_NAMES := MenuBarReady MenuBarActive MenuBarActiveDark
+MENU_BAR_GLYPH_NAMES := MenuBarReady MenuBarActive
 # Hardened runtime enforces library validation: embedded non-Apple code must be
 # signed with the app's own Team ID. The self-signed dev identity has no Team ID,
 # so macOS refuses to load the embedded Sparkle.framework and the app dies at

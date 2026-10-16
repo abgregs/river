@@ -28,8 +28,6 @@ struct RiverApp: App {
 
 private struct MenuBarLabel: View {
     let appState: AppState
-    // Picks the Active glyph's light or dark image.
-    @State private var appearance = SystemAppearance()
 
     var body: some View {
         switch MenuBarPresentation.visual(
@@ -39,7 +37,7 @@ private struct MenuBarLabel: View {
         ).icon {
         case .glyph(let glyph):
             // A glyph PNG has no name of its own, unlike the SF Symbol it replaces.
-            Image(nsImage: MenuBarGlyphImages.image(for: glyph, dark: appearance.isDark))
+            Image(nsImage: MenuBarGlyphImages.image(for: glyph))
                 .accessibilityLabel("River")
         case .symbol(let name):
             Image(systemName: name)
@@ -47,45 +45,27 @@ private struct MenuBarLabel: View {
     }
 }
 
-/// Whether the system is in Dark mode, kept current. The menu bar label's SwiftUI color scheme
-/// stays at its launch value when the system switches between Light and Dark, and a drawing
-/// handler is not re-run either, so the Active glyph kept the dark image on a light menu bar;
-/// `NSApp.effectiveAppearance` follows the switch (measured on device, 2026-10-15).
-@MainActor
-@Observable
-private final class SystemAppearance {
-    private(set) var isDark = Palette.isDark(NSApplication.shared.effectiveAppearance)
-    @ObservationIgnored private var observation: NSKeyValueObservation?
-
-    init() {
-        observation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] app, _ in
-            let dark = Palette.isDark(app.effectiveAppearance)
-            Task { @MainActor in self?.isDark = dark }
-        }
-    }
-}
-
 /// The mark's menu bar images, loaded once from the bundle's Resources, where `make bundle`
-/// copies them and `make verify` asserts they ship.
+/// copies them and `make verify` asserts they ship. Template images, because the menu bar
+/// takes its look from the wallpaper behind it, not from Light or Dark mode: a fixed color
+/// picked from the system appearance measured about 1.5:1 on a tinted bar (2026-10-15).
 @MainActor
 private enum MenuBarGlyphImages {
     private static let logger = Logger(subsystem: Constants.loggingSubsystem, category: "menu-bar")
-    private static var cache: [String: NSImage] = [:]
+    private static var cache: [MenuBarPresentation.Glyph: NSImage] = [:]
 
-    static func image(for glyph: MenuBarPresentation.Glyph, dark: Bool) -> NSImage {
-        let name = glyph.assetName(dark: dark)
-        if let cached = cache[name] { return cached }
+    static func image(for glyph: MenuBarPresentation.Glyph) -> NSImage {
+        if let cached = cache[glyph] { return cached }
         let image: NSImage
-        if let loaded = Bundle.main.image(forResource: name) {
-            loaded.isTemplate = glyph.isTemplate
+        if let loaded = Bundle.main.image(forResource: glyph.rawValue) {
             image = loaded
         } else {
             // Only an unbundled `swift run` gets here; a bundle without the glyphs fails `make verify`.
-            logger.fault("Menu bar glyph \(name, privacy: .public) missing from the bundle")
+            logger.fault("Menu bar glyph \(glyph.rawValue, privacy: .public) missing from the bundle")
             image = NSImage(systemSymbolName: "mic", accessibilityDescription: nil) ?? NSImage()
-            image.isTemplate = true
         }
-        cache[name] = image
+        image.isTemplate = true
+        cache[glyph] = image
         return image
     }
 }

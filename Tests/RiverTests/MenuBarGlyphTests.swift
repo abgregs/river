@@ -13,12 +13,6 @@ enum MenuBarGlyphRenderer {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/River/Resources/MenuBarGlyphs")
 
-    /// Every shipped image: the glyph, its appearance, and its asset name.
-    static let images: [(glyph: MenuBarPresentation.Glyph, dark: Bool, name: String)] =
-        MenuBarPresentation.Glyph.allCases.flatMap { glyph in
-            (glyph.isTemplate ? [false] : [false, true]).map { dark in (glyph, dark, glyph.assetName(dark: dark)) }
-        }
-
     static func fileName(_ name: String, scale: Int) -> String {
         scale == 1 ? "\(name).png" : "\(name)@\(scale)x.png"
     }
@@ -30,17 +24,9 @@ enum MenuBarGlyphRenderer {
         }
     }
 
-    // Ready is black with alpha, read by its alpha only as a template image. Active is the
-    // accent for the menu bar's appearance: the light value on a light bar, the dark on a dark.
-    static func color(for glyph: MenuBarPresentation.Glyph, dark: Bool) -> CGColor {
-        switch glyph {
-        case .ready: return CGColor(gray: 0, alpha: 1)
-        case .active: return (dark ? Palette.accentDark : Palette.accentLight).cgColor
-        }
-    }
-
-    // The glyph's own shapes, 16 pt tall and centered in the 18 pt box.
-    static func render(_ glyph: MenuBarPresentation.Glyph, dark: Bool, scale: Int) throws -> CGImage {
+    // The glyph's own shapes, 16 pt tall and centered in the 18 pt box, black with alpha: a
+    // template image is read by its alpha only.
+    static func render(_ glyph: MenuBarPresentation.Glyph, scale: Int) throws -> CGImage {
         let size = Constants.menuBarGlyphSize
         let pixels = Int(size) * scale
         struct ContextUnavailable: Error {}
@@ -59,7 +45,7 @@ enum MenuBarGlyphRenderer {
         let target = CGRect(x: (size - box.width * height / box.height) / 2, y: (size - height) / 2,
                             width: box.width * height / box.height, height: height)
         let transform = StoneMark.transform(fitting: box, into: target)
-        context.setFillColor(color(for: glyph, dark: dark))
+        context.setFillColor(CGColor(gray: 0, alpha: 1))
         for outline in outlines { context.addPath(StoneMark.path(outline, transform: transform)) }
         context.fillPath()
         guard let image = context.makeImage() else { throw ContextUnavailable() }
@@ -80,18 +66,16 @@ enum MenuBarGlyphRenderer {
 
 @Suite("Menu bar glyph assets")
 struct MenuBarGlyphTests {
-    static let variants: [(String, Int)] = MenuBarGlyphRenderer.images.flatMap { image in [(image.name, 1), (image.name, 2)] }
+    static let variants: [(MenuBarPresentation.Glyph, Int)] = MenuBarPresentation.Glyph.allCases.flatMap { glyph in [(glyph, 1), (glyph, 2)] }
 
     @Test("write the glyph PNGs",
           .enabled(if: ProcessInfo.processInfo.environment["RIVER_WRITE_GLYPHS"] != nil))
     func writeAssets() throws {
         try FileManager.default.createDirectory(at: MenuBarGlyphRenderer.assetDirectory, withIntermediateDirectories: true)
-        for image in MenuBarGlyphRenderer.images {
-            for scale in [1, 2] {
-                let rendered = try MenuBarGlyphRenderer.render(image.glyph, dark: image.dark, scale: scale)
-                let data = try #require(NSBitmapImageRep(cgImage: rendered).representation(using: .png, properties: [:]))
-                try data.write(to: MenuBarGlyphRenderer.assetDirectory.appendingPathComponent(MenuBarGlyphRenderer.fileName(image.name, scale: scale)))
-            }
+        for (glyph, scale) in Self.variants {
+            let rendered = try MenuBarGlyphRenderer.render(glyph, scale: scale)
+            let data = try #require(NSBitmapImageRep(cgImage: rendered).representation(using: .png, properties: [:]))
+            try data.write(to: MenuBarGlyphRenderer.assetDirectory.appendingPathComponent(MenuBarGlyphRenderer.fileName(glyph.rawValue, scale: scale)))
         }
     }
 
@@ -99,13 +83,12 @@ struct MenuBarGlyphTests {
     // changed one without the other. The tolerance absorbs antialiasing differences between
     // macOS versions, not a moved shape or a changed color.
     @Test("the shipped PNGs match the mark", arguments: variants)
-    func assetsMatchTheMark(name: String, scale: Int) throws {
-        let image = try #require(MenuBarGlyphRenderer.images.first { $0.name == name })
-        let url = MenuBarGlyphRenderer.assetDirectory.appendingPathComponent(MenuBarGlyphRenderer.fileName(name, scale: scale))
+    func assetsMatchTheMark(glyph: MenuBarPresentation.Glyph, scale: Int) throws {
+        let url = MenuBarGlyphRenderer.assetDirectory.appendingPathComponent(MenuBarGlyphRenderer.fileName(glyph.rawValue, scale: scale))
         let shipped = try #require(NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil))
         #expect(shipped.width == Int(Constants.menuBarGlyphSize) * scale)
         #expect(shipped.height == Int(Constants.menuBarGlyphSize) * scale)
-        let expected = MenuBarGlyphRenderer.rgba(of: try MenuBarGlyphRenderer.render(image.glyph, dark: image.dark, scale: scale))
+        let expected = MenuBarGlyphRenderer.rgba(of: try MenuBarGlyphRenderer.render(glyph, scale: scale))
         let actual = MenuBarGlyphRenderer.rgba(of: shipped)
         let worst = zip(expected, actual).map { abs(Int($0) - Int($1)) }.max() ?? 255
         #expect(worst <= 8)
@@ -118,20 +101,5 @@ struct MenuBarGlyphTests {
         let files = try FileManager.default.contentsOfDirectory(atPath: MenuBarGlyphRenderer.assetDirectory.path)
         let expected = MenuBarPresentation.Glyph.assetNames.flatMap { [MenuBarGlyphRenderer.fileName($0, scale: 1), MenuBarGlyphRenderer.fileName($0, scale: 2)] }
         #expect(Set(files.filter { $0.hasSuffix(".png") }) == Set(expected))
-    }
-
-    // The accent must hold the 3:1 a non-text graphic needs against the menu bar it sits on,
-    // measured against an opaque light and dark menu bar (the real one is translucent).
-    @Test("the Active accent clears 3:1 on its menu bar", arguments: [(false, 0xE6E6E6), (true, 0x232427)])
-    func activeContrast(dark: Bool, menuBar: Int) {
-        func luminance(_ color: NSColor) -> Double {
-            let srgb = color.usingColorSpace(.sRGB)!
-            func channel(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
-            return 0.2126 * channel(srgb.redComponent) + 0.7152 * channel(srgb.greenComponent) + 0.0722 * channel(srgb.blueComponent)
-        }
-        let bar = NSColor(srgbRed: Double((menuBar >> 16) & 0xFF) / 255, green: Double((menuBar >> 8) & 0xFF) / 255,
-                          blue: Double(menuBar & 0xFF) / 255, alpha: 1)
-        let accent = luminance(dark ? Palette.accentDark : Palette.accentLight), ground = luminance(bar)
-        #expect((max(accent, ground) + 0.05) / (min(accent, ground) + 0.05) >= 3)
     }
 }

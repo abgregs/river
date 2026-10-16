@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// River's color tokens (planning 0028), the one place the identity's colors are
-/// spelled. The mark takes the accent while River records or transcribes, in the panel and the
-/// menu bar's Active glyph (docs/design/stones-identity.md); otherwise marks use `ink`.
+/// spelled. The panel's mark takes the accent while River records or transcribes
+/// (docs/design/stones-identity.md); otherwise marks use `ink`.
 enum Palette {
     static let charcoal = NSColor(srgbHex: 0x23262B)
     static let raisedCharcoal = NSColor(srgbHex: 0x2E3238)

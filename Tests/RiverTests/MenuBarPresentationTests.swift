@@ -73,18 +73,7 @@ struct MenuBarPresentationTests {
     // ship, so a renamed case must fail here before it silently blanks the menu bar.
     @Test("the glyphs map to their shipped asset names")
     func glyphAssetNames() {
-        #expect(MenuBarPresentation.Glyph.assetNames == ["MenuBarReady", "MenuBarActive", "MenuBarActiveDark"])
-        #expect(MenuBarPresentation.Glyph.ready.assetName(dark: true) == "MenuBarReady")
-        #expect(MenuBarPresentation.Glyph.active.assetName(dark: false) == "MenuBarActive")
-        #expect(MenuBarPresentation.Glyph.active.assetName(dark: true) == "MenuBarActiveDark")
-    }
-
-    // The accent means River is on, and the system would repaint a template image in the menu
-    // bar's own color; only Ready, the ink r, may be tinted.
-    @Test("only Ready is a template image")
-    func onlyReadyIsTemplate() {
-        #expect(MenuBarPresentation.Glyph.ready.isTemplate)
-        #expect(!MenuBarPresentation.Glyph.active.isTemplate)
+        #expect(MenuBarPresentation.Glyph.assetNames == ["MenuBarReady", "MenuBarActive"])
     }
 
     @Test("default modelLoadState is .ready (backward-compatible call sites)")

@@ -4,24 +4,15 @@ import Foundation
 /// so the icon/label contract is unit-tested without standing up SwiftUI.
 enum MenuBarPresentation {
     // The stones mark's menu bar glyphs (docs/design/stones-identity.md), shipped as PNGs in
-    // the bundle's Resources. Ready is the r as a template image the system tints. Active,
-    // for both Listening and Transcribing, is a frozen reading of the bars in the accent:
-    // the accent means River is on. A colored image is not tinted by the system, so Active
-    // ships one image per menu bar appearance.
+    // the bundle's Resources: Ready is the r; Active, for both Listening and Transcribing, is a
+    // frozen reading of the bars. Both are template images, which the system paints white or
+    // black to match the menu bar, as it does every other icon there.
     enum Glyph: String, CaseIterable {
         case ready = "MenuBarReady"
         case active = "MenuBarActive"
 
-        var isTemplate: Bool { self == .ready }
-
-        func assetName(dark: Bool) -> String {
-            self == .active && dark ? "\(rawValue)Dark" : rawValue
-        }
-
         // Every file `make bundle` copies and `make verify` asserts, without the scale suffix.
-        static var assetNames: [String] {
-            allCases.flatMap { glyph in glyph.isTemplate ? [glyph.rawValue] : [glyph.rawValue, glyph.assetName(dark: true)] }
-        }
+        static var assetNames: [String] { allCases.map(\.rawValue) }
     }
 
     // The cycle states draw River's mark; the warning, downloading, and loading states keep
