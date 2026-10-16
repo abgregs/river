@@ -84,8 +84,11 @@ final class AudioCaptureManager {
     /// zero-length recording silently succeed. Returns `[]` when buffers arrived
     /// but the trim removed everything (an all-silence recording): the caller
     /// reads that as "nothing was said," not a failure (planning 0023).
-    func stopRecording() async throws -> [Float] {
-        let deadline = Date().addingTimeInterval(Self.warmupWaitSeconds)
+    ///
+    /// `warmupWait` exists for tests: a loaded test machine can oversleep the 0.3 s window,
+    /// so the late-buffer test passes a long one. The wait still ends at the first buffer.
+    func stopRecording(warmupWait: Double = AudioCaptureManager.warmupWaitSeconds) async throws -> [Float] {
+        let deadline = Date().addingTimeInterval(warmupWait)
         while buffers.isEmpty && Date() < deadline {
             try? await Task.sleep(nanoseconds: 5_000_000)
         }
@@ -96,7 +99,7 @@ final class AudioCaptureManager {
         resampler = nil
 
         guard let firstBuffer = buffers.first else {
-            logger.warning("stopRecording: no audio buffers arrived within \(Self.warmupWaitSeconds, privacy: .public)s")
+            logger.warning("stopRecording: no audio buffers arrived within \(warmupWait, privacy: .public)s")
             throw AudioCaptureError.noAudioCaptured
         }
 
