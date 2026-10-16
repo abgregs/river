@@ -41,19 +41,22 @@ The accent marks something that is **on right now**: a dictation River is workin
 
 ## Which value to use
 
-- **The HUD** is dark on every desktop, so it uses `accentDark` directly: 7.27:1 on its lightest ground (see The HUD surface below), 9.83:1 on charcoal.
+- **The HUD** follows Light and Dark mode through `Palette.HUD`: `accentDark` on the dark surface, `accentLight` on the light one (see The HUD surface below).
 - **App windows** (Settings, onboarding, menus) follow the system appearance, so they use the dynamic `accent`: `accentLight` measures 4.61:1 on white.
 - **Text on an accent fill** uses `onAccent`: white on `accentLight` is 4.61:1; on `accentDark` white is 1.54:1 and fails, so the dark value takes charcoal (9.83:1).
 - Never `accentLight` on charcoal or `accentDark` on white; measure any new pairing before shipping it.
 
 ## Neutrals and text
 
-- **HUD:** `ink` text measures 9.65:1 on the surface's lightest ground and 13.06:1 on charcoal (11.09:1 on raised charcoal). Secondary text uses the system `.secondary` under the HUD's forced dark scheme (a system value, not measured here).
+- **HUD:** `ink` on the dark surface measures 9.65:1 on its lightest ground and 13.06:1 on charcoal (11.09:1 on raised charcoal); `charcoal` on the light surface, at least 10.6:1 by the worst-case model below. Secondary text (a toast's hint, the notice) uses `.secondary`, measured from a render as the text color at 50%: **below 4.5:1** on both surfaces, about 3.0:1 on the light one and 3.71:1 on the dark one's measured lightest ground. Open: the text at 70% would pass both (4.74:1 light worst case).
 - **App windows:** platform label colors (`.primary`, `.secondary`) on system backgrounds. Do not paint windows charcoal; platform first ([direction.md](direction.md)).
 
 ## The HUD surface
 
-Every floating surface (the mark's panel, the message rectangle, the transcript panel) is one `HUDSurface`, built like a native dark HUD window and matched to Raycast Notes on 2026-10-09: the desktop behind it blurred by a forced-dark `NSVisualEffectView`, `deepCharcoal` at 72% over the blur, a 1 pt inner hairline of white at 20% that brightens to 35% along the top edge, a 0.5 pt outer line of black at 80%, and one soft shadow outside the edge. Because the blur lets the desktop through, the ground varies with what is behind it. Measured on screen:
+Every floating surface (the mark's panel, the message rectangle, the transcript panel) is one `HUDSurface`, built like a native HUD window in the system's appearance. Its colors are `Palette.HUD`, one set per appearance, and the blur's `NSVisualEffectView` takes the same appearance as the tint, so the two always flip together.
+**Why:** revised 2026-10-15. The HUD was dark on every desktop, so its palette never flipped; the maintainer chose a light frosted surface in Light mode, the same build with light and dark swapped, which also matches the system's own pop-ups.
+
+**Dark**, matched to Raycast Notes on 2026-10-09: `deepCharcoal` at 72% over the blur, a 1 pt inner hairline of white at 20% that brightens to 35% along the top edge, a 0.5 pt outer line of black at 80%, and one soft shadow outside the edge. Because the blur lets the desktop through, the ground varies with what is behind it. Measured on screen:
 
 | Behind the surface | Ground | `ink` | `accentDark` |
 |---|---|---|---|
@@ -61,7 +64,18 @@ Every floating surface (the mark's panel, the message rectangle, the transcript 
 | 50% gray | `#262729` | 12.86:1 | 9.69:1 |
 | White, the lightest case | `#3A3B3D` | 9.65:1 | 7.27:1 |
 
-Under Reduce Transparency, `deepCharcoal`, opaque, replaces the blur and the tint, so the surface reads as the same dark panel as the blurred one over dark content.
+**Light**, 2026-10-15: `mist` (`#F4F5F7`, charcoal's hue at near white) at **88%** over the blur, text in `charcoal`, the mark in `accentLight`, the inner hairline white at 50% brightening to 90% (a sheen; white barely shows on a light tint), the outer line black at 12%, the same shadow. Not yet measured on screen; worst case, with the tint mixed straight over the desktop and the blur ignored:
+
+| Behind the surface | `charcoal` | `accentLight` |
+|---|---|---|
+| Black, the darkest case | 10.63:1 | 3.23:1 |
+| 50% gray | 12.27:1 | 3.73:1 |
+| White | 14.04:1 | 4.26:1 |
+| `mist`, opaque | 13.91:1 | 4.23:1 |
+
+**Why 88%, not the dark surface's 72%:** a light panel over a dark desktop turns gray, and at 72% the deep accent fell to 2.13:1 over black. `PaletteTests` holds both appearances to 4.5:1 for text and 3:1 for the mark on this worst case, and fails at 72%. The hairline and outer-line values are first values, to tune on device.
+
+Under Reduce Transparency, the tint, opaque, replaces the blur and the tint, so the surface reads as the same panel as the blurred one.
 
 ## The mark's colors
 
@@ -71,6 +85,8 @@ Measured over the HUD surface's lightest ground (`#3A3B3D`, over a white page) a
 |---|---|---|---|
 | `accentDark` | 7.27:1 | 12.16:1 | River active: the stones and the bars |
 | `ink` | 9.65:1 | 16.14:1 | Preparing: the r held still |
+
+On the light surface the same roles take `accentLight` and `charcoal`, at the values in the light table above.
 
 The mark is solid: the pixel identity's dimmed cells, crest base, and dither are gone, so nothing in it sits below 3:1 and Increase Contrast needs no floor ([pixel-identity.md](pixel-identity.md) recorded those values).
 
