@@ -43,7 +43,7 @@ struct RiverIndicatorSnapshotTests {
         for held in Self.frames() {
             for scheme in [ColorScheme.light, .dark] {
                 let view = Canvas { context, size in
-                    StoneMarkRenderer.draw(held.frame, in: &context, size: size)
+                    StoneMarkRenderer.draw(held.frame, in: &context, size: size, colors: .for(scheme))
                 }
                 .frame(width: Constants.indicatorMarkSize, height: Constants.indicatorMarkSize)
                 .padding(.horizontal, Constants.indicatorPanelHorizontalPadding)
