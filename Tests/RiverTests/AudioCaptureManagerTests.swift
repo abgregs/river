@@ -40,18 +40,20 @@ struct AudioCaptureCycleTests {
     @Test("a buffer that arrives late (within warmup) still produces samples")
     func lateBufferStillCaptures() async throws {
         // Engine-warmup race: a short tap that releases right when the engine
-        // first produces audio. The 300 ms wait inside stopRecording is what
-        // saves this case. We model it by running stopRecording in a child Task
-        // and publishing the buffer from the test's own timeline — that puts
-        // the buffer arrival deterministically inside the wait window without
-        // two peer Tasks racing for the MainActor scheduler.
+        // first produces audio. The wait inside stopRecording is what saves this
+        // case. We model it by running stopRecording in a child Task and publishing
+        // the buffer from the test's own timeline. The wait is long here because the
+        // shipped 300 ms is wall-clock time: a loaded CI runner oversleeping the
+        // 100 ms below by 200 ms failed this test with `.noAudioCaptured`. The wait
+        // ends at the first buffer, so the test still takes about 100 ms;
+        // stopRecordingThrowsWhenSilent covers the shipped window expiring.
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone)
         await manager.startRecording()
 
         let stopTask = Task { @MainActor in
-            try await manager.stopRecording()
+            try await manager.stopRecording(warmupWait: 10)
         }
         try await Task.sleep(nanoseconds: 100_000_000)
         // Voiced buffer: stopRecording trims silence, so zeros would trim to empty.
