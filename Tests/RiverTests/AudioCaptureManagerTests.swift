@@ -65,16 +65,17 @@ struct AudioCaptureCycleTests {
     }
 }
 
-@Suite("AudioCaptureManager capture coverage")
-struct AudioCaptureCoverageTests {
+@Suite("AudioCaptureManager capture gap")
+struct AudioCaptureGapTests {
     // The engine stops on an audio device change and nothing tells the recording. The
     // 2026-09-24 trace: a 14 s first recording with AirPods captured 1.5 s and typed
     // nothing, a quiet no-op. The engine now restarts (MicrophoneCapability); when that
     // fails, the shortfall must surface instead of a fragment passing as the dictation
-    // (planning 0032). The clock is injected so no test waits out a recording.
+    // (planning 0032). The bound is an absolute gap, so a long dictation cannot hide a
+    // large loss behind its length. The clock is injected so no test waits out a recording.
 
     @MainActor
-    @Test("a recording whose audio covers far less than its wall time throws .captureIncomplete")
+    @Test("a recording whose audio falls far short of its wall time throws .captureIncomplete")
     func shortfallThrows() async throws {
         var clock: TimeInterval = 100
         let microphone = MicrophoneCapability()
@@ -84,6 +85,25 @@ struct AudioCaptureCoverageTests {
         await manager.startRecording()
         microphone.publishForTest(makeSineBuffer(milliseconds: 1_500, frequency: 440, amplitude: 0.5))
         clock += 14                                   // 1.5 s of audio for a 14 s recording
+
+        await #expect(throws: AudioCaptureError.self) {
+            _ = try await manager.stopRecording()
+        }
+    }
+
+    @MainActor
+    @Test("a long recording missing a large share of its audio throws, whatever the share")
+    func longShortfallThrows() async throws {
+        // 2.5 min missing from a 5 min dictation: a ratio rule at 50% would let this
+        // through as if half were enough. The gap rule does not.
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+
+        await manager.startRecording()
+        microphone.publishForTest(makeSineBuffer(milliseconds: 150_000, frequency: 440, amplitude: 0.5, sampleRate: 16_000))
+        clock += 300
 
         await #expect(throws: AudioCaptureError.self) {
             _ = try await manager.stopRecording()
@@ -109,8 +129,8 @@ struct AudioCaptureCoverageTests {
     }
 
     @MainActor
-    @Test("a short recording is exempt: its warmup is most of it, and an empty one already throws")
-    func shortRecordingExempt() async throws {
+    @Test("a short tap passes with a normal warmup gap, even when that gap is most of it")
+    func shortTapWarmupGapPasses() async throws {
         var clock: TimeInterval = 100
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true

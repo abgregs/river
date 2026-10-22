@@ -40,7 +40,7 @@ final class AudioCaptureManager {
     // arrives and handed to `onSamples`. The batch conversion at stop time is unchanged.
     private var onSamples: (@MainActor ([Float]) -> Void)?
     private var resampler: IncrementalResampler?
-    // Injectable clock so the coverage check in `stopRecording` is tested without
+    // Injectable clock so the gap check in `stopRecording` is tested without
     // waiting out a real recording.
     private let now: () -> TimeInterval
     private var recordingStartedAt: TimeInterval?
@@ -125,8 +125,8 @@ final class AudioCaptureManager {
         // the restart failed, the buffers stop short of the recording. Typing the
         // fragment would pass off part of the dictation as the whole.
         let capturedSeconds = collected.reduce(0.0) { $0 + Double($1.frameLength) / $1.format.sampleRate }
-        if recordingSeconds >= Constants.captureCoverageCheckedAfterSeconds,
-           capturedSeconds < recordingSeconds * Constants.captureCoverageMinimumRatio {
+        let gapSeconds = recordingSeconds - capturedSeconds
+        if gapSeconds > Constants.captureGapMaximumSeconds {
             logger.error("stopRecording: captured \(capturedSeconds, format: .fixed(precision: 2), privacy: .public) s of a \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s recording")
             throw AudioCaptureError.captureIncomplete(capturedSeconds: capturedSeconds, recordingSeconds: recordingSeconds)
         }
@@ -134,7 +134,7 @@ final class AudioCaptureManager {
         let samples = try Self.convert(collected)
         let trimmed = Self.trimSilence(samples)
         let formats = Self.formatRuns(collected).map { "\(Int($0.format.sampleRate)) Hz" }.joined(separator: " -> ")
-        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
+        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
         return trimmed
     }
 

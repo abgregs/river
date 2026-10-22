@@ -36,7 +36,7 @@ Re-entrancy is safe: every transition is guarded by `guard state == expected` be
 
 1. `MicrophoneCapability` observes `.AVAudioEngineConfigurationChange` for its engine, re-reads the input format, reinstalls the tap and restarts the engine in place. The buffer stream continues in the new format. `AVAudioEngine.start` stays in that one type (AGENTS.md rule 3).
 2. `AudioCaptureManager.convert` converts each run of same-format buffers with its own converter and joins the runs, so a recording that changed rate part-way (24 kHz, then 48 kHz) resamples each part at its own rate. The live 16 kHz feed already restarted its resampler per format.
-3. If the restart failed, the buffers stop short of the recording. `stopRecording` compares the captured audio with the recording's wall time and throws `.captureIncomplete` when a recording longer than `Constants.captureCoverageCheckedAfterSeconds` covers less than `captureCoverageMinimumRatio` of it, rather than typing a fragment as the whole.
+3. If the restart failed, the buffers stop short of the recording. `stopRecording` compares the captured audio with the recording's wall time and throws `.captureIncomplete` when the audio falls short by more than `Constants.captureGapMaximumSeconds` (1 s, over twice the engine's own start-up gap), rather than typing a fragment as the whole. The bound is absolute, not a share of the recording, so a long dictation cannot hide a large loss behind its length.
 
 ## No AX-API path
 
