@@ -368,6 +368,34 @@ struct InputMonitoringDecodeTests {
     }
 }
 
+@Suite("MicrophoneCapability configuration change")
+struct MicrophoneConfigurationChangeTests {
+    // The engine stops itself when the audio device changes, and a recording that
+    // nobody told kept running on a dead engine (planning 0032). The capability now
+    // listens for the change and restarts in place. The restart needs a real device;
+    // what runs here is the wiring: the observer is live after `startEngine` and
+    // gone after `stopEngine`, so a change can neither be missed during a recording
+    // nor restart an engine that was deliberately stopped.
+
+    @MainActor
+    @Test("the change observer is live after startEngine and removed by stopEngine")
+    func observerFollowsEngineLifetime() async {
+        let mic = MicrophoneCapability()
+        mic.skipEngineForTesting = true
+
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: nil)
+        #expect(mic.configurationChangeCount == 0)        // nothing started yet
+
+        await mic.startEngine()
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: nil)
+        #expect(mic.configurationChangeCount == 1)
+
+        mic.stopEngine()
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: nil)
+        #expect(mic.configurationChangeCount == 1)        // stopped: no longer listening
+    }
+}
+
 @Suite("MicrophoneCapability level metering")
 struct MicrophoneLevelTests {
     // The level path (planning 0020): RMS and normalized-level are pure and

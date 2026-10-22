@@ -30,6 +30,14 @@ Re-entrancy is safe: every transition is guarded by `guard state == expected` be
 
 `AudioCaptureManager.stopRecording()` therefore waits up to **300 ms** for at least one buffer to arrive before tearing down. Normal-length presses are unaffected — the wait loop exits immediately when buffers already exist.
 
+## Device changes mid-recording
+
+`AVAudioEngine` stops itself when its configuration changes (the default input switches, AirPods connect or leave call mode, headphones are plugged in) and tells no one but `NotificationCenter`. A recording that ignored it kept running on a dead engine: the first recording with AirPods connected captured 1.5 s of a 14 s dictation and typed nothing ([planning 0032](../planning/0032_first-recording-device-switch.md)). Three rules now hold:
+
+1. `MicrophoneCapability` observes `.AVAudioEngineConfigurationChange` for its engine, re-reads the input format, reinstalls the tap and restarts the engine in place. The buffer stream continues in the new format. `AVAudioEngine.start` stays in that one type (AGENTS.md rule 3).
+2. `AudioCaptureManager.convert` converts each run of same-format buffers with its own converter and joins the runs, so a recording that changed rate part-way (24 kHz, then 48 kHz) resamples each part at its own rate. The live 16 kHz feed already restarted its resampler per format.
+3. If the restart failed, the buffers stop short of the recording. `stopRecording` compares the captured audio with the recording's wall time and throws `.captureIncomplete` when a recording longer than `Constants.captureCoverageCheckedAfterSeconds` covers less than `captureCoverageMinimumRatio` of it, rather than typing a fragment as the whole.
+
 ## No AX-API path
 
 Text insertion is **synthesized input events** through `AccessibilityCapability` — Unicode key events via `CGEvent.keyboardSetUnicodeString` ([planning 0011](../planning/0011_keystroke-injection.md)). There is no Accessibility-API *write* path. **Why:** AX writes require per-app focus targeting that is brittle across browsers, Electron apps, and terminal emulators. Synthesized keystrokes are uniformly supported wherever typing works, and they touch nothing but the focused field.
@@ -47,7 +55,7 @@ If `AccessibilityCapability.postKeyEvent` throws (status not `.granted`), it doe
 
 This is the surface the menu-bar visual-state milestone landed (it brought the renderer and the `errors` publisher together, as planned). It is **not** a substitute for the permission path above — a genuinely denied capability still routes through onboarding, not a transient toast.
 
-Audio capture follows the same pattern via `AudioCaptureError` (`.noAudioCaptured` when no buffer arrives in the 300 ms engine-warmup window; `.conversionFailed` when `AVAudioConverter` errors). `RiverSession.handleDeactivate` catches both, logs at `.error`, and still returns to `.idle` — getting stuck in `.processing` would freeze the cycle. Note: `MicrophoneCapability.startEngine` itself does **not** throw (a failure to start logs a warning; the capability's `status` is the surface that signals "engine won't work" upstream to onboarding). The fail-loud surface is `stopRecording`, which is where "did we actually capture audio" becomes knowable.
+Audio capture follows the same pattern via `AudioCaptureError` (`.noAudioCaptured` when no buffer arrives in the 300 ms engine-warmup window; `.conversionFailed` when `AVAudioConverter` errors; `.captureIncomplete` when the audio stops well short of the recording, see "Device changes mid-recording"). `RiverSession.handleDeactivate` catches all three, logs at `.error`, and still returns to `.idle` — getting stuck in `.processing` would freeze the cycle. Note: `MicrophoneCapability.startEngine` itself does **not** throw (a failure to start logs a warning; the capability's `status` is the surface that signals "engine won't work" upstream to onboarding). The fail-loud surface is `stopRecording`, which is where "did we actually capture audio" becomes knowable.
 
 ## Related
 

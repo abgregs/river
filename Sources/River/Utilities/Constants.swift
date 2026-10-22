@@ -126,6 +126,15 @@ enum Constants {
     static let silenceTrimLeadSeconds: Double = 0.5
     static let silenceTrimTailSeconds: Double = 0.2
 
+    // A recording whose audio covers less than this share of its wall time is reported as a
+    // capture failure instead of transcribed. The engine stops when the audio device changes
+    // and nothing tells the recording: a 14 s first recording with AirPods captured 1.5 s and
+    // typed nothing (2026-09-24 trace). The engine now restarts, so this catches a restart
+    // that failed. Short recordings are exempt, since the engine's own warmup is a large
+    // share of them and `noAudioCaptured` already covers an empty one.
+    static let captureCoverageMinimumRatio: Double = 0.5
+    static let captureCoverageCheckedAfterSeconds: Double = 1.0
+
     // Whisper returns nothing for a word shorter than about a second unless silence
     // surrounds it, so a clip under `shortClipSeconds` is decoded with `shortClipPadSeconds`
     // of silence on each side. Longer clips are decoded as captured: padding them hurt

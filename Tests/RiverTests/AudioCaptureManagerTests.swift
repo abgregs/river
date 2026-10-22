@@ -65,6 +65,66 @@ struct AudioCaptureCycleTests {
     }
 }
 
+@Suite("AudioCaptureManager capture coverage")
+struct AudioCaptureCoverageTests {
+    // The engine stops on an audio device change and nothing tells the recording. The
+    // 2026-09-24 trace: a 14 s first recording with AirPods captured 1.5 s and typed
+    // nothing, a quiet no-op. The engine now restarts (MicrophoneCapability); when that
+    // fails, the shortfall must surface instead of a fragment passing as the dictation
+    // (planning 0032). The clock is injected so no test waits out a recording.
+
+    @MainActor
+    @Test("a recording whose audio covers far less than its wall time throws .captureIncomplete")
+    func shortfallThrows() async throws {
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+
+        await manager.startRecording()
+        microphone.publishForTest(makeSineBuffer(milliseconds: 1_500, frequency: 440, amplitude: 0.5))
+        clock += 14                                   // 1.5 s of audio for a 14 s recording
+
+        await #expect(throws: AudioCaptureError.self) {
+            _ = try await manager.stopRecording()
+        }
+    }
+
+    @MainActor
+    @Test("a recording whose audio tracks its wall time is returned")
+    func fullCoverageReturns() async throws {
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+
+        await manager.startRecording()
+        for _ in 0..<10 {
+            microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
+        }
+        clock += 1.2                                  // 1.0 s of audio for a 1.2 s recording: engine warmup
+
+        let samples = try await manager.stopRecording()
+        #expect(samples.count > 15_000)
+    }
+
+    @MainActor
+    @Test("a short recording is exempt: its warmup is most of it, and an empty one already throws")
+    func shortRecordingExempt() async throws {
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+
+        await manager.startRecording()
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
+        clock += 0.9                                  // 0.1 s of audio for a 0.9 s tap
+
+        let samples = try await manager.stopRecording()
+        #expect(!samples.isEmpty)
+    }
+}
+
 @Suite("AudioCaptureManager discard")
 struct AudioCaptureDiscardTests {
     // The cancel path (planning 0017): discardRecording drops captured buffers and
@@ -144,6 +204,26 @@ struct AudioCaptureConvertTests {
         #expect(throws: AudioCaptureError.self) {
             _ = try AudioCaptureManager.convert([makeBuffer(milliseconds: 100)], from: badFormat)
         }
+    }
+
+    @MainActor
+    @Test("convert joins runs of different formats into one continuous 16 kHz stream")
+    func convertJoinsFormatRuns() throws {
+        // After the engine restarts on a device change, a recording holds 24 kHz AirPods
+        // buffers and then 48 kHz built-in-mic buffers (planning 0032). One converter
+        // built for the first format would resample the second run at the wrong rate:
+        // 100 ms at 48 kHz read as 24 kHz comes out as 200 ms. Each run must convert
+        // at its own rate, so 100 ms + 100 ms is ~200 ms at 16 kHz, with its energy.
+        let airPods = makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 24_000)
+        let builtIn = makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 48_000)
+
+        let samples = try AudioCaptureManager.convert([airPods, builtIn])
+
+        #expect(samples.count > 3_000)   // ~3200, less resampler latency per run
+        #expect(samples.count < 3_400)
+        let rms = (samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
+        #expect(rms > 0.1)
+        #expect(AudioCaptureManager.formatRuns([airPods, builtIn, builtIn]).map(\.buffers.count) == [1, 2])
     }
 
     @MainActor

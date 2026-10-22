@@ -18,6 +18,11 @@ show as raw text. -->
 
 ## [Unreleased]
 
+### Fixed
+
+- The first recording with AirPods connected no longer comes back empty. Opening the microphone switched the AirPods to their call mode, and the recording stopped hearing you part-way; River now follows the audio device change and keeps recording.
+- A recording that lost its audio part-way is reported as an error instead of typing the fragment it caught as if it were the whole dictation.
+
 ## [0.2.1] - 2026-10-08
 
 A smaller app that starts without a network, and taps that no longer get lost.
