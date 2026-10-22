@@ -30,7 +30,13 @@ On the first activation after launch, the recording state and the hotkey behave 
 
 ## On-device verification
 
-Pending the maintainer's smoke on `fix/device-switch`.
+Smoke-tested by the maintainer on 2026-10-22 on `fix/device-switch` (MacBook Air, AirPods Pro):
+
+- A: AirPods connected and set as default input, first recording after launch. The dictation landed in full; no fragment, no silent no-op.
+- B: built-in microphone, AirPods disconnected. Unchanged from before the fix.
+- Also observed: dictating on the built-in microphone with the AirPods still connected works.
+
+The `engine restarted` log line was not captured: info-level `audioLogger` output is not persisted for `log show`, so only the behaviour was verified.
 
 ## Related
 
