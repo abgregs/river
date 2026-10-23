@@ -19,6 +19,11 @@ final class MicrophoneCapability: Capability {
     private let levelSubject = PassthroughSubject<Float, Never>()
     private var engine: AVAudioEngine?
     private(set) var inputFormat: AVAudioFormat?
+    private var configurationObserver: (any NSObjectProtocol)?
+    // internal for testability — counts the configuration changes the capability
+    // handled, so a test can assert the observer is wired on `startEngine` and gone
+    // after `stopEngine` without a real engine (the restart itself needs a device).
+    private(set) var configurationChangeCount = 0
 
     // Throttle state for the level publisher: `nil` until the first sample so the
     // first buffer always emits. Injectable clock so the ~14 Hz throttle is tested
@@ -78,28 +83,24 @@ final class MicrophoneCapability: Capability {
     /// fail-quiet pattern in `InputMonitoringCapability.startTap`.
     func startEngine() async {
         guard engine == nil else { return }
-        if skipEngineForTesting { return }
+        if skipEngineForTesting {
+            // No engine to observe, so listen for any engine's change: the test posts
+            // the notification with no object and asserts the count.
+            observeConfigurationChanges(of: nil)
+            return
+        }
         let engine = AVAudioEngine()
         let format = engine.inputNode.inputFormat(forBus: 0)
         guard format.sampleRate > 0 else {
             audioLogger.warning("Input node returned a zero-sampleRate format — no microphone available.")
             return
         }
-        engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            guard let self else { return }
-            let copy = Self.copy(buffer)
-            // RMS is computed here on the audio thread (pure, no `self` access), so
-            // only the throttled emission crosses to the main actor.
-            let rms = Self.rms(of: buffer)
-            Task { @MainActor in
-                self.audioBufferSubject.send(copy)
-                self.emitLevel(rms: rms)
-            }
-        }
+        installTap(on: engine, format: format)
         do {
             try engine.start()
             self.engine = engine
             self.inputFormat = format
+            observeConfigurationChanges(of: engine)
             audioLogger.info("AVAudioEngine started; input format \(format.sampleRate, privacy: .public) Hz \(format.channelCount, privacy: .public) ch")
         } catch {
             engine.inputNode.removeTap(onBus: 0)
@@ -109,6 +110,10 @@ final class MicrophoneCapability: Capability {
 
     /// Removes the input tap and stops the engine. Idempotent.
     func stopEngine() {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+            self.configurationObserver = nil
+        }
         guard let engine else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
@@ -125,6 +130,59 @@ final class MicrophoneCapability: Capability {
     // Microphone grant on the running process).
     func publishForTest(_ buffer: AVAudioPCMBuffer) {
         audioBufferSubject.send(buffer)
+    }
+
+    /// The engine stops itself when its configuration changes: the default input
+    /// switching, AirPods connecting or leaving call mode, headphones plugged in.
+    /// Nothing tells the recording. The 2026-09-24 trace shows a first recording with
+    /// AirPods running 14 s on an engine that CoreAudio had stopped 1.7 s in, which
+    /// captured 1.5 s of audio and typed nothing. So the capability re-reads the
+    /// input format, reinstalls the tap and restarts the engine in place; the buffer
+    /// stream continues, now in the new format (`AudioCaptureManager` converts each
+    /// run of same-format buffers on its own). A failed restart is logged at `.error`
+    /// and the recording's shortfall is what `stopRecording` reports.
+    // internal for testability — the notification handler, split out so a test can
+    // drive it without posting through NotificationCenter.
+    func handleConfigurationChange() {
+        configurationChangeCount += 1
+        guard let engine else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        let format = engine.inputNode.inputFormat(forBus: 0)
+        guard format.sampleRate > 0 else {
+            audioLogger.error("Audio configuration changed and the input node has no format; capture has stopped")
+            return
+        }
+        installTap(on: engine, format: format)
+        do {
+            try engine.start()
+            inputFormat = format
+            audioLogger.info("Audio configuration changed; engine restarted with input format \(format.sampleRate, privacy: .public) Hz \(format.channelCount, privacy: .public) ch")
+        } catch {
+            audioLogger.error("Audio configuration changed and the engine could not restart: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+        }
+    }
+
+    private func observeConfigurationChanges(of engine: AVAudioEngine?) {
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            // Delivered on the main queue, which is the main actor.
+            MainActor.assumeIsolated { self?.handleConfigurationChange() }
+        }
+    }
+
+    private func installTap(on engine: AVAudioEngine, format: AVAudioFormat) {
+        engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            let copy = Self.copy(buffer)
+            // RMS is computed here on the audio thread (pure, no `self` access), so
+            // only the throttled emission crosses to the main actor.
+            let rms = Self.rms(of: buffer)
+            Task { @MainActor in
+                self.audioBufferSubject.send(copy)
+                self.emitLevel(rms: rms)
+            }
+        }
     }
 
     // internal for testability — the throttled level emission, split from the tap

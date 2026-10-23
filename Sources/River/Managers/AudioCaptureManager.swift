@@ -11,6 +11,11 @@ enum AudioCaptureError: Error, LocalizedError {
     case noAudioCaptured
     /// `AVAudioConverter` initialization or `convert` returned an error.
     case conversionFailed
+    /// Buffers arrived, but they cover far less of the recording than its wall time:
+    /// the engine stopped part-way (an audio device change it could not recover from)
+    /// and the rest of the dictation was never heard. Surfaced rather than typing a
+    /// fragment as if it were the whole.
+    case captureIncomplete(capturedSeconds: Double, recordingSeconds: Double)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +23,8 @@ enum AudioCaptureError: Error, LocalizedError {
             return "No audio was captured (engine may have failed to start)."
         case .conversionFailed:
             return "Could not convert recorded audio to 16 kHz mono."
+        case .captureIncomplete(let captured, let recording):
+            return String(format: "Only %.1f s of a %.1f s recording was captured (the audio device changed or stopped).", captured, recording)
         }
     }
 }
@@ -33,6 +40,25 @@ final class AudioCaptureManager {
     // arrives and handed to `onSamples`. The batch conversion at stop time is unchanged.
     private var onSamples: (@MainActor ([Float]) -> Void)?
     private var resampler: IncrementalResampler?
+    // Injectable clock so the gap check is tested without waiting out a real recording.
+    private let now: () -> TimeInterval
+    private var recordingStartedAt: TimeInterval?
+    // When the first buffer arrived. The gap is measured from here, not from the start
+    // call: the engine's start-up (0.9 s seen on a loaded machine with AirPods) is latency,
+    // not lost audio, and counting it put a healthy recording within 0.1 s of the bound.
+    private var firstBufferAt: TimeInterval?
+    // Running total of the audio that arrived, in seconds at each buffer's own rate.
+    private var capturedSeconds: Double = 0
+    // The watchdog: every `watchdogInterval` it compares the clock since the first buffer
+    // with `capturedSeconds` and, past `Constants.captureGapMaximumSeconds`, calls
+    // `onCaptureGapExceeded` so the session ends the recording early. `stopRecording` then
+    // throws as it would at release. Before the first buffer it instead waits out
+    // `Constants.captureStartTimeoutSeconds`, so a dead engine still fails fast.
+    private let watchdogInterval: Double
+    private var watchdog: Task<Void, Never>?
+    /// Called on the main actor when the recording's audio falls more than
+    /// `Constants.captureGapMaximumSeconds` behind the clock. Set once by the session.
+    var onCaptureGapExceeded: (@MainActor () -> Void)?
 
     /// Upper bound on the engine-warmup wait inside `stopRecording`. `AVAudioEngine`
     /// produces its first tap-callback buffer ~60-100 ms after `start()`; a short
@@ -40,8 +66,14 @@ final class AudioCaptureManager {
     /// See `architecture/river-pipeline.md` "Engine warmup".
     static let warmupWaitSeconds: Double = 0.3
 
-    init(microphone: MicrophoneCapability) {
+    init(
+        microphone: MicrophoneCapability,
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        watchdogInterval: Double = Constants.captureWatchdogIntervalSeconds
+    ) {
         self.microphone = microphone
+        self.now = now
+        self.watchdogInterval = watchdogInterval
     }
 
     /// Subscribes to the capability's buffer stream and starts the engine.
@@ -57,13 +89,48 @@ final class AudioCaptureManager {
         buffers.removeAll(keepingCapacity: true)
         self.onSamples = onSamples
         resampler = nil
+        recordingStartedAt = now()
+        firstBufferAt = nil
+        capturedSeconds = 0
         microphone.audioBuffers
             .sink { [weak self] buffer in
-                self?.buffers.append(buffer)
-                self?.forwardLive(buffer)
+                guard let self else { return }
+                if firstBufferAt == nil { firstBufferAt = now() }
+                buffers.append(buffer)
+                capturedSeconds += Double(buffer.frameLength) / buffer.format.sampleRate
+                forwardLive(buffer)
             }
             .store(in: &cancellables)
         await microphone.startEngine()
+        startWatchdog()
+    }
+
+    private func startWatchdog() {
+        watchdog?.cancel()
+        let interval = watchdogInterval
+        watchdog = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled, let self else { return }
+                if captureGapExceeded() {
+                    logger.error("Capture gap exceeded \(Constants.captureGapMaximumSeconds, privacy: .public) s mid-recording; ending the recording")
+                    onCaptureGapExceeded?()
+                    return
+                }
+            }
+        }
+    }
+
+    // internal for testability — the watchdog's question, answered from the injected
+    // clock: has the audio fallen more than `captureGapMaximumSeconds` behind the clock
+    // since it began arriving? Before the first buffer the only failure is an engine that
+    // never starts, bounded by `captureStartTimeoutSeconds`.
+    func captureGapExceeded() -> Bool {
+        guard let recordingStartedAt else { return false }
+        guard let firstBufferAt else {
+            return now() - recordingStartedAt > Constants.captureStartTimeoutSeconds
+        }
+        return now() - firstBufferAt - capturedSeconds > Constants.captureGapMaximumSeconds
     }
 
     private func forwardLive(_ buffer: AVAudioPCMBuffer) {
@@ -88,6 +155,8 @@ final class AudioCaptureManager {
     /// `warmupWait` exists for tests: a loaded test machine can oversleep the 0.3 s window,
     /// so the late-buffer test passes a long one. The wait still ends at the first buffer.
     func stopRecording(warmupWait: Double = AudioCaptureManager.warmupWaitSeconds) async throws -> [Float] {
+        watchdog?.cancel()
+        watchdog = nil
         let deadline = Date().addingTimeInterval(warmupWait)
         while buffers.isEmpty && Date() < deadline {
             try? await Task.sleep(nanoseconds: 5_000_000)
@@ -98,18 +167,35 @@ final class AudioCaptureManager {
         onSamples = nil
         resampler = nil
 
-        guard let firstBuffer = buffers.first else {
+        guard !buffers.isEmpty else {
             logger.warning("stopRecording: no audio buffers arrived within \(warmupWait, privacy: .public)s")
             throw AudioCaptureError.noAudioCaptured
         }
 
-        let sourceFormat = firstBuffer.format
         let collected = buffers
         buffers.removeAll(keepingCapacity: true)
+        let recordingSeconds = recordingStartedAt.map { now() - $0 } ?? 0
+        // Buffers arrived, so `firstBufferAt` is set; the fallbacks only satisfy the optional.
+        let startupSeconds = (firstBufferAt ?? 0) - (recordingStartedAt ?? 0)
+        let heardSeconds = firstBufferAt.map { now() - $0 } ?? 0
+        recordingStartedAt = nil
+        firstBufferAt = nil
 
-        let samples = try Self.convert(collected, from: sourceFormat)
+        // The engine stops on a device change and restarts (MicrophoneCapability). If
+        // the restart failed, the buffers stop short of the recording. Typing the
+        // fragment would pass off part of the dictation as the whole. The gap is
+        // counted from the first buffer: start-up latency is not missing audio.
+        let capturedSeconds = self.capturedSeconds
+        let gapSeconds = heardSeconds - capturedSeconds
+        if gapSeconds > Constants.captureGapMaximumSeconds {
+            logger.error("stopRecording: captured \(capturedSeconds, format: .fixed(precision: 2), privacy: .public) s of a \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s recording")
+            throw AudioCaptureError.captureIncomplete(capturedSeconds: capturedSeconds, recordingSeconds: recordingSeconds)
+        }
+
+        let samples = try Self.convert(collected)
         let trimmed = Self.trimSilence(samples)
-        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(sourceFormat.sampleRate, privacy: .public) Hz; \(trimmed.count, privacy: .public) after silence trim")
+        let formats = Self.formatRuns(collected).map { "\(Int($0.format.sampleRate)) Hz" }.joined(separator: " -> ")
+        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, startup \(startupSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
         return trimmed
     }
 
@@ -120,16 +206,46 @@ final class AudioCaptureManager {
     /// waits for warmup nor throws `.noAudioCaptured` (an empty buffer list is the
     /// expected outcome, not a failure). Safe to call when nothing is recording.
     func discardRecording() async {
+        watchdog?.cancel()
+        watchdog = nil
         cancellables.removeAll()
         microphone.stopEngine()
         onSamples = nil
         resampler = nil
+        recordingStartedAt = nil
+        firstBufferAt = nil
         let dropped = buffers.count
         buffers.removeAll(keepingCapacity: true)
         logger.info("discardRecording: dropped \(dropped, privacy: .public) buffers; no transcription")
     }
 
-    // internal for testability — pure conversion from N hardware-format buffers
+    // internal for testability — converts a recording whose format may change part-way
+    // (the engine restarted on a new device: 24 kHz AirPods, then the 48 kHz built-in
+    // mic) to one continuous 16 kHz mono stream. Each run of same-format buffers gets
+    // its own converter; one converter fed both would resample the second run at the
+    // first run's rate.
+    static func convert(_ buffers: [AVAudioPCMBuffer], toSampleRate: Double = 16_000) throws -> [Float] {
+        var samples: [Float] = []
+        for run in formatRuns(buffers) {
+            samples += try convert(run.buffers, from: run.format, toSampleRate: toSampleRate)
+        }
+        return samples
+    }
+
+    // internal for testability — consecutive buffers grouped by format, in order.
+    static func formatRuns(_ buffers: [AVAudioPCMBuffer]) -> [(format: AVAudioFormat, buffers: [AVAudioPCMBuffer])] {
+        var runs: [(format: AVAudioFormat, buffers: [AVAudioPCMBuffer])] = []
+        for buffer in buffers {
+            if let last = runs.indices.last, runs[last].format == buffer.format {
+                runs[last].buffers.append(buffer)
+            } else {
+                runs.append((buffer.format, [buffer]))
+            }
+        }
+        return runs
+    }
+
+    // internal for testability — pure conversion from N same-format buffers
     // to a single 16 kHz mono Float32 sample array. Done once at stop time
     // rather than inside the tap callback (river-pipeline.md step 3).
     static func convert(
