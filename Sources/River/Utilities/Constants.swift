@@ -135,8 +135,9 @@ enum Constants {
     // the first buffer, not from the start call: the engine's own start measured 0.91 s on
     // a loaded machine with AirPods (2026-10-23), which would have cut a healthy recording
     // short. What remains is a restart's lost window plus up to one buffer in flight at
-    // release. The bound is provisional for the restart case until a mid-recording device
-    // switch is measured on device.
+    // release. Measured 2026-10-23: a mid-recording switch from AirPods to the built-in
+    // microphone cost 0.48 s and the text spanned the switch, so 1 s leaves the restart
+    // about half its budget.
     static let captureGapMaximumSeconds: Double = 1.0
     // Before the first buffer there is no gap to measure, only an engine that has not
     // started. Past this the watchdog ends the recording so the user is not left talking
