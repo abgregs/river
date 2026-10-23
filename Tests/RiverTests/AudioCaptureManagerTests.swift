@@ -114,7 +114,7 @@ struct AudioCaptureGapTests {
     }
 
     @MainActor
-    @Test("captureGapExceeded answers from the clock: false idle, false within warmup, true once behind")
+    @Test("captureGapExceeded answers from the clock: false idle, false during a slow start, true once behind")
     func gapCheckFollowsTheClock() async throws {
         var clock: TimeInterval = 100
         let microphone = MicrophoneCapability()
@@ -123,8 +123,8 @@ struct AudioCaptureGapTests {
         #expect(!manager.captureGapExceeded())            // nothing recording
 
         await manager.startRecording()
-        clock += 0.4                                      // a first-recording warmup
-        #expect(!manager.captureGapExceeded())
+        clock += 2.0                                      // a slow engine start, longer than the gap bound
+        #expect(!manager.captureGapExceeded())            // latency before the first buffer is not lost audio
         microphone.publishForTest(makeSineBuffer(milliseconds: 1_000, frequency: 440, amplitude: 0.5))
         clock += 1.0
         #expect(!manager.captureGapExceeded())            // audio kept up
@@ -144,14 +144,69 @@ struct AudioCaptureGapTests {
         manager.onCaptureGapExceeded = { fired += 1 }
 
         await manager.startRecording()
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
         for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
         #expect(fired == 0)                               // no gap yet
-        clock += 1.5                                      // no buffer for 1.5 s
+        clock += 1.5                                      // no buffer for 1.5 s after the first
         for _ in 0..<50 where fired == 0 { try await Task.sleep(nanoseconds: 5_000_000) }
         #expect(fired == 1)
 
         await #expect(throws: AudioCaptureError.self) {   // and release reports it
             _ = try await manager.stopRecording()
+        }
+    }
+
+    @MainActor
+    @Test("a slow engine start longer than the gap bound does not trip the watchdog")
+    func slowStartDoesNotFire() async throws {
+        // Field data (2026-10-23): 0.91 s from the start call to the first buffer on a loaded
+        // machine with AirPods, with nothing lost. Counting that as a gap would end a healthy
+        // recording. The gap is measured from the first buffer instead.
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock }, watchdogInterval: 0.005)
+        var fired = 0
+        manager.onCaptureGapExceeded = { fired += 1 }
+
+        await manager.startRecording()
+        clock += 2.0                                      // start-up slower than the 1 s gap bound
+        for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
+        #expect(fired == 0)
+        microphone.publishForTest(makeSineBuffer(milliseconds: 1_000, frequency: 440, amplitude: 0.5))
+        clock += 1.0                                      // audio keeps up from the first buffer on
+        for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
+        #expect(fired == 0)
+
+        let samples = try await manager.stopRecording()   // and release returns the audio
+        #expect(!samples.isEmpty)
+    }
+
+    @MainActor
+    @Test("an engine that never delivers a buffer trips the watchdog at the start timeout")
+    func deadEngineFiresAtStartTimeout() async throws {
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock }, watchdogInterval: 0.005)
+        var fired = 0
+        manager.onCaptureGapExceeded = { fired += 1 }
+
+        await manager.startRecording()
+        clock += Constants.captureStartTimeoutSeconds - 0.1
+        for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
+        #expect(fired == 0)                               // still a slow start
+        clock += 0.2                                      // now past the timeout, nothing heard
+        for _ in 0..<50 where fired == 0 { try await Task.sleep(nanoseconds: 5_000_000) }
+        #expect(fired == 1)
+
+        do {
+            _ = try await manager.stopRecording(warmupWait: 0.01)
+            Issue.record("expected .noAudioCaptured, got samples")
+        } catch AudioCaptureError.noAudioCaptured {
+            // release reports the dead engine, not a gap
+        } catch {
+            Issue.record("expected .noAudioCaptured, got \(error)")
         }
     }
 
@@ -167,14 +222,14 @@ struct AudioCaptureGapTests {
         for _ in 0..<10 {
             microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
         }
-        clock += 1.2                                  // 1.0 s of audio for a 1.2 s recording: engine warmup
+        clock += 1.2                                  // 1.0 s of audio, 1.2 s since the first buffer: in flight at release
 
         let samples = try await manager.stopRecording()
         #expect(samples.count > 15_000)
     }
 
     @MainActor
-    @Test("a short tap passes with a normal warmup gap, even when that gap is most of it")
+    @Test("a short tap passes when its audio trails the clock by less than the bound, even when that is most of it")
     func shortTapWarmupGapPasses() async throws {
         var clock: TimeInterval = 100
         let microphone = MicrophoneCapability()

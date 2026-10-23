@@ -131,10 +131,17 @@ enum Constants {
     // changes and nothing tells the recording: a 14 s first recording with AirPods captured
     // 1.5 s and typed nothing (2026-09-24 trace). The engine now restarts, so this catches
     // a restart that failed. The bound is absolute, not a share of the recording: 2.5 min
-    // missing from a 5 min dictation is as lost as 2.5 s from 5 s. The normal gap is the
-    // engine's own start, 0.15-0.25 s and about 0.4 s on the first recording after launch,
-    // plus up to one buffer in flight at release; 1 s is over twice that worst case.
+    // missing from a 5 min dictation is as lost as 2.5 s from 5 s. The gap is counted from
+    // the first buffer, not from the start call: the engine's own start measured 0.91 s on
+    // a loaded machine with AirPods (2026-10-23), which would have cut a healthy recording
+    // short. What remains is a restart's lost window plus up to one buffer in flight at
+    // release. The bound is provisional for the restart case until a mid-recording device
+    // switch is measured on device.
     static let captureGapMaximumSeconds: Double = 1.0
+    // Before the first buffer there is no gap to measure, only an engine that has not
+    // started. Past this the watchdog ends the recording so the user is not left talking
+    // to a dead microphone; a slow but live start (0.91 s measured) stays well inside it.
+    static let captureStartTimeoutSeconds: Double = 3.0
     // How often a recording checks that gap while it runs. Buffers stop when the engine
     // dies, so the gap grows with the clock and a check every second catches the loss
     // within two seconds; the recording then ends on its own instead of running on while

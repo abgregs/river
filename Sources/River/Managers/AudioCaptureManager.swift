@@ -43,11 +43,17 @@ final class AudioCaptureManager {
     // Injectable clock so the gap check is tested without waiting out a real recording.
     private let now: () -> TimeInterval
     private var recordingStartedAt: TimeInterval?
+    // When the first buffer arrived. The gap is measured from here, not from the start
+    // call: the engine's start-up (0.9 s seen on a loaded machine with AirPods) is latency,
+    // not lost audio, and counting it put a healthy recording within 0.1 s of the bound.
+    private var firstBufferAt: TimeInterval?
     // Running total of the audio that arrived, in seconds at each buffer's own rate.
     private var capturedSeconds: Double = 0
-    // The watchdog: every `watchdogInterval` it compares wall time with `capturedSeconds`
-    // and, past `Constants.captureGapMaximumSeconds`, calls `onCaptureGapExceeded` so the
-    // session ends the recording early. `stopRecording` then throws as it would at release.
+    // The watchdog: every `watchdogInterval` it compares the clock since the first buffer
+    // with `capturedSeconds` and, past `Constants.captureGapMaximumSeconds`, calls
+    // `onCaptureGapExceeded` so the session ends the recording early. `stopRecording` then
+    // throws as it would at release. Before the first buffer it instead waits out
+    // `Constants.captureStartTimeoutSeconds`, so a dead engine still fails fast.
     private let watchdogInterval: Double
     private var watchdog: Task<Void, Never>?
     /// Called on the main actor when the recording's audio falls more than
@@ -84,10 +90,12 @@ final class AudioCaptureManager {
         self.onSamples = onSamples
         resampler = nil
         recordingStartedAt = now()
+        firstBufferAt = nil
         capturedSeconds = 0
         microphone.audioBuffers
             .sink { [weak self] buffer in
                 guard let self else { return }
+                if firstBufferAt == nil { firstBufferAt = now() }
                 buffers.append(buffer)
                 capturedSeconds += Double(buffer.frameLength) / buffer.format.sampleRate
                 forwardLive(buffer)
@@ -114,10 +122,15 @@ final class AudioCaptureManager {
     }
 
     // internal for testability — the watchdog's question, answered from the injected
-    // clock: has the audio fallen more than `captureGapMaximumSeconds` behind wall time?
+    // clock: has the audio fallen more than `captureGapMaximumSeconds` behind the clock
+    // since it began arriving? Before the first buffer the only failure is an engine that
+    // never starts, bounded by `captureStartTimeoutSeconds`.
     func captureGapExceeded() -> Bool {
         guard let recordingStartedAt else { return false }
-        return now() - recordingStartedAt - capturedSeconds > Constants.captureGapMaximumSeconds
+        guard let firstBufferAt else {
+            return now() - recordingStartedAt > Constants.captureStartTimeoutSeconds
+        }
+        return now() - firstBufferAt - capturedSeconds > Constants.captureGapMaximumSeconds
     }
 
     private func forwardLive(_ buffer: AVAudioPCMBuffer) {
@@ -162,13 +175,18 @@ final class AudioCaptureManager {
         let collected = buffers
         buffers.removeAll(keepingCapacity: true)
         let recordingSeconds = recordingStartedAt.map { now() - $0 } ?? 0
+        // Buffers arrived, so `firstBufferAt` is set; the fallbacks only satisfy the optional.
+        let startupSeconds = (firstBufferAt ?? 0) - (recordingStartedAt ?? 0)
+        let heardSeconds = firstBufferAt.map { now() - $0 } ?? 0
         recordingStartedAt = nil
+        firstBufferAt = nil
 
         // The engine stops on a device change and restarts (MicrophoneCapability). If
         // the restart failed, the buffers stop short of the recording. Typing the
-        // fragment would pass off part of the dictation as the whole.
+        // fragment would pass off part of the dictation as the whole. The gap is
+        // counted from the first buffer: start-up latency is not missing audio.
         let capturedSeconds = self.capturedSeconds
-        let gapSeconds = recordingSeconds - capturedSeconds
+        let gapSeconds = heardSeconds - capturedSeconds
         if gapSeconds > Constants.captureGapMaximumSeconds {
             logger.error("stopRecording: captured \(capturedSeconds, format: .fixed(precision: 2), privacy: .public) s of a \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s recording")
             throw AudioCaptureError.captureIncomplete(capturedSeconds: capturedSeconds, recordingSeconds: recordingSeconds)
@@ -177,7 +195,7 @@ final class AudioCaptureManager {
         let samples = try Self.convert(collected)
         let trimmed = Self.trimSilence(samples)
         let formats = Self.formatRuns(collected).map { "\(Int($0.format.sampleRate)) Hz" }.joined(separator: " -> ")
-        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
+        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, startup \(startupSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
         return trimmed
     }
 
@@ -195,6 +213,7 @@ final class AudioCaptureManager {
         onSamples = nil
         resampler = nil
         recordingStartedAt = nil
+        firstBufferAt = nil
         let dropped = buffers.count
         buffers.removeAll(keepingCapacity: true)
         logger.info("discardRecording: dropped \(dropped, privacy: .public) buffers; no transcription")
