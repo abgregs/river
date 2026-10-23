@@ -17,7 +17,17 @@ struct ErrorToast: Equatable {
 enum ErrorToastPresentation {
     static func toast(for error: RiverError) -> ErrorToast {
         switch error {
-        case .audioCapture:
+        case .audioCapture(let underlying):
+            // The microphone stopped part-way (the audio device changed and the engine
+            // could not recover): the generic "is a microphone connected" hint would
+            // misdirect, since one was. Say what happened and what the user still has.
+            if let captureError = underlying as? AudioCaptureError,
+               case .captureIncomplete = captureError {
+                return ErrorToast(
+                    headline: "Recording cut short",
+                    hint: "The audio device changed or stopped part-way. River typed what it heard; dictate the rest again."
+                )
+            }
             return ErrorToast(
                 headline: "Couldn't capture audio",
                 hint: "Check that a microphone is connected and not muted, then try again."

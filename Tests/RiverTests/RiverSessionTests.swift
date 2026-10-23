@@ -241,6 +241,31 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("the capture watchdog ends a recording through the deactivate path")
+    func captureWatchdogEndsRecording() async throws {
+        // Mid-recording, the audio stopped arriving (planning 0032, decided 2026-10-23):
+        // the capture manager's watchdog asks the session to end the recording, which
+        // takes the same path as a key release, so stopRecording reports the shortfall
+        // and the session still returns to .idle with the error surfaced.
+        let env = makeSession()
+        env.session.wireHotkeyCallbacks()
+        var errors: [RiverError] = []
+        let token = env.session.errors.sink { errors.append($0) }
+        defer { token.cancel() }
+
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+        env.audio.onCaptureGapExceeded?()
+        await waitUntil { env.session.currentState == .idle }
+
+        #expect(env.session.currentState == .idle)
+        guard case .audioCapture = errors.first else {
+            Issue.record("expected .audioCapture, got \(String(describing: errors.first))")
+            return
+        }
+    }
+
+    @MainActor
     @Test("an all-silence recording completes the cycle with no error emitted")
     func allSilenceRecordingEmitsNoError() async throws {
         // A stray key-brush captures pure silence. `makeBuffer()` is zeros, which
@@ -605,6 +630,7 @@ struct RiverSessionTests {
         let microphone: MicrophoneCapability
         let transcription: TranscriptionManager
         let accessibility: AccessibilityCapability
+        let audio: AudioCaptureManager
     }
 
     @MainActor
@@ -629,12 +655,17 @@ struct RiverSessionTests {
         // session's apply-or-defer routing without a real WhisperKit download.
         transcription.setModelLoadStateForTesting(.ready)
         transcription.skipLoadForTesting = true
+        // The clock is frozen: these tests are about the cycle, and with suites running
+        // in parallel a recording here has measured 1.6 s of wall time for 0.1 s of fake
+        // audio, which the capture-gap check would report as lost audio. The gap check and
+        // its watchdog have their own suites; the session test drives the callback directly.
+        let audio = AudioCaptureManager(microphone: microphone, now: { 100 })
         let session = RiverSession(
             accessibility: accessibility,
             microphone: microphone,
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
-            audio: AudioCaptureManager(microphone: microphone),
+            audio: audio,
             textInsertion: TextInsertionManager(accessibility: accessibility),
             transcription: transcription,
             settings: store
@@ -646,7 +677,8 @@ struct RiverSessionTests {
             inputMonitoring: inputMonitoring,
             microphone: microphone,
             transcription: transcription,
-            accessibility: accessibility
+            accessibility: accessibility,
+            audio: audio
         )
     }
 

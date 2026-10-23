@@ -25,6 +25,19 @@ struct ErrorToastPresentationTests {
         }
     }
 
+    @Test("an incomplete capture gets its own headline, not the no-microphone hint")
+    func incompleteCaptureHasOwnToast() {
+        // The microphone was there and stopped part-way (planning 0032). Telling the
+        // user to check that one is connected would misdirect; the toast says what
+        // happened and that the words heard were typed.
+        let cut = ErrorToastPresentation.toast(for: .audioCapture(
+            underlying: AudioCaptureError.captureIncomplete(capturedSeconds: 1.5, recordingSeconds: 14)))
+        let generic = ErrorToastPresentation.toast(for: .audioCapture(
+            underlying: AudioCaptureError.noAudioCaptured))
+        #expect(cut.headline != generic.headline)
+        #expect(cut.hint.contains("typed"))
+    }
+
     @Test("the three kinds produce distinct headlines")
     func distinctHeadlinesPerKind() {
         // A copy-paste slip that mapped two kinds to the same headline would make the

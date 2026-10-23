@@ -160,6 +160,11 @@ final class RiverSession {
         }
         hotkey.onCancel = { [weak self] in self?.handleCancel() }
         hotkey.isRecording = { [weak self] in self?.currentState == .recording }
+        // The capture watchdog ends a recording whose audio stopped arriving, through the
+        // same path as a key release; `stopRecording` reports the shortfall from there.
+        audio.onCaptureGapExceeded = { [weak self] in
+            Task { @MainActor in await self?.handleDeactivate() }
+        }
     }
 
     // internal for testability — state-guarded `.idle` → `.recording` transition.
@@ -279,8 +284,18 @@ final class RiverSession {
                 }
             }
         } catch {
-            stream?.cancel()
             logger.error("Audio capture failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+            // Type what was heard (decided 2026-10-23): the stream decoded the audio that
+            // did arrive, and discarding it would lose the user's words along with the
+            // ones the microphone never delivered. The error follows the text.
+            if let stream {
+                let outcome = await stream.finish()
+                if !outcome.text.isEmpty {
+                    logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
+                    liveTranscriptSubject.send(outcome.text)
+                    await deliver(outcome.text)
+                }
+            }
             errorSubject.send(.audioCapture(underlying: error))
         }
         stateSubject.send(.idle)

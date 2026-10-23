@@ -135,6 +135,12 @@ enum Constants {
     // engine's own start, 0.15-0.25 s and about 0.4 s on the first recording after launch,
     // plus up to one buffer in flight at release; 1 s is over twice that worst case.
     static let captureGapMaximumSeconds: Double = 1.0
+    // How often a recording checks that gap while it runs. Buffers stop when the engine
+    // dies, so the gap grows with the clock and a check every second catches the loss
+    // within two seconds; the recording then ends on its own instead of running on while
+    // the user talks to a dead microphone. Decided 2026-10-23: a tight bound on purpose,
+    // tuned later only against measured false positives.
+    static let captureWatchdogIntervalSeconds: Double = 1.0
 
     // Whisper returns nothing for a word shorter than about a second unless silence
     // surrounds it, so a clip under `shortClipSeconds` is decoded with `shortClipPadSeconds`

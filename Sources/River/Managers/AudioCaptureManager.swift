@@ -40,10 +40,19 @@ final class AudioCaptureManager {
     // arrives and handed to `onSamples`. The batch conversion at stop time is unchanged.
     private var onSamples: (@MainActor ([Float]) -> Void)?
     private var resampler: IncrementalResampler?
-    // Injectable clock so the gap check in `stopRecording` is tested without
-    // waiting out a real recording.
+    // Injectable clock so the gap check is tested without waiting out a real recording.
     private let now: () -> TimeInterval
     private var recordingStartedAt: TimeInterval?
+    // Running total of the audio that arrived, in seconds at each buffer's own rate.
+    private var capturedSeconds: Double = 0
+    // The watchdog: every `watchdogInterval` it compares wall time with `capturedSeconds`
+    // and, past `Constants.captureGapMaximumSeconds`, calls `onCaptureGapExceeded` so the
+    // session ends the recording early. `stopRecording` then throws as it would at release.
+    private let watchdogInterval: Double
+    private var watchdog: Task<Void, Never>?
+    /// Called on the main actor when the recording's audio falls more than
+    /// `Constants.captureGapMaximumSeconds` behind the clock. Set once by the session.
+    var onCaptureGapExceeded: (@MainActor () -> Void)?
 
     /// Upper bound on the engine-warmup wait inside `stopRecording`. `AVAudioEngine`
     /// produces its first tap-callback buffer ~60-100 ms after `start()`; a short
@@ -51,9 +60,14 @@ final class AudioCaptureManager {
     /// See `architecture/river-pipeline.md` "Engine warmup".
     static let warmupWaitSeconds: Double = 0.3
 
-    init(microphone: MicrophoneCapability, now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+    init(
+        microphone: MicrophoneCapability,
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        watchdogInterval: Double = Constants.captureWatchdogIntervalSeconds
+    ) {
         self.microphone = microphone
         self.now = now
+        self.watchdogInterval = watchdogInterval
     }
 
     /// Subscribes to the capability's buffer stream and starts the engine.
@@ -70,13 +84,40 @@ final class AudioCaptureManager {
         self.onSamples = onSamples
         resampler = nil
         recordingStartedAt = now()
+        capturedSeconds = 0
         microphone.audioBuffers
             .sink { [weak self] buffer in
-                self?.buffers.append(buffer)
-                self?.forwardLive(buffer)
+                guard let self else { return }
+                buffers.append(buffer)
+                capturedSeconds += Double(buffer.frameLength) / buffer.format.sampleRate
+                forwardLive(buffer)
             }
             .store(in: &cancellables)
         await microphone.startEngine()
+        startWatchdog()
+    }
+
+    private func startWatchdog() {
+        watchdog?.cancel()
+        let interval = watchdogInterval
+        watchdog = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled, let self else { return }
+                if captureGapExceeded() {
+                    logger.error("Capture gap exceeded \(Constants.captureGapMaximumSeconds, privacy: .public) s mid-recording; ending the recording")
+                    onCaptureGapExceeded?()
+                    return
+                }
+            }
+        }
+    }
+
+    // internal for testability — the watchdog's question, answered from the injected
+    // clock: has the audio fallen more than `captureGapMaximumSeconds` behind wall time?
+    func captureGapExceeded() -> Bool {
+        guard let recordingStartedAt else { return false }
+        return now() - recordingStartedAt - capturedSeconds > Constants.captureGapMaximumSeconds
     }
 
     private func forwardLive(_ buffer: AVAudioPCMBuffer) {
@@ -101,6 +142,8 @@ final class AudioCaptureManager {
     /// `warmupWait` exists for tests: a loaded test machine can oversleep the 0.3 s window,
     /// so the late-buffer test passes a long one. The wait still ends at the first buffer.
     func stopRecording(warmupWait: Double = AudioCaptureManager.warmupWaitSeconds) async throws -> [Float] {
+        watchdog?.cancel()
+        watchdog = nil
         let deadline = Date().addingTimeInterval(warmupWait)
         while buffers.isEmpty && Date() < deadline {
             try? await Task.sleep(nanoseconds: 5_000_000)
@@ -124,7 +167,7 @@ final class AudioCaptureManager {
         // The engine stops on a device change and restarts (MicrophoneCapability). If
         // the restart failed, the buffers stop short of the recording. Typing the
         // fragment would pass off part of the dictation as the whole.
-        let capturedSeconds = collected.reduce(0.0) { $0 + Double($1.frameLength) / $1.format.sampleRate }
+        let capturedSeconds = self.capturedSeconds
         let gapSeconds = recordingSeconds - capturedSeconds
         if gapSeconds > Constants.captureGapMaximumSeconds {
             logger.error("stopRecording: captured \(capturedSeconds, format: .fixed(precision: 2), privacy: .public) s of a \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s recording")
@@ -145,6 +188,8 @@ final class AudioCaptureManager {
     /// waits for warmup nor throws `.noAudioCaptured` (an empty buffer list is the
     /// expected outcome, not a failure). Safe to call when nothing is recording.
     func discardRecording() async {
+        watchdog?.cancel()
+        watchdog = nil
         cancellables.removeAll()
         microphone.stopEngine()
         onSamples = nil

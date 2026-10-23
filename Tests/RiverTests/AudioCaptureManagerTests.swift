@@ -46,10 +46,13 @@ struct AudioCaptureCycleTests {
         // shipped 300 ms is wall-clock time: a loaded CI runner oversleeping the
         // 100 ms below by 200 ms failed this test with `.noAudioCaptured`. The wait
         // ends at the first buffer, so the test still takes about 100 ms;
-        // stopRecordingThrowsWhenSilent covers the shipped window expiring.
+        // stopRecordingThrowsWhenSilent covers the shipped window expiring. The clock
+        // is frozen for the same reason: with suites running in parallel the 100 ms
+        // below has measured 1.8 s, which the capture-gap check would report as lost
+        // audio. That check has its own suite; this test is about the warmup wait.
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
-        let manager = AudioCaptureManager(microphone: microphone)
+        let manager = AudioCaptureManager(microphone: microphone, now: { 100 })
         await manager.startRecording()
 
         let stopTask = Task { @MainActor in
@@ -106,6 +109,48 @@ struct AudioCaptureGapTests {
         clock += 300
 
         await #expect(throws: AudioCaptureError.self) {
+            _ = try await manager.stopRecording()
+        }
+    }
+
+    @MainActor
+    @Test("captureGapExceeded answers from the clock: false idle, false within warmup, true once behind")
+    func gapCheckFollowsTheClock() async throws {
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+        #expect(!manager.captureGapExceeded())            // nothing recording
+
+        await manager.startRecording()
+        clock += 0.4                                      // a first-recording warmup
+        #expect(!manager.captureGapExceeded())
+        microphone.publishForTest(makeSineBuffer(milliseconds: 1_000, frequency: 440, amplitude: 0.5))
+        clock += 1.0
+        #expect(!manager.captureGapExceeded())            // audio kept up
+        clock += 1.1                                      // then nothing arrived
+        #expect(manager.captureGapExceeded())
+        await manager.discardRecording()
+    }
+
+    @MainActor
+    @Test("the watchdog calls onCaptureGapExceeded once the audio falls behind the clock")
+    func watchdogFires() async throws {
+        var clock: TimeInterval = 100
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { clock }, watchdogInterval: 0.005)
+        var fired = 0
+        manager.onCaptureGapExceeded = { fired += 1 }
+
+        await manager.startRecording()
+        for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
+        #expect(fired == 0)                               // no gap yet
+        clock += 1.5                                      // no buffer for 1.5 s
+        for _ in 0..<50 where fired == 0 { try await Task.sleep(nanoseconds: 5_000_000) }
+        #expect(fired == 1)
+
+        await #expect(throws: AudioCaptureError.self) {   // and release reports it
             _ = try await manager.stopRecording()
         }
     }
