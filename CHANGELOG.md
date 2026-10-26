@@ -18,6 +18,10 @@ show as raw text. -->
 
 ## [Unreleased]
 
+### Changed
+
+- With AirPods or another Bluetooth headset as the input, River now records from the Mac's built-in microphone instead of the headset's. The headset is never switched into call mode, so music and calls keep their quality while you dictate, and the recording is at the Mac microphone's full rate.
+
 ### Fixed
 
 - The first recording with AirPods connected no longer comes back empty. Opening the microphone switched the AirPods to their call mode, and the recording stopped hearing you part-way; River now follows the audio device change and keeps recording.
