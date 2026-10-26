@@ -29,7 +29,7 @@ Only the Xcode Command Line Tools are required — no full Xcode. The `make inst
 Three deep modules carry most of the design:
 
 - **[`RiverSession`](docs/architecture/river-session.md)** owns one full activation-to-paste cycle. `AppDelegate` is a thin lifecycle shell that constructs the session and calls `start()`. The state machine, callback wiring, and deferred-reconfiguration logic all live inside the session — nowhere else.
-- **[`Capability`](docs/architecture/capabilities.md)** layer owns each macOS permission: both the TCC check and the OS call that the permission gates. `CGEvent.post` is only called inside `AccessibilityCapability`; `AVAudioEngine.start()` is only called inside `MicrophoneCapability`; `CGEvent.tapCreate` is only called inside `InputMonitoringCapability`.
+- **[`Capability`](docs/architecture/capabilities.md)** layer owns each macOS permission: both the TCC check and the OS call that the permission gates. `CGEvent.post` is only called inside `AccessibilityCapability`; `AudioOutputUnitStart` is only called inside `MicrophoneCapability`; `CGEvent.tapCreate` is only called inside `InputMonitoringCapability`.
 - **[`SettingsStore`](docs/architecture/settings-store.md)** wraps `UserDefaults.standard` behind typed per-key publishers. SwiftUI uses `@AppStorage(Settings.x.name)`; non-SwiftUI code uses `store.publisher(for: Settings.x)`.
 
 Read the three docs above before adding code that touches the cycle, a permission, or a setting.
@@ -40,7 +40,7 @@ Rules 1 and 2 are facts about macOS: break one and the app fails silently, so th
 
 1. **Event tap thread invariant** — owned by `InputMonitoringCapability`. The CFRunLoop runs on a dedicated `com.river.eventtap` background thread with QoS `.userInteractive`. Never on the main run loop. See [docs/architecture/threading-invariant.md](docs/architecture/threading-invariant.md).
 2. **Bundle integrity** — `Info.plist` and `--entitlements` are mandatory at sign time, and `Contents/Resources` must carry the app icon and the menu bar glyphs. `make verify` (run by `make install` and the release workflow) asserts the bundle identifier, the icon plus its `CFBundleIconFile` key, and every glyph file, and fails loudly. There is no runtime detector for a malformed bundle or a missing asset, so neither must ever get past the build. See [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md) item #3 and [docs/conventions/test-harnesses.md](docs/conventions/test-harnesses.md).
-3. **One source of truth for OS API calls.** `CGEvent.post`, `AVAudioEngine.start`, and `CGEvent.tapCreate` are each called in exactly one place — the corresponding capability. A second call site means a second place that has to check the permission.
+3. **One source of truth for OS API calls.** `CGEvent.post`, `AudioOutputUnitStart`, and `CGEvent.tapCreate` are each called in exactly one place — the corresponding capability. A second call site means a second place that has to check the permission.
 4. **One source of truth for `UserDefaults` key strings.** Each key appears in exactly one `SettingKey` declaration. `@AppStorage` references it via `Settings.x.name`. An inline string literal can drift from the declared key without any error. See [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md) item #8.
 5. **Compile-time vs. runtime config** — user-facing settings live in `SettingsStore` from day 1, not in `Constants.swift`. `Constants` holds defaults that `Settings` keys reference, plus internal tunables.
 

@@ -13,7 +13,7 @@ This collapses three otherwise-separate concerns into one pattern: permission de
 
 | Capability | What it gates | OS API it wraps |
 |---|---|---|
-| `MicrophoneCapability` | Audio capture | `AVCaptureDevice.requestAccess(.audio)` + `AVAudioEngine.start()` |
+| `MicrophoneCapability` | Audio capture | `AVCaptureDevice.requestAccess(.audio)` + `AudioOutputUnitStart` (a HAL output unit pinned to the chosen device) |
 | `InputMonitoringCapability` | Global event taps | `CGEvent.tapCreate(..., options: .listenOnly)` — observe-only, never modifies/consumes input ([0006](../planning/0006_runtime-security-hardening.md)) |
 | `AccessibilityCapability` | Posting synthetic events to other apps | `CGEvent.post(...)` (synthesized Unicode keystrokes for text insertion — planning 0011), plus the read-only focused-element role read behind the insertion guard (`AXUIElementCopyAttributeValue` — see [river-pipeline.md](river-pipeline.md)) |
 
@@ -56,7 +56,9 @@ final class AccessibilityCapability: Capability {
 }
 ```
 
-**Only `AccessibilityCapability` calls `CGEvent.post`. Only `MicrophoneCapability` starts the audio engine. Only `InputMonitoringCapability` creates the tap.** This is the layer's core rule (`AGENTS.md` rule 3).
+**Only `AccessibilityCapability` calls `CGEvent.post`. Only `MicrophoneCapability` starts the capture unit. Only `InputMonitoringCapability` creates the tap.** This is the layer's core rule (`AGENTS.md` rule 3).
+
+`MicrophoneCapability` captures through a HAL output unit (`kAudioUnitSubType_HALOutput`, input element enabled, output element disabled) pinned to one device before it initialises. The device comes from `InputDeviceSelection`: the system default input, unless that is a Bluetooth device, in which case the built-in microphone, so a headset is never pulled into call mode and keeps its playback quality (warm-microphone spec, decision 4). A pinned unit does not follow the default, so the capability listens to the HAL for default-input and device-list changes and re-pins only when the selection names a different device. `AVAudioEngine` was replaced because its input node binds the system default before any pin can take effect.
 
 ## Status detection
 
@@ -95,7 +97,7 @@ final class TextInsertionManager {
 }
 ```
 
-Same pattern for `HotkeyManager` ↔ `InputMonitoringCapability` (the capability creates the tap; the manager interprets events) and `AudioCaptureManager` ↔ `MicrophoneCapability` (the capability starts the engine; the manager handles buffers).
+Same pattern for `HotkeyManager` ↔ `InputMonitoringCapability` (the capability creates the tap; the manager interprets events) and `AudioCaptureManager` ↔ `MicrophoneCapability` (the capability chooses the device and starts the capture unit; the manager handles buffers).
 
 ## Onboarding consumes the capability set
 
