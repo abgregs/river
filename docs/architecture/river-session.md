@@ -58,7 +58,7 @@ That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a
            Capability     Capability     Capability
 ```
 
-`RiverSession` consumes the managers; the managers consume capabilities. No call ever skips a layer.
+`RiverSession` consumes the managers; the managers consume capabilities. No call ever skips a layer. The session also reads `SystemAvailabilityMonitor` (sleep, lock and session state) as one input to microphone readiness; the monitor gates no OS call, so it sits outside this layering.
 
 ## Reconfiguration without leaks
 
