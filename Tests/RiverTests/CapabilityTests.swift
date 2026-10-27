@@ -368,6 +368,40 @@ struct InputMonitoringDecodeTests {
     }
 }
 
+@Suite("InputMonitoringCapability tap lifecycle")
+struct InputMonitoringLifecycleTests {
+    // `startTap` must not report the tap started until its run loop is running. A
+    // `CFRunLoopStop` sent before `CFRunLoopRun` begins is a no-op, so a stop that won
+    // that race left the loop running and `stopTap` waiting for the thread forever: a hung
+    // local test run on 2026-10-27, from session tests that start and stop back to back.
+    // The real tap needs Input Monitoring on the test process, as a developer terminal
+    // has; without it `tapCreate` returns nil, each start is a quick no-op, and this passes
+    // trivially (as in CI). Each stop has a deadline so a regression fails, not hangs.
+
+    @MainActor
+    final class Flag { var isSet = false }
+
+    @MainActor
+    @Test("a stop right after a start always ends the tap thread")
+    func stopRightAfterStartEndsTheThread() async throws {
+        for _ in 0..<300 {
+            let capability = InputMonitoringCapability()
+            await capability.startTap()
+            let stopped = Flag()
+            Task { @MainActor in
+                await capability.stopTap()
+                stopped.isSet = true
+            }
+            let deadline = ContinuousClock.now + .seconds(2)
+            while !stopped.isSet, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            let didStop = stopped.isSet
+            try #require(didStop, "stopTap did not return within 2 s of startTap")
+        }
+    }
+}
+
 @Suite("MicrophoneCapability device change")
 struct MicrophoneDeviceChangeTests {
     // A capture unit pinned to one device does not follow the system default, so the
