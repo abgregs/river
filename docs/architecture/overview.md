@@ -28,7 +28,7 @@ AppDelegate (lifecycle only)              │
                       AccessibilityCapability)
             │
             ▼
-        macOS APIs (CGEventTap, AVAudioEngine, CGEvent.post)
+        macOS APIs (CGEventTap, AudioOutputUnit, CGEvent.post)
 ```
 
 **Why this layering:** every concern that previously landed in `AppDelegate` (state machine, callback wiring, notification filtering, deferred-restart logic) is now owned by `RiverSession`. Every concern that previously involved calling an OS API "and hoping" (post a synthetic key event, start the audio engine) now goes through a capability that owns both the check and the call. SwiftUI keeps its scene lifecycle; `AppDelegate` shrinks to a few lines.

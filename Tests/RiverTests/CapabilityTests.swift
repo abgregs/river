@@ -368,31 +368,49 @@ struct InputMonitoringDecodeTests {
     }
 }
 
-@Suite("MicrophoneCapability configuration change")
-struct MicrophoneConfigurationChangeTests {
-    // The engine stops itself when the audio device changes, and a recording that
-    // nobody told kept running on a dead engine (planning 0032). The capability now
-    // listens for the change and restarts in place. The restart needs a real device;
-    // what runs here is the wiring: the observer is live after `startEngine` and
-    // gone after `stopEngine`, so a change can neither be missed during a recording
-    // nor restart an engine that was deliberately stopped.
+@Suite("MicrophoneCapability device change")
+struct MicrophoneDeviceChangeTests {
+    // A capture unit pinned to one device does not follow the system default, so the
+    // capability listens to the HAL for device changes and re-selects (planning 0032,
+    // warm-microphone spec decision 4). The restart needs a real device; what runs
+    // here is the wiring: the handler acts after `startEngine` and is inert after
+    // `stopEngine`, so a change can neither be missed during a recording nor restart
+    // a unit that was deliberately stopped.
 
     @MainActor
-    @Test("the change observer is live after startEngine and removed by stopEngine")
-    func observerFollowsEngineLifetime() async {
+    @Test("the device-change handler is live after startEngine and inert after stopEngine")
+    func handlerFollowsEngineLifetime() async {
         let mic = MicrophoneCapability()
         mic.skipEngineForTesting = true
 
-        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: nil)
-        #expect(mic.configurationChangeCount == 0)        // nothing started yet
+        mic.handleDeviceChange()
+        #expect(mic.deviceChangeCount == 0)        // nothing started yet
 
         await mic.startEngine()
-        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: nil)
-        #expect(mic.configurationChangeCount == 1)
+        mic.handleDeviceChange()
+        #expect(mic.deviceChangeCount == 1)
 
         mic.stopEngine()
-        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: nil)
-        #expect(mic.configurationChangeCount == 1)        // stopped: no longer listening
+        mic.handleDeviceChange()
+        #expect(mic.deviceChangeCount == 1)        // stopped: no longer listening
+    }
+}
+
+@Suite("MicrophoneCapability render buffer")
+struct MicrophoneRenderBufferTests {
+    // The HAL render callback hands this buffer to `AudioUnitRender`. On the first
+    // on-device build (2026-10-26) the buffer had `frameLength` 0, so its audio buffer
+    // list advertised zero bytes, every render failed with paramErr and every
+    // recording came back empty. The byte size is what the HAL reads, so that is what
+    // is pinned here.
+
+    @Test("the render buffer advertises the full slice to the HAL before rendering")
+    func renderBufferIsSizedForTheSlice() throws {
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1))
+        let buffer = try #require(MicrophoneCapability.renderBuffer(format: format, frameCount: 512))
+        #expect(buffer.frameLength == 512)
+        #expect(buffer.mutableAudioBufferList.pointee.mNumberBuffers == 1)
+        #expect(buffer.mutableAudioBufferList.pointee.mBuffers.mDataByteSize == 512 * UInt32(MemoryLayout<Float>.size))
     }
 }
 

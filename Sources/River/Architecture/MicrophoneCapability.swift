@@ -1,6 +1,8 @@
 import AppKit
+import AudioToolbox
 import AVFoundation
 import Combine
+import CoreAudio
 import Foundation
 import os
 
@@ -12,18 +14,37 @@ final class MicrophoneCapability: Capability {
     private let audioLogger = Logger(subsystem: Constants.loggingSubsystem, category: "audio")
     private let subject: CurrentValueSubject<CapabilityStatus, Never>
 
-    // fileprivate so the audio tap callback (in this file) can deliver into it.
-    fileprivate let audioBufferSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let audioBufferSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
     // Live input level (0...1), throttled — the recording HUD's level meter reads
     // this so a silent mic is visible *during* capture (planning 0020).
     private let levelSubject = PassthroughSubject<Float, Never>()
-    private var engine: AVAudioEngine?
+
+    // The capture unit: a HAL output unit with its input element enabled and its
+    // output element disabled, pinned to one device before it initialises. Pinning
+    // first is what keeps a Bluetooth headset out of call mode when the built-in
+    // microphone is chosen instead (`InputDeviceSelection`); `AVAudioEngine` could
+    // not do this because its input node binds the system default before any pin
+    // (warm-microphone spec, step 0, 2026-10-22 and 2026-10-26).
+    private var unit: AudioUnit?
+    // The audio-thread half, kept alive for the unit's lifetime (it is the render
+    // callback's refCon).
+    private var sink: CaptureSink?
+    private(set) var captureDevice: AudioDeviceID?
     private(set) var inputFormat: AVAudioFormat?
-    private var configurationObserver: (any NSObjectProtocol)?
-    // internal for testability — counts the configuration changes the capability
-    // handled, so a test can assert the observer is wired on `startEngine` and gone
-    // after `stopEngine` without a real engine (the restart itself needs a device).
-    private(set) var configurationChangeCount = 0
+    private typealias Listener = (object: AudioObjectID, address: AudioObjectPropertyAddress, block: AudioObjectPropertyListenerBlock)
+    // System-wide: the default input and the device list. Live between `startEngine`
+    // and `stopEngine`.
+    private var systemListeners: [Listener] = []
+    // On the pinned device: its nominal sample rate and liveness. Live with the unit,
+    // because a pinned unit does not follow a format change the way the engine did.
+    private var deviceListeners: [Listener] = []
+    // True between `startEngine` and `stopEngine`: the window in which a device
+    // change is acted on. Also the idempotency guard for both calls.
+    private var listening = false
+    // internal for testability — counts the device changes the capability handled
+    // while listening, so a test can assert the handler is live after `startEngine`
+    // and inert after `stopEngine` without a real device (the restart needs one).
+    private(set) var deviceChangeCount = 0
 
     // Throttle state for the level publisher: `nil` until the first sample so the
     // first buffer always emits. Injectable clock so the ~14 Hz throttle is tested
@@ -31,25 +52,25 @@ final class MicrophoneCapability: Capability {
     private let now: () -> TimeInterval
     private var lastLevelEmit: TimeInterval?
 
-    // internal for testability — when true, `startEngine` is a no-op. The test
-    // runner often has Microphone permission, so without this `AVAudioEngine.start`
-    // succeeds and real silence (or noise) leaks into tests via the tap callback,
-    // racing with synthetic buffers from `publishForTest`. The M4 pattern got
-    // this for free because `tapCreate` returns nil without Input Monitoring;
-    // mic capture has no equivalent natural skip.
+    // internal for testability — when true, `startEngine` opens no capture unit. The
+    // test runner often has Microphone permission, so without this the unit starts
+    // and real silence (or noise) leaks into tests via the render callback, racing
+    // with synthetic buffers from `publishForTest`. The M4 pattern got this for
+    // free because `tapCreate` returns nil without Input Monitoring; mic capture
+    // has no equivalent natural skip.
     var skipEngineForTesting = false
 
     var status: AnyPublisher<CapabilityStatus, Never> { subject.eraseToAnyPublisher() }
     var currentStatus: CapabilityStatus { subject.value }
 
-    /// Buffers from the audio input tap. Subscribers receive on the main actor
-    /// (the tap callback hops via `Task { @MainActor in ... }` per the threading
-    /// invariant). Buffers are deep-copied — the tap's buffer is reused after
-    /// the callback returns.
+    /// Buffers from the capture unit, Float32 mono at the device's sample rate.
+    /// Subscribers receive on the main actor (the render callback hops via
+    /// `Task { @MainActor in ... }` per the threading invariant). Each buffer is
+    /// freshly allocated for the callback, so it is the subscriber's to keep.
     var audioBuffers: AnyPublisher<AVAudioPCMBuffer, Never> { audioBufferSubject.eraseToAnyPublisher() }
 
     /// Throttled input level (0...1) during capture. Emits on the main actor (the
-    /// tap callback hops via `Task { @MainActor in ... }`, same discipline as the
+    /// render callback hops via `Task { @MainActor in ... }`, same discipline as the
     /// buffer stream and the event tap). `AppState.bind(microphone:)` subscribes;
     /// the recording HUD renders it (planning 0020).
     var inputLevels: AnyPublisher<Float, Never> { levelSubject.eraseToAnyPublisher() }
@@ -75,119 +96,236 @@ final class MicrophoneCapability: Capability {
         SystemSettingsPane.microphone.open()
     }
 
-    /// Starts the `AVAudioEngine` and installs an input tap that publishes
-    /// (deep-copied) buffers to `audioBuffers`. Idempotent. If the engine fails
-    /// to start (typically because Microphone isn't granted for the running
-    /// process), logs a warning and returns — the capability's `status` already
-    /// reports `.denied`/`.unknown` to onboarding upstream. Mirrors the
-    /// fail-quiet pattern in `InputMonitoringCapability.startTap`.
+    /// Chooses the capture device, starts the capture unit on it and publishes its
+    /// buffers to `audioBuffers`. Idempotent. If the unit fails to start, logs a warning
+    /// and returns, mirroring the fail-quiet pattern in `InputMonitoringCapability.startTap`.
+    /// A missing Microphone grant does not fail the start: CoreAudio delivers silence
+    /// instead, which the silence trim reads as "nothing was said"; the capability's
+    /// `status` already reports `.denied`/`.unknown` to onboarding upstream.
     func startEngine() async {
-        guard engine == nil else { return }
-        if skipEngineForTesting {
-            // No engine to observe, so listen for any engine's change: the test posts
-            // the notification with no object and asserts the count.
-            observeConfigurationChanges(of: nil)
+        guard !listening else { return }
+        listening = true
+        if skipEngineForTesting { return }
+        observeDeviceChanges()
+        guard let device = selectDevice() else {
+            audioLogger.warning("No input device available; capture not started")
             return
         }
-        let engine = AVAudioEngine()
-        let format = engine.inputNode.inputFormat(forBus: 0)
-        guard format.sampleRate > 0 else {
-            audioLogger.warning("Input node returned a zero-sampleRate format — no microphone available.")
-            return
-        }
-        installTap(on: engine, format: format)
-        do {
-            try engine.start()
-            self.engine = engine
-            self.inputFormat = format
-            observeConfigurationChanges(of: engine)
-            audioLogger.info("AVAudioEngine started; input format \(format.sampleRate, privacy: .public) Hz \(format.channelCount, privacy: .public) ch")
-        } catch {
-            engine.inputNode.removeTap(onBus: 0)
-            audioLogger.warning("AVAudioEngine.start failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-        }
+        startUnit(on: device)
     }
 
-    /// Removes the input tap and stops the engine. Idempotent.
+    /// Stops the capture unit and stops acting on device changes. Idempotent.
     func stopEngine() {
-        if let configurationObserver {
-            NotificationCenter.default.removeObserver(configurationObserver)
-            self.configurationObserver = nil
-        }
-        guard let engine else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        self.engine = nil
-        self.inputFormat = nil
+        guard listening else { return }
+        listening = false
+        removeListeners(&systemListeners)
+        stopUnit()
         // Reset the throttle so the next recording's first buffer emits a level
         // immediately rather than being gated by the previous recording's timestamp.
         lastLevelEmit = nil
-        audioLogger.info("AVAudioEngine stopped")
+        audioLogger.info("Capture unit stopped")
     }
 
     // internal for testability — pushes a synthetic buffer into the stream
-    // synchronously on the main actor, bypassing the engine (which requires a
+    // synchronously on the main actor, bypassing the capture unit (which requires a
     // Microphone grant on the running process).
     func publishForTest(_ buffer: AVAudioPCMBuffer) {
         audioBufferSubject.send(buffer)
     }
 
-    /// The engine stops itself when its configuration changes: the default input
-    /// switching, AirPods connecting or leaving call mode, headphones plugged in.
-    /// Nothing tells the recording. The 2026-09-24 trace shows a first recording with
-    /// AirPods running 14 s on an engine that CoreAudio had stopped 1.7 s in, which
-    /// captured 1.5 s of audio and typed nothing. So the capability re-reads the
-    /// input format, reinstalls the tap and restarts the engine in place; the buffer
-    /// stream continues, now in the new format (`AudioCaptureManager` converts each
-    /// run of same-format buffers on its own). A failed restart is logged at `.error`
-    /// and the recording's shortfall is what `stopRecording` reports.
-    // internal for testability — the notification handler, split out so a test can
-    // drive it without posting through NotificationCenter.
-    func handleConfigurationChange() {
-        configurationChangeCount += 1
-        guard let engine else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        let format = engine.inputNode.inputFormat(forBus: 0)
-        guard format.sampleRate > 0 else {
-            audioLogger.error("Audio configuration changed and the input node has no format; capture has stopped")
+    /// A pinned unit does not follow the system default, so the capability listens
+    /// to the HAL itself: the default input changing (AirPods connecting, a USB
+    /// microphone chosen), the device list changing (the pinned device unplugged),
+    /// and the pinned device's own sample rate and liveness (another app changing
+    /// the rate). On any of them it re-runs the selection and restarts the unit only
+    /// if the answer is a different device or the same device at a new rate; the buffer stream continues in the new
+    /// format (`AudioCaptureManager` converts each run of same-format buffers on its
+    /// own). AirPods connecting or leaving while the built-in microphone is pinned
+    /// changes nothing and costs no restart. A failed restart is logged at `.error`
+    /// and the recording's shortfall is what the capture gap watchdog reports
+    /// (planning 0032).
+    // internal for testability — the listener handler, split out so a test can
+    // drive it without a HAL property change.
+    func handleDeviceChange() {
+        guard listening else { return }
+        deviceChangeCount += 1
+        guard !skipEngineForTesting else { return }
+        guard let device = selectDevice() else {
+            audioLogger.error("Audio devices changed and no input device remains; capture has stopped")
+            stopUnit()
             return
         }
-        installTap(on: engine, format: format)
-        do {
-            try engine.start()
-            inputFormat = format
-            audioLogger.info("Audio configuration changed; engine restarted with input format \(format.sampleRate, privacy: .public) Hz \(format.channelCount, privacy: .public) ch")
-        } catch {
-            audioLogger.error("Audio configuration changed and the engine could not restart: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+        if unit != nil, device == captureDevice {
+            let rate = CoreAudioDevices.nominalSampleRate(of: device)
+            if rate == inputFormat?.sampleRate {
+                audioLogger.info("Audio devices changed; capture stays on device \(device, privacy: .public)")
+                return
+            }
+            // The device changed its format under the pinned unit (another app or Audio
+            // MIDI Setup set a new rate). The client format no longer matches, so the
+            // unit is rebuilt on the same device at the new rate.
+            audioLogger.info("Capture device \(device, privacy: .public) changed its sample rate to \(rate, privacy: .public) Hz; restarting the capture unit")
+        } else {
+            audioLogger.info("Audio devices changed; moving capture to \(CoreAudioDevices.name(of: device)) (device \(device, privacy: .public))")
+        }
+        stopUnit()
+        startUnit(on: device)
+    }
+
+    // MARK: - Device selection
+
+    private func selectDevice() -> AudioDeviceID? {
+        let defaultInput = CoreAudioDevices.defaultInputDevice()
+        let builtIn = CoreAudioDevices.builtInInputDevice()
+        let choice = InputDeviceSelection.choose(
+            defaultInputIsBluetooth: defaultInput.map(CoreAudioDevices.isBluetooth) ?? false,
+            builtInMicrophoneAvailable: builtIn != nil
+        )
+        switch choice {
+        case .defaultInput:
+            return defaultInput ?? builtIn
+        case .builtInMicrophone:
+            if let defaultInput {
+                audioLogger.info("Default input \(CoreAudioDevices.name(of: defaultInput)) (device \(defaultInput, privacy: .public)) is Bluetooth; capturing from the built-in microphone so it keeps its audio quality")
+            }
+            return builtIn
         }
     }
 
-    private func observeConfigurationChanges(of engine: AVAudioEngine?) {
-        configurationObserver = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-        ) { [weak self] _ in
+    // MARK: - The capture unit
+
+    private func startUnit(on device: AudioDeviceID) {
+        var description = AudioComponentDescription(
+            componentType: kAudioUnitType_Output, componentSubType: kAudioUnitSubType_HALOutput,
+            componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0
+        )
+        guard let component = AudioComponentFindNext(nil, &description) else {
+            audioLogger.warning("No HAL output component; capture not started")
+            return
+        }
+        var created: AudioUnit?
+        guard AudioComponentInstanceNew(component, &created) == noErr, let unit = created else {
+            audioLogger.warning("Could not create the capture unit")
+            return
+        }
+
+        // Each step logs its own failure; the unit is disposed on the first one.
+        func step(_ what: StaticString, _ status: OSStatus) -> Bool {
+            guard status != noErr else { return true }
+            audioLogger.warning("Capture unit setup failed at \(what, privacy: .public): status \(status, privacy: .public)")
+            AudioComponentInstanceDispose(unit)
+            return false
+        }
+
+        var enabled: UInt32 = 1
+        var disabled: UInt32 = 0
+        var pinned = device
+        let idSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var deviceFormat = AudioStreamBasicDescription()
+        var formatSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        // Order matters: enable the input element, disable the output element, pin
+        // the device, then read the device's format and set the client format, and
+        // only then initialise. Pinning after initialise is what the engine did, and
+        // it did not keep the headset out of call mode.
+        guard step("enable input", AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, &enabled, 4)),
+              step("disable output", AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, &disabled, 4)),
+              step("pin device", AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &pinned, idSize)),
+              step("read device format", AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &deviceFormat, &formatSize))
+        else { return }
+        guard deviceFormat.mSampleRate > 0,
+              let format = AVAudioFormat(standardFormatWithSampleRate: deviceFormat.mSampleRate, channels: 1) else {
+            audioLogger.warning("Capture device \(device, privacy: .public) reports no sample rate; capture not started")
+            AudioComponentInstanceDispose(unit)
+            return
+        }
+        var clientFormat = format.streamDescription.pointee
+        let sink = CaptureSink(unit: unit, format: format) { [weak self] buffer, rms in
+            self?.audioBufferSubject.send(buffer)
+            self?.emitLevel(rms: rms)
+        }
+        var callback = AURenderCallbackStruct(inputProc: captureInputProc, inputProcRefCon: Unmanaged.passUnretained(sink).toOpaque())
+        guard step("set client format", AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &clientFormat, formatSize)),
+              step("set input callback", AudioUnitSetProperty(unit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, &callback, UInt32(MemoryLayout<AURenderCallbackStruct>.size))),
+              step("initialise", AudioUnitInitialize(unit))
+        else { return }
+        // The pin must survive initialise; it is what keeps a headset out of call mode.
+        var pinnedAfter: AudioDeviceID = 0
+        var pinnedSize = idSize
+        if AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &pinnedAfter, &pinnedSize) == noErr,
+           pinnedAfter != device {
+            audioLogger.error("Capture unit initialised on device \(pinnedAfter, privacy: .public) instead of the selected device \(device, privacy: .public); the pin did not hold")
+        }
+        // The one gated OS call (AGENTS.md rule 3): capture starts here and nowhere else.
+        guard AudioOutputUnitStart(unit) == noErr else {
+            audioLogger.warning("AudioOutputUnitStart failed on device \(device, privacy: .public)")
+            AudioUnitUninitialize(unit)
+            AudioComponentInstanceDispose(unit)
+            return
+        }
+        self.unit = unit
+        self.sink = sink
+        captureDevice = device
+        inputFormat = format
+        listen(to: kAudioDevicePropertyNominalSampleRate, on: device, into: &deviceListeners)
+        listen(to: kAudioDevicePropertyDeviceIsAlive, on: device, into: &deviceListeners)
+        audioLogger.info("Capture unit started on \(CoreAudioDevices.name(of: device)) (device \(device, privacy: .public)) at \(format.sampleRate, privacy: .public) Hz")
+    }
+
+    private func stopUnit() {
+        removeListeners(&deviceListeners)
+        guard let unit else { return }
+        // Stop is synchronous: no render callback runs after it returns, so the sink
+        // can be released.
+        AudioOutputUnitStop(unit)
+        AudioUnitUninitialize(unit)
+        AudioComponentInstanceDispose(unit)
+        self.unit = nil
+        sink = nil
+        captureDevice = nil
+        inputFormat = nil
+    }
+
+    // MARK: - Device listeners
+
+    private func observeDeviceChanges() {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        listen(to: kAudioHardwarePropertyDefaultInputDevice, on: system, into: &systemListeners)
+        listen(to: kAudioHardwarePropertyDevices, on: system, into: &systemListeners)
+    }
+
+    private func listen(to selector: AudioObjectPropertySelector, on object: AudioObjectID, into list: inout [Listener]) {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             // Delivered on the main queue, which is the main actor.
-            MainActor.assumeIsolated { self?.handleConfigurationChange() }
+            MainActor.assumeIsolated { self?.handleDeviceChange() }
         }
+        let status = AudioObjectAddPropertyListenerBlock(object, &address, .main, block)
+        guard status == noErr else {
+            audioLogger.warning("Could not listen for audio changes (selector \(selector, privacy: .public) on object \(object, privacy: .public)): status \(status, privacy: .public)")
+            return
+        }
+        list.append((object, address, block))
     }
 
-    private func installTap(on engine: AVAudioEngine, format: AVAudioFormat) {
-        engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            guard let self else { return }
-            let copy = Self.copy(buffer)
-            // RMS is computed here on the audio thread (pure, no `self` access), so
-            // only the throttled emission crosses to the main actor.
-            let rms = Self.rms(of: buffer)
-            Task { @MainActor in
-                self.audioBufferSubject.send(copy)
-                self.emitLevel(rms: rms)
+    // CoreAudio matches a listener by block identity, so the stored block is the one
+    // handed back. A non-zero status here means a listener leaked; it is logged so a
+    // smoke run shows it, since the `listening` guard would otherwise hide it.
+    private func removeListeners(_ list: inout [Listener]) {
+        for listener in list {
+            var address = listener.address
+            let status = AudioObjectRemovePropertyListenerBlock(listener.object, &address, .main, listener.block)
+            if status != noErr {
+                audioLogger.warning("Could not remove an audio listener (selector \(listener.address.mSelector, privacy: .public)): status \(status, privacy: .public)")
             }
         }
+        list.removeAll()
     }
 
-    // internal for testability — the throttled level emission, split from the tap
+    // MARK: - Levels
+
+    // internal for testability — the throttled level emission, split from the render
     // callback so the ~14 Hz throttle is tested with an injected clock without a
-    // real engine (planning 0020 AC3). Emits the normalized level on the main actor;
+    // real device (planning 0020 AC3). Emits the normalized level on the main actor;
     // buffers arriving inside `inputLevelPublishInterval` of the last emission are
     // dropped (the meter doesn't need every buffer).
     func emitLevel(rms: Float) {
@@ -197,11 +335,24 @@ final class MicrophoneCapability: Capability {
         levelSubject.send(Self.normalizedLevel(rms: rms))
     }
 
+    // internal for testability — the buffer a render callback hands to
+    // `AudioUnitRender`. `frameLength` is set to the slice BEFORE rendering: a fresh
+    // `AVAudioPCMBuffer` has `frameLength` 0 and its audio buffer list's
+    // `mDataByteSize` follows it, so rendering into it fails with paramErr (-50) and
+    // delivers nothing. The first on-device build did exactly that (2026-10-26) and
+    // every recording came back empty; the test pins the byte size so it cannot
+    // recur silently. Pure and audio-thread-safe.
+    nonisolated static func renderBuffer(format: AVAudioFormat, frameCount: AVAudioFrameCount) -> AVAudioPCMBuffer? {
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
+        buffer.frameLength = frameCount
+        return buffer
+    }
+
     // internal for testability — RMS of a buffer's first channel. Pure and
-    // audio-thread-safe (no `self`), so the tap callback computes it before hopping
-    // to the main actor, and tests exercise it on synthetic loud/quiet/silent
-    // buffers (planning 0020 AC2).
-    static func rms(of buffer: AVAudioPCMBuffer) -> Float {
+    // audio-thread-safe (no `self`), so the render callback computes it before
+    // hopping to the main actor, and tests exercise it on synthetic
+    // loud/quiet/silent buffers (planning 0020 AC2).
+    nonisolated static func rms(of buffer: AVAudioPCMBuffer) -> Float {
         guard let channelData = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
         let count = Int(buffer.frameLength)
         let samples = channelData[0]
@@ -217,6 +368,8 @@ final class MicrophoneCapability: Capability {
         guard rms > 0 else { return 0 }
         return min(1, rms / Constants.inputLevelReferenceRMS)
     }
+
+    // MARK: - Status
 
     private func updateStatus(_ next: CapabilityStatus) {
         guard subject.value != next else { return }
@@ -239,20 +392,58 @@ final class MicrophoneCapability: Capability {
         @unknown default: return .unknown
         }
     }
+}
 
-    // The tap callback's buffer is reused after the closure returns; appending
-    // it directly would later read freed memory. Deep-copy now while we're
-    // still on the audio thread.
-    private static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength)!
-        copy.frameLength = buffer.frameLength
-        let channels = Int(buffer.format.channelCount)
-        let bytes = Int(buffer.frameLength) * MemoryLayout<Float>.size
-        if let srcData = buffer.floatChannelData, let dstData = copy.floatChannelData {
-            for channel in 0..<channels {
-                memcpy(dstData[channel], srcData[channel], bytes)
-            }
-        }
-        return copy
+// MARK: - The audio-thread half
+
+/// What the render callback needs and nothing more: the unit to render from, the
+/// client format to allocate in, and the main-actor delivery. Immutable after
+/// construction apart from the one-shot failure flag, which only the IO thread
+/// writes, so it is safe to use from the audio thread while the capability owns it.
+private final class CaptureSink: @unchecked Sendable {
+    let unit: AudioUnit
+    let format: AVAudioFormat
+    let deliver: @MainActor (AVAudioPCMBuffer, Float) -> Void
+    // Set by the render callback on its first failure so the failure is logged once
+    // per unit, not 93 times a second. Only the IO thread touches it.
+    var reportedRenderFailure = false
+
+    init(unit: AudioUnit, format: AVAudioFormat, deliver: @escaping @MainActor (AVAudioPCMBuffer, Float) -> Void) {
+        self.unit = unit
+        self.format = format
+        self.deliver = deliver
     }
+}
+
+/// The input render callback. Runs on the HAL's IO thread: allocates a buffer for
+/// this slice, pulls the input into it, computes the RMS there (pure), and hops to
+/// the main actor with both. The buffer is the subscriber's to keep; nothing on the
+/// audio thread touches it again.
+// File scope so the nonisolated render callback can reach it.
+private let captureLogger = Logger(subsystem: Constants.loggingSubsystem, category: "audio")
+
+private let captureInputProc: AURenderCallback = { refCon, flags, timeStamp, bus, frameCount, _ in
+    let sink = Unmanaged<CaptureSink>.fromOpaque(refCon).takeUnretainedValue()
+    guard let buffer = MicrophoneCapability.renderBuffer(format: sink.format, frameCount: frameCount) else {
+        if !sink.reportedRenderFailure {
+            sink.reportedRenderFailure = true
+            captureLogger.error("Capture unit could not allocate a \(frameCount, privacy: .public) frame buffer; no audio is being delivered")
+        }
+        return noErr
+    }
+    let status = AudioUnitRender(sink.unit, flags, timeStamp, bus, frameCount, buffer.mutableAudioBufferList)
+    guard status == noErr else {
+        // A render that fails returns its status to CoreAudio and nothing reaches the
+        // main actor. The first on-device build failed every render this way (-50) with
+        // no log line; this is the line it lacked.
+        if !sink.reportedRenderFailure {
+            sink.reportedRenderFailure = true
+            captureLogger.error("AudioUnitRender failed with status \(status, privacy: .public) on the capture unit at \(sink.format.sampleRate, privacy: .public) Hz; no audio is being delivered")
+        }
+        return status
+    }
+    let rms = MicrophoneCapability.rms(of: buffer)
+    let deliver = sink.deliver
+    Task { @MainActor in deliver(buffer, rms) }
+    return noErr
 }

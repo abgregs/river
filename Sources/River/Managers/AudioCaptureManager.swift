@@ -20,7 +20,7 @@ enum AudioCaptureError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noAudioCaptured:
-            return "No audio was captured (engine may have failed to start)."
+            return "No audio was captured (the microphone may have failed to start)."
         case .conversionFailed:
             return "Could not convert recorded audio to 16 kHz mono."
         case .captureIncomplete(let captured, let recording):
@@ -60,10 +60,11 @@ final class AudioCaptureManager {
     /// `Constants.captureGapMaximumSeconds` behind the clock. Set once by the session.
     var onCaptureGapExceeded: (@MainActor () -> Void)?
 
-    /// Upper bound on the engine-warmup wait inside `stopRecording`. `AVAudioEngine`
-    /// produces its first tap-callback buffer ~60-100 ms after `start()`; a short
-    /// tap that releases inside that window would otherwise drop the utterance.
-    /// See `architecture/river-pipeline.md` "Engine warmup".
+    /// Upper bound on the start-up wait inside `stopRecording`. The capture unit's
+    /// render callback first fires some tens of milliseconds after `AudioOutputUnitStart`
+    /// (~60-100 ms measured under `AVAudioEngine`; the HAL unit's own start-up is not yet
+    /// measured); a short tap that releases inside that window would otherwise drop the
+    /// utterance. See `architecture/river-pipeline.md` "Engine warmup".
     static let warmupWaitSeconds: Double = 0.3
 
     init(
@@ -181,8 +182,9 @@ final class AudioCaptureManager {
         recordingStartedAt = nil
         firstBufferAt = nil
 
-        // The engine stops on a device change and restarts (MicrophoneCapability). If
-        // the restart failed, the buffers stop short of the recording. Typing the
+        // The capture unit restarts when its selected device changes (MicrophoneCapability).
+        // If the restart failed, or the pinned device stopped delivering, the buffers
+        // stop short of the recording. Typing the
         // fragment would pass off part of the dictation as the whole. The gap is
         // counted from the first buffer: start-up latency is not missing audio.
         let capturedSeconds = self.capturedSeconds

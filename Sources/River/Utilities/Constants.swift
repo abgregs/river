@@ -127,24 +127,25 @@ enum Constants {
     static let silenceTrimTailSeconds: Double = 0.2
 
     // A recording whose audio falls short of its wall time by more than this is reported as
-    // a capture failure instead of transcribed. The engine stops when the audio device
-    // changes and nothing tells the recording: a 14 s first recording with AirPods captured
-    // 1.5 s and typed nothing (2026-09-24 trace). The engine now restarts, so this catches
-    // a restart that failed. The bound is absolute, not a share of the recording: 2.5 min
+    // a capture failure instead of transcribed. Under `AVAudioEngine` the engine stopped
+    // when the audio device changed and nothing told the recording: a 14 s first recording
+    // with AirPods captured 1.5 s and typed nothing (2026-09-24 trace). The capture unit now
+    // restarts when its selected device changes, so this catches a restart that failed or a
+    // pinned device that stopped delivering. The bound is absolute, not a share of the recording: 2.5 min
     // missing from a 5 min dictation is as lost as 2.5 s from 5 s. The gap is counted from
     // the first buffer, not from the start call: the engine's own start measured 0.91 s on
-    // a loaded machine with AirPods (2026-10-23), which would have cut a healthy recording
-    // short. What remains is a restart's lost window plus up to one buffer in flight at
+    // a loaded machine with AirPods (2026-10-23, `AVAudioEngine`; the HAL unit's start-up
+    // is not yet measured), which would have cut a healthy recording short. What remains is a restart's lost window plus up to one buffer in flight at
     // release. Measured 2026-10-23: a mid-recording switch from AirPods to the built-in
     // microphone cost 0.48 s and the text spanned the switch, so 1 s leaves the restart
     // about half its budget.
     static let captureGapMaximumSeconds: Double = 1.0
-    // Before the first buffer there is no gap to measure, only an engine that has not
-    // started. Past this the watchdog ends the recording so the user is not left talking
+    // Before the first buffer there is no gap to measure, only a capture unit that has not
+    // delivered. Past this the watchdog ends the recording so the user is not left talking
     // to a dead microphone; a slow but live start (0.91 s measured) stays well inside it.
     static let captureStartTimeoutSeconds: Double = 3.0
-    // How often a recording checks that gap while it runs. Buffers stop when the engine
-    // dies, so the gap grows with the clock and a check every second catches the loss
+    // How often a recording checks that gap while it runs. Buffers stop when the capture
+    // unit dies, so the gap grows with the clock and a check every second catches the loss
     // within two seconds; the recording then ends on its own instead of running on while
     // the user talks to a dead microphone. Decided 2026-10-23: a tight bound on purpose,
     // tuned later only against measured false positives.
@@ -356,7 +357,7 @@ enum Constants {
     // The reference was 0.2 (about -14 dBFS) to match the study page's `rms / 0.2`.
     // On-device that mapping left loud speech below level 0.3 and full scale
     // unreachable: a browser applies automatic gain control to its mic, while
-    // `AVAudioEngine` delivers the raw signal, so the same voice lands far lower here
+    // CoreAudio delivers the raw signal, so the same voice lands far lower here
     // (maintainer's smoke, 2026-09-17). Lowering the reference scales every level
     // threshold down together and leaves the indicator's own tuned numbers untouched.
     // Conservative first value: room tone has been measured near 0.02 RMS in places

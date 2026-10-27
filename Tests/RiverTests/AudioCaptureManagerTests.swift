@@ -70,10 +70,10 @@ struct AudioCaptureCycleTests {
 
 @Suite("AudioCaptureManager capture gap")
 struct AudioCaptureGapTests {
-    // The engine stops on an audio device change and nothing tells the recording. The
-    // 2026-09-24 trace: a 14 s first recording with AirPods captured 1.5 s and typed
-    // nothing, a quiet no-op. The engine now restarts (MicrophoneCapability); when that
-    // fails, the shortfall must surface instead of a fragment passing as the dictation
+    // Under `AVAudioEngine` the engine stopped on an audio device change and nothing told
+    // the recording. The 2026-09-24 trace: a 14 s first recording with AirPods captured
+    // 1.5 s and typed nothing, a quiet no-op. The capture unit now restarts on a device
+    // change (MicrophoneCapability); when that fails, the shortfall must surface instead of a fragment passing as the dictation
     // (planning 0032). The bound is an absolute gap, so a long dictation cannot hide a
     // large loss behind its length. The clock is injected so no test waits out a recording.
 

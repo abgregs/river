@@ -39,6 +39,10 @@ Defer the protocol extraction. Keep concrete cycle collaborators + `skip*ForTest
 - **Cycle tests start needing to inject success-path scenarios** (e.g., to verify that `M7` correctly hands transcribed text `'X'` to `TextInsertionManager` without going through WhisperKit). Today that's covered by manual on-device verification; if it becomes a fast-feedback need, the protocol seams pay for themselves.
 - **The fakes-required-for-testability list grows organically** to cover more than the one OS/network call each — e.g., if a manager gains complex internal logic that's worth testing through a fake of a different manager, the protocol approach gets cleaner-per-line.
 
+## Notes
+
+- 2026-10-26: `MicrophoneCapability`'s implementation moved from `AVAudioEngine` to a HAL output unit pinned to a device chosen by `InputDeviceSelection` (warm-microphone spec, decision 4). Its interface (`startEngine`, `stopEngine`, `audioBuffers`, `inputLevels`, `skipEngineForTesting`, `publishForTest`) did not change and no caller did. That is one implementation replacing another behind one concrete type, not a second adapter, so the deferral holds. The "alternative audio source" condition above means a second source beside the first.
+
 ## Related
 
 - [../conventions/tests.md](../conventions/tests.md) — the access-seams list documents every `skip*ForTesting` and `publishForTest` seam currently in play.
