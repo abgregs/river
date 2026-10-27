@@ -20,7 +20,7 @@ The trim and padding changes in [0023](0023_silence-decoding-hardening.md) recov
 
 ### What the user is told
 
-- The switch's description: *"When off, the microphone stays ready, so your first word isn't cut off. The microphone indicator stays on while River is open."*
+- The switch's description: *"When off, the microphone stays ready, so your first word isn't cut off. The microphone indicator stays on while River is open and able to dictate."*
 - The README privacy line (permissions step): River keeps the last half second of audio in memory and discards it continuously. Nothing is saved, transcribed or typed until you press the key.
 - The `NSMicrophoneUsageDescription` string ("record your voice for on-device transcription") stays accurate and does not change.
 

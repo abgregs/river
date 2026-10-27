@@ -87,7 +87,7 @@ struct SettingsView: View {
                 }
             Toggle("Sound effects", isOn: $playFeedbackSounds)
             Toggle("Only use the microphone while dictating", isOn: $micOnlyWhileDictating)
-            Text("When off, the microphone stays ready, so your first word isn't cut off. The microphone indicator stays on while River is open.")
+            Text("When off, the microphone stays ready, so your first word isn't cut off. The microphone indicator stays on while River is open and able to dictate.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
