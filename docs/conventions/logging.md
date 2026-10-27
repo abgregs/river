@@ -13,7 +13,7 @@ Categories in use:
 - `app` — `AppDelegate` lifecycle, `RiverSession` state transitions
 - `permissions` — `Capability` status checks and the onboarding grant flow
 - `hotkey` — `HotkeyManager` events, restart, tap status
-- `audio` — `MicrophoneCapability` engine start/stop + input format; `AudioCaptureManager` capture lifecycle, sample count, and conversion failures
+- `audio` — `MicrophoneCapability` capture-unit start/stop, device selection and input format; `AudioCaptureManager` capture lifecycle, sample count, and conversion failures
 - `transcribe` — `TranscriptionManager`: WhisperKit model-load lifecycle (start / loaded / failed), transcribe start (sample count), end (transcribed char count). **Never** log the transcribed text itself — that's user content (anti-pattern #4)
 - `insert` — `TextInsertionManager` keystroke injection (typing the transcription at the cursor)
 
@@ -52,7 +52,7 @@ logger.error("WhisperKit load failed: \(LogRedaction.redactUserPaths(error.local
 
 ### Non-sensitive scalars are public directly
 
-Sample counts, character counts, state names, keycodes — logged `privacy: .public` with no wrapper. They're the bread-and-butter diagnostic signal and contain no PII.
+Sample counts, character counts, state names, keycodes, audio device ids and sample rates — logged `privacy: .public` with no wrapper. They're the bread-and-butter diagnostic signal and contain no PII. Audio device *names* are not in this list: a Bluetooth name usually carries the owner's name ("<Name>'s AirPods Pro"), so names take the default redaction and the id, transport and rate carry the public signal.
 
 ```swift
 logger.info("State -> processing")                                 // state name, public

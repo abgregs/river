@@ -74,7 +74,7 @@ final class AppState {
     // internal for testability — wires the mic's throttled level publisher so the
     // HUD meter observes input level without the level path crossing through the
     // session (mirrors `bind(transcription:)`; planning 0020). The mic is the one
-    // `AVAudioEngine` owner and computes the level; this only forwards it.
+    // capture-unit owner and computes the level; this only forwards it.
     func bind(microphone: MicrophoneCapability) {
         microphone.inputLevels
             .sink { [weak self] level in self?.apply(inputLevel: level) }

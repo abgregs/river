@@ -26,7 +26,7 @@ Re-entrancy is safe: every transition is guarded by `guard state == expected` be
 
 ## Engine warmup
 
-`AudioOutputUnitStart` returns synchronously, but the render callback only fires once the device has produced its first buffer (~60–100 ms warmup). A short tap that ends inside that window would otherwise drop the entire utterance.
+`AudioOutputUnitStart` returns synchronously, but the render callback only fires once the device has produced its first buffer (~60–100 ms warmup, measured under `AVAudioEngine`; the capture unit's own start-up is not yet measured). A short tap that ends inside that window would otherwise drop the entire utterance.
 
 `AudioCaptureManager.stopRecording()` therefore waits up to **300 ms** for at least one buffer to arrive before tearing down. Normal-length presses are unaffected — the wait loop exits immediately when buffers already exist.
 

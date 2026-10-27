@@ -28,8 +28,8 @@ On the first activation after launch, the recording state and the hotkey behave 
 - The gap check, with an injected clock: 1.5 s of audio for a 14 s recording throws; 150 s of audio for a 300 s recording throws; 1 s of audio for a 1.2 s recording returns; a 0.9 s tap with 0.1 s of audio passes. `captureGapExceeded` is false while idle, during a slow start, and while audio keeps up, and true once it falls behind. A 2 s start followed by audio that keeps up does not trip the watchdog; an engine that never delivers a buffer trips it at the start timeout.
 - The watchdog, with a short injected interval, calls `onCaptureGapExceeded` once the audio falls behind, and the session's wiring ends the recording through the deactivate path and surfaces `.audioCapture`.
 - `.captureIncomplete` maps to its own toast, distinct from the no-microphone one.
-- The configuration-change observer is live after `startEngine` and gone after `stopEngine`, asserted by posting the notification under `skipEngineForTesting`.
-- The restart itself needs a device and is checked on device only: with AirPods connected, relaunch, dictate twice, and read the `audio` log lines. The first recording should log `Audio configuration changed; engine restarted with input format 48000 Hz`, and its buffers should track its wall time.
+- The device-change handler is live after `startEngine` and inert after `stopEngine`, asserted by calling `handleDeviceChange` directly under `skipEngineForTesting` (superseded the notification test on 2026-10-26).
+- The restart itself needs a device and is checked on device only. Since 2026-10-26 a Bluetooth default input no longer restarts anything: with AirPods connected the first recording logs `Default input <private> (device N) is Bluetooth; capturing from the built-in microphone` and `Capture unit started on <private> (device M) at 48000 Hz`, and its buffers track its wall time. A restart is exercised by unplugging a wired microphone mid-recording, which logs `Audio devices changed; moving capture to ...`.
 
 ## On-device verification
 
