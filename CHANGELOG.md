@@ -24,7 +24,7 @@ show as raw text. -->
 
 ### Changed
 
-- The microphone stays ready while River can take a dictation (the model loaded, the Mac awake and unlocked), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
+- The microphone stays ready while River can take a dictation (permissions granted, the model loaded, the Mac awake and unlocked), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
 - With AirPods or another Bluetooth headset selected as the input, River records from the Mac's built-in microphone instead, on Macs that have one. The headset is never switched into call mode, so music and calls keep their quality while you dictate, and the recording is at the Mac microphone's full rate. A Mac without a built-in microphone keeps using the headset.
 
 ### Fixed

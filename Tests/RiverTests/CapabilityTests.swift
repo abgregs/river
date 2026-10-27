@@ -101,6 +101,23 @@ struct OnboardingGateTests {
         #expect(OnboardingGate.shouldPresent(for: caps))
     }
 
+    // The ready microphone (planning 0033) asks the gate with statuses from publishers,
+    // so the status form must give the same answer as the capability form, `.unknown`
+    // included, or the mic could open while the permissions window is still up.
+    @Test("the status form of the gate matches the capability form", arguments: [
+        ([CapabilityStatus.granted, .granted, .granted], false),
+        ([.granted, .denied, .granted], true),
+        ([.granted, .granted, .unknown], true),
+    ])
+    func statusFormMatches(statuses: [CapabilityStatus], expected: Bool) async {
+        let fromStatuses = OnboardingGate.shouldPresent(statuses: statuses)
+        let fromCapabilities = await MainActor.run {
+            OnboardingGate.shouldPresent(for: statuses.map { FakeCapability(status: $0) })
+        }
+        #expect(fromStatuses == expected)
+        #expect(fromCapabilities == expected)
+    }
+
     @MainActor
     @Test("gate opens when any capability is unknown")
     func opensWhenAnyUnknown() {

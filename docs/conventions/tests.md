@@ -68,6 +68,7 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `MicrophoneCapability.noteDeviceChange()` — the listener block's entry point, which queues one handler run per burst of CoreAudio callbacks, so a test fires a burst and asserts a single run without a HAL property change
 - `MicrophoneCapability.isListening` — whether the capability is between `startEngine` and `stopEngine`, so ready-mode tests see the unit kept running or stopped without a device (planning 0033)
 - `MicrophoneCapability.setStatusForTesting(_:)` — drives `status` without the host's TCC read, so session tests pin whether the ready microphone opens or closes on the grant (mirrors `AccessibilityCapability.setStatusForTesting`)
+- `InputMonitoringCapability.setStatusForTesting(_:)` — drives `status` without the host's TCC read, so session tests pin that the ready microphone waits for every permission, not only Microphone (planning 0033)
 - `SystemAvailabilityMonitor.setForTesting(_:)` — drives the published sleep, lock and session state without a workspace notification
 - `MicrophoneCapability.renderBuffer(format:frameCount:)` — the buffer the render callback hands to `AudioUnitRender`, with `frameLength` set so the HAL sees the slice's bytes; `MicrophoneRenderBufferTests` pins the byte size after the first on-device build delivered nothing
 - `MicrophoneCapability.captureDevice` — read-only, the device the unit is pinned to

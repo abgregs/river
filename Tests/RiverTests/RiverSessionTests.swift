@@ -640,7 +640,7 @@ struct RiverSessionTests {
     }
 
     @MainActor
-    @Test("the switch, a denied grant, an unready model, and sleep each close the microphone")
+    @Test("the switch, any missing permission, an unready model, and sleep each close the microphone")
     func readinessFollowsEachInput() async throws {
         let env = makeSession()
         try await env.session.start()
@@ -657,6 +657,22 @@ struct RiverSessionTests {
         await waitUntil { !env.microphone.isListening }
         #expect(!env.microphone.isListening)
         env.microphone.setStatusForTesting(.granted)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        // Onboarding is incomplete while any permission is missing, not only Microphone:
+        // without these two River cannot dictate, so the indicator must stay off (AC 4).
+        env.accessibility.setStatusForTesting(.denied)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.accessibility.setStatusForTesting(.granted)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        env.inputMonitoring.setStatusForTesting(.unknown)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.inputMonitoring.setStatusForTesting(.granted)
         await waitUntil { env.microphone.isListening }
         #expect(env.microphone.isListening)
 
@@ -756,6 +772,9 @@ struct RiverSessionTests {
         microphone.setStatusForTesting(.granted)
         let system = SystemAvailabilityMonitor()
         let inputMonitoring = InputMonitoringCapability()
+        // Granted like the other two, so onboarding reads complete and the ready
+        // microphone does not follow the host's Input Monitoring state.
+        inputMonitoring.setStatusForTesting(.granted)
         let hotkey = HotkeyManager(inputMonitoring: inputMonitoring, initialKeyCode: 62)
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
         let transcription = TranscriptionManager()

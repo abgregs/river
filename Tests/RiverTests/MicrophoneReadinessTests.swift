@@ -10,23 +10,23 @@ struct MicrophoneReadinessTests {
     @Test("every input favourable keeps the microphone ready")
     func allFavourableIsReady() {
         #expect(MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, microphone: .granted, model: .ready, system: .available
+            micOnlyWhileDictating: false, onboardingComplete: true, model: .ready, system: .available
         ))
     }
 
     @Test("the switch closes the microphone between dictations")
     func switchCloses() {
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: true, microphone: .granted, model: .ready, system: .available
+            micOnlyWhileDictating: true, onboardingComplete: true, model: .ready, system: .available
         ))
     }
 
-    @Test("a microphone that is not granted stays closed", arguments: [CapabilityStatus.denied, .unknown])
-    func ungrantedCloses(status: CapabilityStatus) {
-        // `.unknown` closes it too: the grant has not been asked for, and the system
-        // prompt belongs to a press, not to idle.
+    @Test("the microphone stays closed until onboarding is complete")
+    func onboardingIncompleteCloses() {
+        // Onboarding is the permissions window: until every permission is granted River
+        // cannot dictate, so the microphone indicator must not light (AC 4).
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, microphone: status, model: .ready, system: .available
+            micOnlyWhileDictating: false, onboardingComplete: false, model: .ready, system: .available
         ))
     }
 
@@ -35,7 +35,7 @@ struct MicrophoneReadinessTests {
         // The first-run download and onboarding happen here: no indicator before the
         // user can dictate.
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, microphone: .granted, model: model, system: .available
+            micOnlyWhileDictating: false, onboardingComplete: true, model: model, system: .available
         ))
     }
 
@@ -46,7 +46,7 @@ struct MicrophoneReadinessTests {
     ])
     func unavailableSystemCloses(system: SystemAvailability) {
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, microphone: .granted, model: .ready, system: system
+            micOnlyWhileDictating: false, onboardingComplete: true, model: .ready, system: system
         ))
     }
 }

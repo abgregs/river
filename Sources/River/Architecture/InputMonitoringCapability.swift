@@ -44,6 +44,13 @@ final class InputMonitoringCapability: Capability {
         update(Self.readStatus())
     }
 
+    // internal for testability — drives `status` without the host's TCC read (mirrors
+    // `AccessibilityCapability.setStatusForTesting`), so session tests pin whether the
+    // ready microphone waits for this permission (planning 0033).
+    func setStatusForTesting(_ status: CapabilityStatus) {
+        update(status)
+    }
+
     func openSystemSettings() {
         SystemSettingsPane.inputMonitoring.open()
     }

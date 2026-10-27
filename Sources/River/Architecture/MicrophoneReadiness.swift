@@ -15,14 +15,17 @@ struct SystemAvailability: Equatable {
 enum MicrophoneReadiness {
     static func shouldListen(
         micOnlyWhileDictating: Bool,
-        microphone: CapabilityStatus,
+        onboardingComplete: Bool,
         model: ModelLoadState,
         system: SystemAvailability
     ) -> Bool {
-        // `.unknown` closes the mic: the grant has not been asked for yet, and opening
-        // the unit would raise the system prompt from idle rather than from a press.
+        // Onboarding complete means every permission is `.granted`, by `OnboardingGate`'s
+        // rule: the mic stays closed while the permissions window would show, so the
+        // indicator never lights before River can dictate. Microphone is one of those
+        // permissions, so a mic still `.unknown` stays closed too, and the system prompt
+        // comes from a press, not from idle.
         !micOnlyWhileDictating
-            && microphone == .granted
+            && onboardingComplete
             && model == .ready
             && system == .available
     }

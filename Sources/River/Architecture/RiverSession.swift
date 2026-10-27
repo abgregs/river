@@ -412,16 +412,20 @@ final class RiverSession {
     }
 
     // The ready microphone (planning 0033, decision 5): the capture unit runs between
-    // recordings only while a dictation is possible. The four inputs are combined
-    // here and the pure rule decides; `AudioCaptureManager` owns the unit and applies a
-    // change that lands mid-recording when the recording ends, so this does not go
-    // through `reconfigureHotkey`'s apply-or-defer path.
+    // recordings only while a dictation is possible. The inputs are combined here and
+    // the pure rule decides; `AudioCaptureManager` owns the unit and applies a change
+    // that lands mid-recording when the recording ends, so this does not go through
+    // `reconfigureHotkey`'s apply-or-defer path. Onboarding is complete when all three
+    // permissions are granted, the same three `AppDelegate` hands to onboarding.
     private func subscribeToMicrophoneReadiness() {
+        let onboardingComplete = accessibility.status
+            .combineLatest(microphone.status, inputMonitoring.status)
+            .map { !OnboardingGate.shouldPresent(statuses: [$0, $1, $2]) }
         settings.publisher(for: Settings.micOnlyWhileDictating)
-            .combineLatest(microphone.status, transcription.modelLoadState, system.availability)
-            .map { micOnly, microphone, model, system in
+            .combineLatest(onboardingComplete, transcription.modelLoadState, system.availability)
+            .map { micOnly, onboardingComplete, model, system in
                 MicrophoneReadiness.shouldListen(
-                    micOnlyWhileDictating: micOnly, microphone: microphone, model: model, system: system
+                    micOnlyWhileDictating: micOnly, onboardingComplete: onboardingComplete, model: model, system: system
                 )
             }
             .removeDuplicates()
