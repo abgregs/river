@@ -64,6 +64,17 @@ final class MicrophoneCapability: Capability {
     // has no equivalent natural skip.
     var skipEngineForTesting = false
 
+    // internal for testability — true between `startEngine` and `stopEngine`, so a
+    // test sees whether ready mode left the unit running without a real device.
+    var isListening: Bool { listening }
+    /// Whether the capture unit is running. `startEngine` is idempotent on
+    /// `listening`, so a unit that failed to start, or was stopped when its device
+    /// vanished, leaves the capability listening with no unit; the manager checks
+    /// this at a press and rebuilds the unit instead of trusting the earlier start
+    /// (planning 0033, decision 6). Under `skipEngineForTesting` there is never a unit,
+    /// so listening stands in for it.
+    var isCapturing: Bool { unit != nil || (skipEngineForTesting && listening) }
+
     var status: AnyPublisher<CapabilityStatus, Never> { subject.eraseToAnyPublisher() }
     var currentStatus: CapabilityStatus { subject.value }
 
