@@ -31,7 +31,13 @@ final class MicrophoneCapability: Capability {
     private var sink: CaptureSink?
     private(set) var captureDevice: AudioDeviceID?
     private(set) var inputFormat: AVAudioFormat?
-    private var deviceListeners: [(AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
+    private typealias Listener = (object: AudioObjectID, address: AudioObjectPropertyAddress, block: AudioObjectPropertyListenerBlock)
+    // System-wide: the default input and the device list. Live between `startEngine`
+    // and `stopEngine`.
+    private var systemListeners: [Listener] = []
+    // On the pinned device: its nominal sample rate and liveness. Live with the unit,
+    // because a pinned unit does not follow a format change the way the engine did.
+    private var deviceListeners: [Listener] = []
     // True between `startEngine` and `stopEngine`: the window in which a device
     // change is acted on. Also the idempotency guard for both calls.
     private var listening = false
@@ -91,11 +97,11 @@ final class MicrophoneCapability: Capability {
     }
 
     /// Chooses the capture device, starts the capture unit on it and publishes its
-    /// buffers to `audioBuffers`. Idempotent. If the unit fails to start (typically
-    /// because Microphone isn't granted for the running process), logs a warning and
-    /// returns — the capability's `status` already reports `.denied`/`.unknown` to
-    /// onboarding upstream. Mirrors the fail-quiet pattern in
-    /// `InputMonitoringCapability.startTap`.
+    /// buffers to `audioBuffers`. Idempotent. If the unit fails to start, logs a warning
+    /// and returns, mirroring the fail-quiet pattern in `InputMonitoringCapability.startTap`.
+    /// A missing Microphone grant does not fail the start: CoreAudio delivers silence
+    /// instead, which the silence trim reads as "nothing was said"; the capability's
+    /// `status` already reports `.denied`/`.unknown` to onboarding upstream.
     func startEngine() async {
         guard !listening else { return }
         listening = true
@@ -112,7 +118,7 @@ final class MicrophoneCapability: Capability {
     func stopEngine() {
         guard listening else { return }
         listening = false
-        removeDeviceListeners()
+        removeListeners(&systemListeners)
         stopUnit()
         // Reset the throttle so the next recording's first buffer emits a level
         // immediately rather than being gated by the previous recording's timestamp.
@@ -129,9 +135,10 @@ final class MicrophoneCapability: Capability {
 
     /// A pinned unit does not follow the system default, so the capability listens
     /// to the HAL itself: the default input changing (AirPods connecting, a USB
-    /// microphone chosen) and the device list changing (the pinned device unplugged).
-    /// On either it re-runs the selection and, only if the answer is a different
-    /// device, restarts the unit there; the buffer stream continues in the new
+    /// microphone chosen), the device list changing (the pinned device unplugged),
+    /// and the pinned device's own sample rate and liveness (another app changing
+    /// the rate). On any of them it re-runs the selection and restarts the unit only
+    /// if the answer is a different device or the same device at a new rate; the buffer stream continues in the new
     /// format (`AudioCaptureManager` converts each run of same-format buffers on its
     /// own). AirPods connecting or leaving while the built-in microphone is pinned
     /// changes nothing and costs no restart. A failed restart is logged at `.error`
@@ -149,10 +156,18 @@ final class MicrophoneCapability: Capability {
             return
         }
         if unit != nil, device == captureDevice {
-            audioLogger.info("Audio devices changed; capture stays on \(CoreAudioDevices.name(of: device), privacy: .public)")
-            return
+            let rate = CoreAudioDevices.nominalSampleRate(of: device)
+            if rate == inputFormat?.sampleRate {
+                audioLogger.info("Audio devices changed; capture stays on device \(device, privacy: .public)")
+                return
+            }
+            // The device changed its format under the pinned unit (another app or Audio
+            // MIDI Setup set a new rate). The client format no longer matches, so the
+            // unit is rebuilt on the same device at the new rate.
+            audioLogger.info("Capture device \(device, privacy: .public) changed its sample rate to \(rate, privacy: .public) Hz; restarting the capture unit")
+        } else {
+            audioLogger.info("Audio devices changed; moving capture to \(CoreAudioDevices.name(of: device)) (device \(device, privacy: .public))")
         }
-        audioLogger.info("Audio devices changed; moving capture to \(CoreAudioDevices.name(of: device), privacy: .public)")
         stopUnit()
         startUnit(on: device)
     }
@@ -171,7 +186,7 @@ final class MicrophoneCapability: Capability {
             return defaultInput ?? builtIn
         case .builtInMicrophone:
             if let defaultInput {
-                audioLogger.info("Default input \(CoreAudioDevices.name(of: defaultInput), privacy: .public) is Bluetooth; capturing from the built-in microphone so it keeps its audio quality")
+                audioLogger.info("Default input \(CoreAudioDevices.name(of: defaultInput)) (device \(defaultInput, privacy: .public)) is Bluetooth; capturing from the built-in microphone so it keeps its audio quality")
             }
             return builtIn
         }
@@ -219,7 +234,7 @@ final class MicrophoneCapability: Capability {
         else { return }
         guard deviceFormat.mSampleRate > 0,
               let format = AVAudioFormat(standardFormatWithSampleRate: deviceFormat.mSampleRate, channels: 1) else {
-            audioLogger.warning("Capture device \(CoreAudioDevices.name(of: device), privacy: .public) reports no sample rate; capture not started")
+            audioLogger.warning("Capture device \(device, privacy: .public) reports no sample rate; capture not started")
             AudioComponentInstanceDispose(unit)
             return
         }
@@ -233,9 +248,16 @@ final class MicrophoneCapability: Capability {
               step("set input callback", AudioUnitSetProperty(unit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, &callback, UInt32(MemoryLayout<AURenderCallbackStruct>.size))),
               step("initialise", AudioUnitInitialize(unit))
         else { return }
+        // The pin must survive initialise; it is what keeps a headset out of call mode.
+        var pinnedAfter: AudioDeviceID = 0
+        var pinnedSize = idSize
+        if AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &pinnedAfter, &pinnedSize) == noErr,
+           pinnedAfter != device {
+            audioLogger.error("Capture unit initialised on device \(pinnedAfter, privacy: .public) instead of the selected device \(device, privacy: .public); the pin did not hold")
+        }
         // The one gated OS call (AGENTS.md rule 3): capture starts here and nowhere else.
         guard AudioOutputUnitStart(unit) == noErr else {
-            audioLogger.warning("AudioOutputUnitStart failed on \(CoreAudioDevices.name(of: device), privacy: .public)")
+            audioLogger.warning("AudioOutputUnitStart failed on device \(device, privacy: .public)")
             AudioUnitUninitialize(unit)
             AudioComponentInstanceDispose(unit)
             return
@@ -244,10 +266,13 @@ final class MicrophoneCapability: Capability {
         self.sink = sink
         captureDevice = device
         inputFormat = format
-        audioLogger.info("Capture unit started on \(CoreAudioDevices.name(of: device), privacy: .public) at \(format.sampleRate, privacy: .public) Hz")
+        listen(to: kAudioDevicePropertyNominalSampleRate, on: device, into: &deviceListeners)
+        listen(to: kAudioDevicePropertyDeviceIsAlive, on: device, into: &deviceListeners)
+        audioLogger.info("Capture unit started on \(CoreAudioDevices.name(of: device)) (device \(device, privacy: .public)) at \(format.sampleRate, privacy: .public) Hz")
     }
 
     private func stopUnit() {
+        removeListeners(&deviceListeners)
         guard let unit else { return }
         // Stop is synchronous: no render callback runs after it returns, so the sink
         // can be released.
@@ -264,27 +289,36 @@ final class MicrophoneCapability: Capability {
 
     private func observeDeviceChanges() {
         let system = AudioObjectID(kAudioObjectSystemObject)
-        for selector in [kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDevices] {
-            var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-            let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-                // Delivered on the main queue, which is the main actor.
-                MainActor.assumeIsolated { self?.handleDeviceChange() }
-            }
-            guard AudioObjectAddPropertyListenerBlock(system, &address, .main, block) == noErr else {
-                audioLogger.warning("Could not listen for audio device changes (selector \(selector, privacy: .public))")
-                continue
-            }
-            deviceListeners.append((address, block))
-        }
+        listen(to: kAudioHardwarePropertyDefaultInputDevice, on: system, into: &systemListeners)
+        listen(to: kAudioHardwarePropertyDevices, on: system, into: &systemListeners)
     }
 
-    private func removeDeviceListeners() {
-        let system = AudioObjectID(kAudioObjectSystemObject)
-        for (address, block) in deviceListeners {
-            var address = address
-            AudioObjectRemovePropertyListenerBlock(system, &address, .main, block)
+    private func listen(to selector: AudioObjectPropertySelector, on object: AudioObjectID, into list: inout [Listener]) {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            // Delivered on the main queue, which is the main actor.
+            MainActor.assumeIsolated { self?.handleDeviceChange() }
         }
-        deviceListeners.removeAll()
+        let status = AudioObjectAddPropertyListenerBlock(object, &address, .main, block)
+        guard status == noErr else {
+            audioLogger.warning("Could not listen for audio changes (selector \(selector, privacy: .public) on object \(object, privacy: .public)): status \(status, privacy: .public)")
+            return
+        }
+        list.append((object, address, block))
+    }
+
+    // CoreAudio matches a listener by block identity, so the stored block is the one
+    // handed back. A non-zero status here means a listener leaked; it is logged so a
+    // smoke run shows it, since the `listening` guard would otherwise hide it.
+    private func removeListeners(_ list: inout [Listener]) {
+        for listener in list {
+            var address = listener.address
+            let status = AudioObjectRemovePropertyListenerBlock(listener.object, &address, .main, listener.block)
+            if status != noErr {
+                audioLogger.warning("Could not remove an audio listener (selector \(listener.address.mSelector, privacy: .public)): status \(status, privacy: .public)")
+            }
+        }
+        list.removeAll()
     }
 
     // MARK: - Levels
@@ -364,12 +398,15 @@ final class MicrophoneCapability: Capability {
 
 /// What the render callback needs and nothing more: the unit to render from, the
 /// client format to allocate in, and the main-actor delivery. Immutable after
-/// construction, so it is safe to read from the audio thread while the capability
-/// owns it.
+/// construction apart from the one-shot failure flag, which only the IO thread
+/// writes, so it is safe to use from the audio thread while the capability owns it.
 private final class CaptureSink: @unchecked Sendable {
     let unit: AudioUnit
     let format: AVAudioFormat
     let deliver: @MainActor (AVAudioPCMBuffer, Float) -> Void
+    // Set by the render callback on its first failure so the failure is logged once
+    // per unit, not 93 times a second. Only the IO thread touches it.
+    var reportedRenderFailure = false
 
     init(unit: AudioUnit, format: AVAudioFormat, deliver: @escaping @MainActor (AVAudioPCMBuffer, Float) -> Void) {
         self.unit = unit
@@ -382,11 +419,29 @@ private final class CaptureSink: @unchecked Sendable {
 /// this slice, pulls the input into it, computes the RMS there (pure), and hops to
 /// the main actor with both. The buffer is the subscriber's to keep; nothing on the
 /// audio thread touches it again.
+// File scope so the nonisolated render callback can reach it.
+private let captureLogger = Logger(subsystem: Constants.loggingSubsystem, category: "audio")
+
 private let captureInputProc: AURenderCallback = { refCon, flags, timeStamp, bus, frameCount, _ in
     let sink = Unmanaged<CaptureSink>.fromOpaque(refCon).takeUnretainedValue()
-    guard let buffer = MicrophoneCapability.renderBuffer(format: sink.format, frameCount: frameCount) else { return noErr }
+    guard let buffer = MicrophoneCapability.renderBuffer(format: sink.format, frameCount: frameCount) else {
+        if !sink.reportedRenderFailure {
+            sink.reportedRenderFailure = true
+            captureLogger.error("Capture unit could not allocate a \(frameCount, privacy: .public) frame buffer; no audio is being delivered")
+        }
+        return noErr
+    }
     let status = AudioUnitRender(sink.unit, flags, timeStamp, bus, frameCount, buffer.mutableAudioBufferList)
-    guard status == noErr else { return status }
+    guard status == noErr else {
+        // A render that fails returns its status to CoreAudio and nothing reaches the
+        // main actor. The first on-device build failed every render this way (-50) with
+        // no log line; this is the line it lacked.
+        if !sink.reportedRenderFailure {
+            sink.reportedRenderFailure = true
+            captureLogger.error("AudioUnitRender failed with status \(status, privacy: .public) on the capture unit at \(sink.format.sampleRate, privacy: .public) Hz; no audio is being delivered")
+        }
+        return status
+    }
     let rms = MicrophoneCapability.rms(of: buffer)
     let deliver = sink.deliver
     Task { @MainActor in deliver(buffer, rms) }

@@ -14,10 +14,27 @@ enum CoreAudioDevices {
         return id
     }
 
-    /// The first device with input streams whose transport is built-in: the Mac's own
-    /// microphone. Nil on a Mac without one.
+    /// The CoreAudio UID macOS gives the Mac's own microphone.
+    static let builtInMicrophoneUID = "BuiltInMicrophoneDevice"
+
+    /// The Mac's own microphone: the device with the well-known UID, or, failing that,
+    /// the first built-in device with input streams. The fallback alone is not enough:
+    /// a headphone jack's line-in also reports a built-in transport on Macs that have
+    /// one and can enumerate first. Nil on a Mac without a built-in microphone.
     static func builtInInputDevice() -> AudioDeviceID? {
-        allDevices().first { hasInputStreams($0) && transportType(of: $0) == kAudioDeviceTransportTypeBuiltIn }
+        let devices = allDevices()
+        if let microphone = devices.first(where: { hasInputStreams($0) && uid(of: $0) == builtInMicrophoneUID }) {
+            return microphone
+        }
+        return devices.first { hasInputStreams($0) && transportType(of: $0) == kAudioDeviceTransportTypeBuiltIn }
+    }
+
+    static func uid(of id: AudioDeviceID) -> String {
+        var address = address(kAudioDevicePropertyDeviceUID)
+        var uid: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &uid) == noErr, let uid else { return "" }
+        return uid.takeRetainedValue() as String
     }
 
     static func isBluetooth(_ id: AudioDeviceID) -> Bool {
