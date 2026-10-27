@@ -141,6 +141,13 @@ final class MicrophoneCapability: Capability {
         audioLogger.info("Capture unit stopped")
     }
 
+    // internal for testability — drives `status` without the host's TCC read (mirrors
+    // `AccessibilityCapability.setStatusForTesting`), so session tests pin whether the
+    // ready microphone opens or closes on the grant.
+    func setStatusForTesting(_ status: CapabilityStatus) {
+        updateStatus(status)
+    }
+
     // internal for testability — pushes a synthetic buffer into the stream
     // synchronously on the main actor, bypassing the capture unit (which requires a
     // Microphone grant on the running process).

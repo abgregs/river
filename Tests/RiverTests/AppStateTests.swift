@@ -235,7 +235,8 @@ struct AppStateTests {
             audio: AudioCaptureManager(microphone: microphone),
             textInsertion: TextInsertionManager(accessibility: accessibility),
             transcription: transcription,
-            settings: store
+            settings: store,
+            system: SystemAvailabilityMonitor()
         )
         let appState = AppState()
         appState.bind(to: session)
