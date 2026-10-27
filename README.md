@@ -36,7 +36,7 @@ Only the Xcode Command Line Tools are needed (`xcode-select --install`).
    swift test               # test suite
    make install             # release + sign + install to /Applications
    ```
-3. Grant Microphone, Input Monitoring, and Accessibility when onboarding prompts you. Granting these to a self-built binary is a high-trust action — see [what you're trusting](docs/architecture/distribution.md).
+3. Grant Microphone, Input Monitoring, and Accessibility when onboarding prompts you. Granting these to a self-built binary is a high-trust action — see [what you're trusting](docs/architecture/distribution.md). While River is open and able to dictate it keeps the microphone ready: the last half second of audio is held in memory and discarded continuously, and nothing is saved, transcribed, or typed until you press the key. "Only use the microphone while dictating" in Settings turns this off.
 
 Contributors: start at [docs/_index.md](docs/_index.md) — conventions, architecture, and the roadmap all live there.
 
