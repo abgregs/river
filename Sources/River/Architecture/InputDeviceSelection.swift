@@ -10,10 +10,9 @@ enum InputDeviceChoice: Equatable {
 /// (AirPods, any headset) is never asked for input: opening a headset's microphone
 /// forces it into call mode (HFP), which drops every sound the Mac plays to 8–24 kHz
 /// for as long as the input stays open. The built-in microphone is used instead, and
-/// the headset keeps its listening quality. The same choice Hex ships as "automatic"
-/// input. Measured 2026-10-26: a HAL unit pinned to the built-in microphone captured
-/// 48 kHz audio while connected AirPods stayed at 48 kHz A2DP (warm-microphone spec,
-/// decision 4).
+/// the headset keeps its listening quality. Measured 2026-10-26: a HAL unit pinned to
+/// the built-in microphone captured 48 kHz audio while connected AirPods stayed at
+/// 48 kHz A2DP (warm-microphone spec, decision 4).
 ///
 /// Pure: the capability reads the HAL and passes the facts in, so the rule is tested
 /// without CoreAudio.
