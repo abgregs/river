@@ -74,11 +74,11 @@ final class AudioCaptureManager {
     /// `Constants.captureGapMaximumSeconds` behind the clock. Set once by the session.
     var onCaptureGapExceeded: (@MainActor () -> Void)?
 
-    /// Upper bound on the start-up wait inside `stopRecording`. The capture unit's
-    /// render callback first fires some tens of milliseconds after `AudioOutputUnitStart`
-    /// (~60-100 ms measured under `AVAudioEngine`; the HAL unit's own start-up is not yet
-    /// measured); a short tap that releases inside that window would otherwise drop the
-    /// utterance. See `architecture/river-pipeline.md` "Engine warmup".
+    /// Upper bound on the wait inside `stopRecording` for the first live buffer. The
+    /// capture unit's render callback first fires after `AudioOutputUnitStart` (0.07–0.09 s
+    /// from a warm start, 0.19–0.21 s cold, measured 2026-10-26); a short tap that releases
+    /// inside that window on the fallback path would otherwise drop the utterance. See
+    /// `architecture/river-pipeline.md` "The ready microphone and the pre-roll".
     static let warmupWaitSeconds: Double = 0.3
 
     init(
@@ -157,7 +157,7 @@ final class AudioCaptureManager {
             recordingStartedAt = now()
         } else {
             if ready {
-                logger.info("Capture unit was not running at the press; starting it now")
+                logger.warning("Capture unit was not running at the press; starting it now")
             }
             _ = window.drain()
             isRecording = true
