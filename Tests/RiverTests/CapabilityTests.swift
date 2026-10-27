@@ -396,6 +396,24 @@ struct MicrophoneDeviceChangeTests {
     }
 }
 
+@Suite("MicrophoneCapability render buffer")
+struct MicrophoneRenderBufferTests {
+    // The HAL render callback hands this buffer to `AudioUnitRender`. On the first
+    // on-device build (2026-10-26) the buffer had `frameLength` 0, so its audio buffer
+    // list advertised zero bytes, every render failed with paramErr and every
+    // recording came back empty. The byte size is what the HAL reads, so that is what
+    // is pinned here.
+
+    @Test("the render buffer advertises the full slice to the HAL before rendering")
+    func renderBufferIsSizedForTheSlice() throws {
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1))
+        let buffer = try #require(MicrophoneCapability.renderBuffer(format: format, frameCount: 512))
+        #expect(buffer.frameLength == 512)
+        #expect(buffer.mutableAudioBufferList.pointee.mNumberBuffers == 1)
+        #expect(buffer.mutableAudioBufferList.pointee.mBuffers.mDataByteSize == 512 * UInt32(MemoryLayout<Float>.size))
+    }
+}
+
 @Suite("MicrophoneCapability level metering")
 struct MicrophoneLevelTests {
     // The level path (planning 0020): RMS and normalized-level are pure and

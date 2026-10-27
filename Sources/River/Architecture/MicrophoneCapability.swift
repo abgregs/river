@@ -301,6 +301,19 @@ final class MicrophoneCapability: Capability {
         levelSubject.send(Self.normalizedLevel(rms: rms))
     }
 
+    // internal for testability — the buffer a render callback hands to
+    // `AudioUnitRender`. `frameLength` is set to the slice BEFORE rendering: a fresh
+    // `AVAudioPCMBuffer` has `frameLength` 0 and its audio buffer list's
+    // `mDataByteSize` follows it, so rendering into it fails with paramErr (-50) and
+    // delivers nothing. The first on-device build did exactly that (2026-10-26) and
+    // every recording came back empty; the test pins the byte size so it cannot
+    // recur silently. Pure and audio-thread-safe.
+    nonisolated static func renderBuffer(format: AVAudioFormat, frameCount: AVAudioFrameCount) -> AVAudioPCMBuffer? {
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
+        buffer.frameLength = frameCount
+        return buffer
+    }
+
     // internal for testability — RMS of a buffer's first channel. Pure and
     // audio-thread-safe (no `self`), so the render callback computes it before
     // hopping to the main actor, and tests exercise it on synthetic
@@ -371,10 +384,9 @@ private final class CaptureSink: @unchecked Sendable {
 /// audio thread touches it again.
 private let captureInputProc: AURenderCallback = { refCon, flags, timeStamp, bus, frameCount, _ in
     let sink = Unmanaged<CaptureSink>.fromOpaque(refCon).takeUnretainedValue()
-    guard let buffer = AVAudioPCMBuffer(pcmFormat: sink.format, frameCapacity: frameCount) else { return noErr }
+    guard let buffer = MicrophoneCapability.renderBuffer(format: sink.format, frameCount: frameCount) else { return noErr }
     let status = AudioUnitRender(sink.unit, flags, timeStamp, bus, frameCount, buffer.mutableAudioBufferList)
     guard status == noErr else { return status }
-    buffer.frameLength = frameCount
     let rms = MicrophoneCapability.rms(of: buffer)
     let deliver = sink.deliver
     Task { @MainActor in deliver(buffer, rms) }
