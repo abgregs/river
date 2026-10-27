@@ -42,6 +42,13 @@ enum Settings {
         name: "streamingDictation",
         defaultValue: true
     )
+    // Open the microphone only for the recording, as before 0033. Default off: the
+    // ready microphone is what keeps the first word of a dictation (planning 0033,
+    // decision 3). Named for what the user controls, when the mic is open.
+    static let micOnlyWhileDictating = SettingKey<Bool>(
+        name: "micOnlyWhileDictating",
+        defaultValue: false
+    )
 }
 
 @MainActor

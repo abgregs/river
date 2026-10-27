@@ -30,6 +30,7 @@ Settings keys (the target set; declared progressively as their consumers land �
 | `selectedModel` | `String` | `Constants.defaultModel` | `RiverSession` → `TranscriptionManager` |
 | `launchAtLogin` | `Bool` | `false` | `SettingsView` → `SMAppService` |
 | `pauseMediaWhileDictating` | `Bool` | `true` | `MediaPauseManager` |
+| `micOnlyWhileDictating` | `Bool` | `false` | `RiverSession` → `AudioCaptureManager.setReady` ([0033](../planning/0033_warm-microphone-pre-roll.md)) |
 
 As of M9, `activationKeyCode` (M4), `activationMode` (M9), `customDictionaryTerms`, `launchAtLogin`, and `selectedModel` (the model picker, [0021](../planning/0021_model-picker.md)) are declared. `pauseMediaWhileDictating` lands once `MediaPauseManager` exists (deferred — see [../planning/0003_pause-media-while-dictating.md](../planning/0003_pause-media-while-dictating.md)). **`doubleTapWindowMs` is deliberately *not* a setting** — it's an internal `Constants` tunable (above) consumed by `HotkeyManager`'s `TapStateMachine`. The user shouldn't have to reason about a double-tap window, so there is no UI control and no slider; a fixed 400 ms is used always.
 
