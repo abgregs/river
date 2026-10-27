@@ -678,6 +678,37 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("a recording that heard only the pre-roll types nothing, with streaming on")
+    func preRollAloneIsNeverTyped() async throws {
+        // The pre-roll is audio from before the press. With streaming on it reaches the
+        // stream at the press, so if the unit then delivers nothing the capture error's
+        // "type what was heard" path would decode and type it. A dead unit at the press
+        // must surface as an error and type nothing (planning 0033).
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "said before the press"
+        #expect(env.store.value(for: Settings.streamingDictation))
+        await env.audio.setReady(true)
+        for _ in 0..<5 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+
+        var errors: [RiverError] = []
+        let token = env.session.errors.sink { errors.append($0) }
+        defer { token.cancel() }
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        await env.session.handleDeactivate()                // no live buffer ever arrives
+        await env.audio.setReady(false)
+
+        // Plain locals: a failing #expect reflects every value it names, and reflecting the
+        // whole test environment hangs the runner.
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        let retained = env.session.hasLastTranscript
+        let errorCount = errors.count
+        #expect(typed.isEmpty)
+        #expect(!retained)
+        #expect(errorCount == 1)
+    }
+
+    @MainActor
     @Test("the switch flipped on mid-recording closes the microphone once the recording ends")
     func switchMidRecordingAppliesWhenTheRecordingEnds() async throws {
         let env = makeSession()

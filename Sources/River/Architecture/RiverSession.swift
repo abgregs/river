@@ -292,8 +292,12 @@ final class RiverSession {
             logger.error("Audio capture failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             // Type what was heard (decided 2026-10-23): the stream decoded the audio that
             // did arrive, and discarding it would lose the user's words along with the
-            // ones the microphone never delivered. The error follows the text.
-            if let stream {
+            // ones the microphone never delivered. The error follows the text. Not when no
+            // live audio arrived: then the stream holds only the pre-roll, audio from before
+            // the press, which is never typed on its own (planning 0033).
+            if case AudioCaptureError.noAudioCaptured = error {
+                stream?.cancel()
+            } else if let stream {
                 let outcome = await stream.finish()
                 if !outcome.text.isEmpty {
                     logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
