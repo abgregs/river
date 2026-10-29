@@ -190,6 +190,7 @@ private func handleTapCallback(
 ) -> Unmanaged<CGEvent>? {
     guard let userInfo else { return Unmanaged.passUnretained(event) }
     if let decoded = InputMonitoringCapability.decode(event) {
+        tapEventLogger.debug("Tap event received")
         let ptrInt = UInt(bitPattern: userInfo)
         Task { @MainActor in
             guard let ptr = UnsafeMutableRawPointer(bitPattern: ptrInt) else { return }
@@ -202,3 +203,8 @@ private func handleTapCallback(
     }
     return Unmanaged.passUnretained(event)
 }
+
+// Logs each event as the tap thread receives it, before the main-actor hop. Read against
+// the session's `State -> recording` line, it measures how long a press waits for the main
+// actor (spec 0033, AC 8). Debug level, so it is off unless a log stream asks for it.
+private let tapEventLogger = Logger(subsystem: Constants.loggingSubsystem, category: "hotkey")
