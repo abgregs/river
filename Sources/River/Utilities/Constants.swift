@@ -126,6 +126,12 @@ enum Constants {
     static let silenceTrimLeadSeconds: Double = 0.5
     static let silenceTrimTailSeconds: Double = 0.2
 
+    // Audio kept in memory while the microphone is ready, and seeded into the next
+    // recording so a word spoken at the instant of the press keeps its onset (planning
+    // 0033, decision 2). Equal to `silenceTrimLeadSeconds`: a longer window only adds
+    // audio the trim discards, and holds more of what was said before the press.
+    static let preRollSeconds: Double = 0.5
+
     // A recording whose audio falls short of its wall time by more than this is reported as
     // a capture failure instead of transcribed. Under `AVAudioEngine` the engine stopped
     // when the audio device changed and nothing told the recording: a 14 s first recording
@@ -350,8 +356,8 @@ enum Constants {
     ]
 
     // Mic level (planning 0020). The publish interval throttles the level publisher
-    // to ~14 Hz (the indicator smooths per display frame, far below the ~43
-    // buffers/sec the tap delivers); the reference RMS is the linear amplitude that
+    // to ~14 Hz (the indicator smooths per display frame, far below the ~93
+    // buffers/sec the capture unit delivers); the reference RMS is the linear amplitude that
     // maps to a full level of 1.
     //
     // The reference was 0.2 (about -14 dBFS) to match the study page's `rms / 0.2`.

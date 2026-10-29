@@ -35,7 +35,21 @@ final class AudioCaptureManager {
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "audio")
 
     private var buffers: [AVAudioPCMBuffer] = []
-    private var cancellables = Set<AnyCancellable>()
+    // One standing subscription to the capability's buffers, installed on first use. The
+    // sink routes each buffer by state: into the recording, into the pre-roll window
+    // while the microphone is ready between recordings, or nowhere.
+    private var subscription: AnyCancellable?
+    private var isRecording = false
+    // Whether the unit should run between recordings (planning 0033). The session
+    // decides through `setReady`; this manager is the only caller of `startEngine` and
+    // `stopEngine`, for recordings and for ready mode alike. A change that arrives during
+    // a recording is applied when the recording ends, so it can never stop the unit
+    // under the recording.
+    private var ready = false
+    private var window = PreRollWindow(seconds: Constants.preRollSeconds)
+    // Audio seeded from the window at the press, for the log line only: it is kept out
+    // of `capturedSeconds` and the first-buffer clock, which measure live capture.
+    private var seededSeconds: Double = 0
     // Live 16 kHz feed for streaming (0025 prototype): each buffer is also resampled as it
     // arrives and handed to `onSamples`. The batch conversion at stop time is unchanged.
     private var onSamples: (@MainActor ([Float]) -> Void)?
@@ -43,11 +57,11 @@ final class AudioCaptureManager {
     // Injectable clock so the gap check is tested without waiting out a real recording.
     private let now: () -> TimeInterval
     private var recordingStartedAt: TimeInterval?
-    // When the first buffer arrived. The gap is measured from here, not from the start
+    // When the first live buffer arrived. The gap is measured from here, not from the start
     // call: the engine's start-up (0.9 s seen on a loaded machine with AirPods) is latency,
     // not lost audio, and counting it put a healthy recording within 0.1 s of the bound.
     private var firstBufferAt: TimeInterval?
-    // Running total of the audio that arrived, in seconds at each buffer's own rate.
+    // Running total of the live audio that arrived, in seconds at each buffer's own rate.
     private var capturedSeconds: Double = 0
     // The watchdog: every `watchdogInterval` it compares the clock since the first buffer
     // with `capturedSeconds` and, past `Constants.captureGapMaximumSeconds`, calls
@@ -60,11 +74,11 @@ final class AudioCaptureManager {
     /// `Constants.captureGapMaximumSeconds` behind the clock. Set once by the session.
     var onCaptureGapExceeded: (@MainActor () -> Void)?
 
-    /// Upper bound on the start-up wait inside `stopRecording`. The capture unit's
-    /// render callback first fires some tens of milliseconds after `AudioOutputUnitStart`
-    /// (~60-100 ms measured under `AVAudioEngine`; the HAL unit's own start-up is not yet
-    /// measured); a short tap that releases inside that window would otherwise drop the
-    /// utterance. See `architecture/river-pipeline.md` "Engine warmup".
+    /// Upper bound on the wait inside `stopRecording` for the first live buffer. The
+    /// capture unit's render callback first fires after `AudioOutputUnitStart` (0.07–0.09 s
+    /// from a warm start, 0.19–0.21 s cold, measured 2026-10-26); a short tap that releases
+    /// inside that window on the fallback path would otherwise drop the utterance. See
+    /// `architecture/river-pipeline.md` "The ready microphone and the pre-roll".
     static let warmupWaitSeconds: Double = 0.3
 
     init(
@@ -77,32 +91,80 @@ final class AudioCaptureManager {
         self.watchdogInterval = watchdogInterval
     }
 
-    /// Subscribes to the capability's buffer stream and starts the engine.
-    /// Idempotent on the subscription side; the capability's `startEngine` is
-    /// itself idempotent. Note: this never throws — the capability fails quietly
-    /// (logged warning) if the engine can't start. `stopRecording` is the
-    /// fail-loud surface (throws `.noAudioCaptured` if no buffers arrived).
-    ///
-    /// `onSamples`, when given, receives each buffer as 16 kHz mono samples as soon as it
-    /// arrives, for transcribing while the user speaks.
-    func startRecording(onSamples: (@MainActor ([Float]) -> Void)? = nil) async {
-        guard cancellables.isEmpty else { return }
-        buffers.removeAll(keepingCapacity: true)
-        self.onSamples = onSamples
-        resampler = nil
-        recordingStartedAt = now()
-        firstBufferAt = nil
-        capturedSeconds = 0
-        microphone.audioBuffers
-            .sink { [weak self] buffer in
-                guard let self else { return }
+    /// Keeps the capture unit running between recordings, or not (planning 0033). While
+    /// idle the change applies at once: the unit starts and the pre-roll window fills, or
+    /// the unit stops and the window is dropped. During a recording it applies when the
+    /// recording ends.
+    func setReady(_ ready: Bool) async {
+        guard self.ready != ready else { return }
+        self.ready = ready
+        logger.info("Microphone ready mode \(ready ? "on" : "off", privacy: .public)")
+        guard !isRecording else { return }
+        await applyReadiness()
+    }
+
+    private func applyReadiness() async {
+        if ready {
+            subscribeIfNeeded()
+            await microphone.startEngine()
+        } else {
+            _ = window.drain()
+            microphone.stopEngine()
+        }
+    }
+
+    private func subscribeIfNeeded() {
+        guard subscription == nil else { return }
+        subscription = microphone.audioBuffers.sink { [weak self] buffer in
+            guard let self else { return }
+            if isRecording {
                 if firstBufferAt == nil { firstBufferAt = now() }
                 buffers.append(buffer)
                 capturedSeconds += Double(buffer.frameLength) / buffer.format.sampleRate
                 forwardLive(buffer)
+            } else if ready {
+                window.append(buffer)
             }
-            .store(in: &cancellables)
-        await microphone.startEngine()
+        }
+    }
+
+    /// Starts a recording. When the unit is already running (ready mode) the recording
+    /// is seeded with the pre-roll window, so it begins before the press. Otherwise the
+    /// unit is started on the press, as before 0033, and the fallback is logged; a unit
+    /// that is listening but not capturing (it failed to start, or its device vanished)
+    /// is stopped first so `startEngine` rebuilds it. Idempotent while recording. Note:
+    /// this never throws — the capability fails quietly (logged warning) if the unit
+    /// can't start. `stopRecording` is the fail-loud surface (throws `.noAudioCaptured`
+    /// if no live buffer arrived).
+    ///
+    /// `onSamples`, when given, receives each buffer as 16 kHz mono samples as soon as it
+    /// arrives, for transcribing while the user speaks; the pre-roll goes through it first.
+    func startRecording(onSamples: (@MainActor ([Float]) -> Void)? = nil) async {
+        guard !isRecording else { return }
+        buffers.removeAll(keepingCapacity: true)
+        self.onSamples = onSamples
+        resampler = nil
+        firstBufferAt = nil
+        capturedSeconds = 0
+        seededSeconds = 0
+        subscribeIfNeeded()
+        if ready, microphone.isCapturing {
+            let seed = window.drain()
+            seededSeconds = seed.reduce(0) { $0 + Double($1.frameLength) / $1.format.sampleRate }
+            buffers = seed
+            for buffer in seed { forwardLive(buffer) }
+            isRecording = true
+            recordingStartedAt = now()
+        } else {
+            if ready {
+                logger.warning("Capture unit was not running at the press; starting it now")
+            }
+            _ = window.drain()
+            isRecording = true
+            recordingStartedAt = now()
+            microphone.stopEngine()
+            await microphone.startEngine()
+        }
         startWatchdog()
     }
 
@@ -144,13 +206,14 @@ final class AudioCaptureManager {
         onSamples(samples)
     }
 
-    /// Waits up to `warmupWaitSeconds` for the first buffer (so short taps still
-    /// produce audio), then tears down the subscription, stops the engine,
-    /// converts the accumulated buffers to 16 kHz mono Float32, and trims leading/
-    /// trailing silence. Throws `.noAudioCaptured` if the wait expired with no
-    /// buffers — the caller (RiverSession) surfaces this rather than letting a
-    /// zero-length recording silently succeed. Returns `[]` when buffers arrived
-    /// but the trim removed everything (an all-silence recording): the caller
+    /// Waits up to `warmupWaitSeconds` for the first live buffer (so short taps still
+    /// produce audio), ends the recording, converts the accumulated buffers to 16 kHz
+    /// mono Float32, and trims leading/trailing silence. The unit stops unless ready
+    /// mode keeps it running. Throws `.noAudioCaptured` if the wait expired with no
+    /// live buffer, whatever the pre-roll held: the pre-roll predates the press and is
+    /// never typed on its own. The caller (RiverSession) surfaces this rather than
+    /// letting a zero-length recording silently succeed. Returns `[]` when buffers
+    /// arrived but the trim removed everything (an all-silence recording): the caller
     /// reads that as "nothing was said," not a failure (planning 0023).
     ///
     /// `warmupWait` exists for tests: a loaded test machine can oversleep the 0.3 s window,
@@ -159,28 +222,26 @@ final class AudioCaptureManager {
         watchdog?.cancel()
         watchdog = nil
         let deadline = Date().addingTimeInterval(warmupWait)
-        while buffers.isEmpty && Date() < deadline {
+        while firstBufferAt == nil && Date() < deadline {
             try? await Task.sleep(nanoseconds: 5_000_000)
-        }
-
-        cancellables.removeAll()
-        microphone.stopEngine()
-        onSamples = nil
-        resampler = nil
-
-        guard !buffers.isEmpty else {
-            logger.warning("stopRecording: no audio buffers arrived within \(warmupWait, privacy: .public)s")
-            throw AudioCaptureError.noAudioCaptured
         }
 
         let collected = buffers
         buffers.removeAll(keepingCapacity: true)
         let recordingSeconds = recordingStartedAt.map { now() - $0 } ?? 0
-        // Buffers arrived, so `firstBufferAt` is set; the fallbacks only satisfy the optional.
         let startupSeconds = (firstBufferAt ?? 0) - (recordingStartedAt ?? 0)
         let heardSeconds = firstBufferAt.map { now() - $0 } ?? 0
+        let heardLiveAudio = firstBufferAt != nil
+        let preRollSeconds = seededSeconds
         recordingStartedAt = nil
         firstBufferAt = nil
+        seededSeconds = 0
+        endRecording()
+
+        guard heardLiveAudio else {
+            logger.warning("stopRecording: no audio buffers arrived within \(warmupWait, privacy: .public)s")
+            throw AudioCaptureError.noAudioCaptured
+        }
 
         // The capture unit restarts when its selected device changes (MicrophoneCapability).
         // If the restart failed, or the pinned device stopped delivering, the buffers
@@ -197,28 +258,38 @@ final class AudioCaptureManager {
         let samples = try Self.convert(collected)
         let trimmed = Self.trimSilence(samples)
         let formats = Self.formatRuns(collected).map { "\(Int($0.format.sampleRate)) Hz" }.joined(separator: " -> ")
-        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, startup \(startupSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
+        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, pre-roll \(preRollSeconds, format: .fixed(precision: 2), privacy: .public) s, startup \(startupSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
         return trimmed
     }
 
-    /// Discards an in-flight recording (planning 0017): tears down the buffer
-    /// subscription, stops the engine, and drops every captured buffer WITHOUT
-    /// converting, trimming, or returning them. The cancel-path counterpart to
-    /// `stopRecording` — there is no audio to transcribe or paste, so it neither
-    /// waits for warmup nor throws `.noAudioCaptured` (an empty buffer list is the
-    /// expected outcome, not a failure). Safe to call when nothing is recording.
+    /// Discards an in-flight recording (planning 0017): ends the recording and drops
+    /// every captured buffer WITHOUT converting, trimming, or returning them. The
+    /// cancel-path counterpart to `stopRecording` — there is no audio to transcribe or
+    /// paste, so it neither waits for warmup nor throws `.noAudioCaptured` (an empty
+    /// buffer list is the expected outcome, not a failure). Safe to call when nothing
+    /// is recording.
     func discardRecording() async {
         watchdog?.cancel()
         watchdog = nil
-        cancellables.removeAll()
-        microphone.stopEngine()
-        onSamples = nil
-        resampler = nil
         recordingStartedAt = nil
         firstBufferAt = nil
+        seededSeconds = 0
         let dropped = buffers.count
         buffers.removeAll(keepingCapacity: true)
+        endRecording()
         logger.info("discardRecording: dropped \(dropped, privacy: .public) buffers; no transcription")
+    }
+
+    // The recording's end for the unit's lifetime: in ready mode the unit keeps running
+    // and the sink refills the window from the next buffer; otherwise it stops as it
+    // always did. This is also where a readiness change made during the recording lands.
+    private func endRecording() {
+        isRecording = false
+        onSamples = nil
+        resampler = nil
+        if !ready {
+            microphone.stopEngine()
+        }
     }
 
     // internal for testability — converts a recording whose format may change part-way

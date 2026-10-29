@@ -18,12 +18,18 @@ show as raw text. -->
 
 ## [Unreleased]
 
+### Added
+
+- A switch in Settings, "Only use the microphone while dictating", restores the previous behaviour: the microphone opens on the key press and closes after the recording. Off by default.
+
 ### Changed
 
+- The microphone stays ready while River can take a dictation (permissions granted, the model loaded, the Mac awake and unlocked), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
 - With AirPods or another Bluetooth headset selected as the input, River records from the Mac's built-in microphone instead, on Macs that have one. The headset is never switched into call mode, so music and calls keep their quality while you dictate, and the recording is at the Mac microphone's full rate. A Mac without a built-in microphone keeps using the headset.
 
 ### Fixed
 
+- A word spoken the instant you press no longer loses its first sound (the microphone is already open; see Changed above).
 - A recording no longer stops hearing you when the audio device changes part-way, for example when a microphone is unplugged. The first recording with AirPods connected used to come back empty for this reason.
 - A recording whose audio stops arriving part-way now ends on its own within a couple of seconds, types the words heard before the loss, and says so, instead of running on and typing the fragment as if it were the whole dictation.
 

@@ -7,6 +7,12 @@ import Foundation
 enum OnboardingGate {
     @MainActor
     static func shouldPresent(for capabilities: [any Capability]) -> Bool {
-        capabilities.contains { $0.currentStatus != .granted }
+        shouldPresent(statuses: capabilities.map(\.currentStatus))
+    }
+
+    /// The same rule over statuses already in hand, so a publisher pipeline (the ready
+    /// microphone, planning 0033) asks the one predicate onboarding itself uses.
+    static func shouldPresent(statuses: [CapabilityStatus]) -> Bool {
+        statuses.contains { $0 != .granted }
     }
 }

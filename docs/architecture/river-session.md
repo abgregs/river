@@ -28,6 +28,7 @@ That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a
 2. **The cycle orchestration.** When the hotkey fires `onActivate`, the session transitions to `.recording` and calls the capture module. When `onDeactivate` fires, it stops capture, transitions to `.processing`, runs transcription, posts the paste, and returns to `.idle`. Each stage's failure is caught independently and emitted as a `RiverError` on the `errors` publisher, without blocking the return to `.idle`.
 3. **Live-or-deferred reconfiguration.** When an activation key/mode change arrives via a SettingsStore publisher, the session applies it by state and active mode: immediately when idle; **live, in place** during a tap-mode recording (plus a `notices` emission); deferred to the next `.idle` during a Hold recording or `.processing`. The session tracks the `activeMode` driving the current recording to make that choice. This is internal — callers never see it.
 4. **Re-entrancy guards.** Activations during `.recording` or `.processing` are no-ops with logging. Out-of-order events are no-ops with logging.
+5. **Microphone readiness.** The session combines the `micOnlyWhileDictating` setting, whether onboarding is complete (the three capabilities' statuses through `OnboardingGate`), the model-load state and the system's availability, puts them through the pure `MicrophoneReadiness` rule, and tells `AudioCaptureManager` whether to keep the capture unit running between recordings ([river-pipeline.md](river-pipeline.md), "The ready microphone and the pre-roll"). This is not the apply-or-defer path in item 3: the manager owns the unit and applies a mid-recording change itself when the recording ends.
 
 ## What the session does not own
 
@@ -57,7 +58,7 @@ That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a
            Capability     Capability     Capability
 ```
 
-`RiverSession` consumes the managers; the managers consume capabilities. No call ever skips a layer.
+`RiverSession` consumes the managers; the managers consume capabilities. No call ever skips a layer. The session also reads `SystemAvailabilityMonitor` (sleep, lock and session state) as one input to microphone readiness; the monitor gates no OS call, so it sits outside this layering.
 
 ## Reconfiguration without leaks
 

@@ -66,6 +66,10 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `MicrophoneCapability.skipEngineForTesting` — flag that keeps `startEngine()` from opening a capture unit (the capability still marks itself listening, so `handleDeviceChange` counts). Required because the test runner usually *does* have Microphone permission, so without it the capture unit starts and silent audio races with `publishForTest` buffers (M4 got this for free because `tapCreate` returns nil without IM grant; mic capture has no natural skip)
 - `MicrophoneCapability.handleDeviceChange()` / `deviceChangeCount` — the HAL device-change handler and a count of the changes it handled, so a test calls it directly and asserts it is live after `startEngine` and inert after `stopEngine` (planning 0032; warm-microphone spec)
 - `MicrophoneCapability.noteDeviceChange()` — the listener block's entry point, which queues one handler run per burst of CoreAudio callbacks, so a test fires a burst and asserts a single run without a HAL property change
+- `MicrophoneCapability.isListening` — whether the capability is between `startEngine` and `stopEngine`, so ready-mode tests see the unit kept running or stopped without a device (planning 0033)
+- `MicrophoneCapability.setStatusForTesting(_:)` — drives `status` without the host's TCC read, so session tests pin whether the ready microphone opens or closes on the grant (mirrors `AccessibilityCapability.setStatusForTesting`)
+- `InputMonitoringCapability.setStatusForTesting(_:)` — drives `status` without the host's TCC read, so session tests pin that the ready microphone waits for every permission, not only Microphone (planning 0033)
+- `SystemAvailabilityMonitor.setForTesting(_:)` — drives the published sleep, lock and session state without a workspace notification
 - `MicrophoneCapability.renderBuffer(format:frameCount:)` — the buffer the render callback hands to `AudioUnitRender`, with `frameLength` set so the HAL sees the slice's bytes; `MicrophoneRenderBufferTests` pins the byte size after the first on-device build delivered nothing
 - `MicrophoneCapability.captureDevice` — read-only, the device the unit is pinned to
 - `AudioCaptureManager.convert(_:from:toSampleRate:)` — pure buffer-list → 16 kHz `[Float]` conversion via `AVAudioConverter`, exercised on synthetic 44.1 kHz buffers; `convert(_:toSampleRate:)` and `formatRuns(_:)` split a mixed-format recording into same-format runs first (planning 0032)
@@ -147,7 +151,7 @@ Tests substitute these into `OnboardingGate`, managers, and `RiverSession` to ex
 ```bash
 swift test                                       # all tests
 swift test --filter RiverSessionTests        # one suite
-swift test --filter "activation while idle"      # one test
+swift test --filter RiverSessionTests/preRollAloneIsNeverTyped   # one test, by type and function name
 ```
 
 If a test requires a permission or external resource and can't be made hermetic, mark it `.disabled` with a reason and document the gap in `docs/planning/_index.md`:
@@ -156,6 +160,8 @@ If a test requires a permission or external resource and can't be made hermetic,
 @Test(.disabled("requires accessibility grant; run manually before release"))
 func endToEndPaste() { ... }
 ```
+
+`--filter` matches type and function names, not `@Test` display names. A run in a terminal that holds Input Monitoring starts real event taps, and tests leave their tap threads running; a modifier key pressed during the run reaches a capability that is already freed and can hang the run. Keep hands off modifier keys while `swift test` runs (tracked under Open items in [../planning/_index.md](../planning/_index.md)).
 
 ## Harnesses and generated assets
 

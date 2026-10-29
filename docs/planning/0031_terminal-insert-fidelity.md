@@ -1,6 +1,6 @@
 # Bug: text lost when a long transcript is typed into Claude Code (0031)
 
-A bug record. Reported by the maintainer on 2026-10-12 and diagnosed the same day. The fix is on branch `fix/paste-fidelity`.
+A bug record. Reported by the maintainer on 2026-10-12 and diagnosed the same day. The fix is on branch `fix/paste-fidelity`. The loss recurred on 2026-10-28; see "Recurred" below.
 
 ## Symptom
 
@@ -45,6 +45,10 @@ Alternatives, not taken:
 
 - **The synthetic event path itself:** `CGEvent` → VS Code (Chromium, xterm.js) → pty. The research raises one more suspect there: a multi-character key event losing all but its last character in xterm.js. River's field results argue against it, since most text arrives, but no loop has measured it.
 - **Claude Code under load,** in a long conversation, where its reads are slower than in the fresh session the loop used.
+
+## Recurred (2026-10-28)
+
+On the installed build with the 4 ms gap, a 176 s dictation (1,856 characters) typed into Claude Code 2.1.299 in VS Code's terminal lost one contiguous run of 1,022 characters, starting mid-word about 200 characters in. "Copy last transcription" pasted with ⌘V was whole. The loop above lost 2,044 characters (2 × 1,022) from about 190 characters in, so this is the same failure: the gap does not hold in the field. Either Claude Code's input handling changed since 2.1.296, or a busy terminal joins the chunks into one read despite the gap. The maintainer confirmed it as a bug to track and deferred the fix (Open items in [_index.md](_index.md)); the candidates are a longer gap or a real paste for terminals, with the costs listed under Fix.
 
 ## Verify on device
 

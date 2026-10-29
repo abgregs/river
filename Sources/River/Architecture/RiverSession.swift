@@ -39,6 +39,7 @@ final class RiverSession {
     private let textInsertion: TextInsertionManager
     private let transcription: TranscriptionManager
     private let settings: SettingsStore
+    private let system: SystemAvailabilityMonitor
 
     // The most recent successful transcription, retained in memory for user-initiated
     // recovery (planning 0019). Set on transcription success — including when the paste
@@ -103,7 +104,8 @@ final class RiverSession {
         audio: AudioCaptureManager,
         textInsertion: TextInsertionManager,
         transcription: TranscriptionManager,
-        settings: SettingsStore
+        settings: SettingsStore,
+        system: SystemAvailabilityMonitor
     ) {
         self.accessibility = accessibility
         self.microphone = microphone
@@ -113,12 +115,14 @@ final class RiverSession {
         self.textInsertion = textInsertion
         self.transcription = transcription
         self.settings = settings
+        self.system = system
     }
 
     func start() async throws {
         guard !isStarted else { return }
         isStarted = true
         subscribeToConfiguration()
+        subscribeToMicrophoneReadiness()
         wireHotkeyCallbacks()
         await hotkey.start()
         logger.info("RiverSession started")
@@ -129,6 +133,7 @@ final class RiverSession {
         isStarted = false
         await hotkey.stop()
         cancellables.removeAll()
+        await audio.setReady(false)
         logger.info("RiverSession stopped")
     }
 
@@ -287,8 +292,12 @@ final class RiverSession {
             logger.error("Audio capture failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             // Type what was heard (decided 2026-10-23): the stream decoded the audio that
             // did arrive, and discarding it would lose the user's words along with the
-            // ones the microphone never delivered. The error follows the text.
-            if let stream {
+            // ones the microphone never delivered. The error follows the text. Not when no
+            // live audio arrived: then the stream holds only the pre-roll, audio from before
+            // the press, which is never typed on its own (planning 0033).
+            if case AudioCaptureError.noAudioCaptured = error {
+                stream?.cancel()
+            } else if let stream {
                 let outcome = await stream.finish()
                 if !outcome.text.isEmpty {
                     logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
@@ -399,6 +408,32 @@ final class RiverSession {
             .store(in: &cancellables)
         settings.publisher(for: Settings.selectedModel)
             .sink { [weak self] newModel in self?.reconfigureModel(newModel) }
+            .store(in: &cancellables)
+    }
+
+    // The ready microphone (planning 0033, decision 5): the capture unit runs between
+    // recordings only while a dictation is possible. The inputs are combined here and
+    // the pure rule decides; `AudioCaptureManager` owns the unit and applies a change
+    // that lands mid-recording when the recording ends, so this does not go through
+    // `reconfigureHotkey`'s apply-or-defer path. Onboarding is complete when all three
+    // permissions are granted, the same three `AppDelegate` hands to onboarding.
+    private func subscribeToMicrophoneReadiness() {
+        let onboardingComplete = accessibility.status
+            .combineLatest(microphone.status, inputMonitoring.status)
+            .map { !OnboardingGate.shouldPresent(statuses: [$0, $1, $2]) }
+        settings.publisher(for: Settings.micOnlyWhileDictating)
+            .combineLatest(onboardingComplete, transcription.modelLoadState, system.availability)
+            .map { micOnly, onboardingComplete, model, system in
+                MicrophoneReadiness.shouldListen(
+                    micOnlyWhileDictating: micOnly, onboardingComplete: onboardingComplete, model: model, system: system
+                )
+            }
+            .removeDuplicates()
+            .sink { [weak self] ready in
+                guard let self else { return }
+                let audio = self.audio
+                Task { @MainActor in await audio.setReady(ready) }
+            }
             .store(in: &cancellables)
     }
 

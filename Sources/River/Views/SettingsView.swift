@@ -15,6 +15,8 @@ struct SettingsView: View {
     private var selectedModel: String = Settings.selectedModel.defaultValue
     @AppStorage(Settings.streamingDictation.name)
     private var streamingDictation: Bool = Settings.streamingDictation.defaultValue
+    @AppStorage(Settings.micOnlyWhileDictating.name)
+    private var micOnlyWhileDictating: Bool = Settings.micOnlyWhileDictating.defaultValue
 
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "app")
 
@@ -84,6 +86,10 @@ struct SettingsView: View {
                     updateLaunchAtLogin(enabled)
                 }
             Toggle("Sound effects", isOn: $playFeedbackSounds)
+            Toggle("Only use the microphone while dictating", isOn: $micOnlyWhileDictating)
+            Text("When off, the microphone stays ready, so your first word isn't cut off. The microphone indicator stays on while River is open and able to dictate.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 

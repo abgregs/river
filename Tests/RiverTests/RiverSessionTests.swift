@@ -621,6 +621,127 @@ struct RiverSessionTests {
         #expect(env.session.currentState == .recording)
     }
 
+    // MARK: - The ready microphone (planning 0033)
+
+    // Decision 5: the unit runs between recordings only while a dictation is possible.
+    // The session combines the four inputs; each test flips one and watches the unit,
+    // because a readiness rule that is right but never wired would leave the first
+    // word clipped exactly as before.
+
+    @MainActor
+    @Test("the microphone is ready after start, and stop closes it")
+    func microphoneReadyAfterStart() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+        await env.session.stop()
+        #expect(!env.microphone.isListening)
+    }
+
+    @MainActor
+    @Test("the switch, any missing permission, an unready model, and sleep each close the microphone")
+    func readinessFollowsEachInput() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        await waitUntil { env.microphone.isListening }
+
+        env.store.setValue(true, for: Settings.micOnlyWhileDictating)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.store.setValue(false, for: Settings.micOnlyWhileDictating)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        env.microphone.setStatusForTesting(.denied)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.microphone.setStatusForTesting(.granted)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        // Onboarding is incomplete while any permission is missing, not only Microphone:
+        // without these two River cannot dictate, so the indicator must stay off (AC 4).
+        env.accessibility.setStatusForTesting(.denied)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.accessibility.setStatusForTesting(.granted)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        env.inputMonitoring.setStatusForTesting(.unknown)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.inputMonitoring.setStatusForTesting(.granted)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        env.transcription.setModelLoadStateForTesting(.loading)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.transcription.setModelLoadStateForTesting(.ready)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        env.system.setForTesting(SystemAvailability(isAwake: false))
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        env.system.setForTesting(.available)
+        await waitUntil { env.microphone.isListening }
+        #expect(env.microphone.isListening)
+
+        await env.session.stop()
+    }
+
+    @MainActor
+    @Test("a recording that heard only the pre-roll types nothing, with streaming on")
+    func preRollAloneIsNeverTyped() async throws {
+        // The pre-roll is audio from before the press. With streaming on it reaches the
+        // stream at the press, so if the unit then delivers nothing the capture error's
+        // "type what was heard" path would decode and type it. A dead unit at the press
+        // must surface as an error and type nothing (planning 0033).
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "said before the press"
+        #expect(env.store.value(for: Settings.streamingDictation))
+        await env.audio.setReady(true)
+        for _ in 0..<5 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+
+        var errors: [RiverError] = []
+        let token = env.session.errors.sink { errors.append($0) }
+        defer { token.cancel() }
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        await env.session.handleDeactivate()                // no live buffer ever arrives
+        await env.audio.setReady(false)
+
+        // Plain locals: a failing #expect reflects every value it names, and reflecting the
+        // whole test environment hangs the runner.
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        let retained = env.session.hasLastTranscript
+        let errorCount = errors.count
+        #expect(typed.isEmpty)
+        #expect(!retained)
+        #expect(errorCount == 1)
+    }
+
+    @MainActor
+    @Test("the switch flipped on mid-recording closes the microphone once the recording ends")
+    func switchMidRecordingAppliesWhenTheRecordingEnds() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        await waitUntil { env.microphone.isListening }
+
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+        env.store.setValue(true, for: Settings.micOnlyWhileDictating)
+        env.microphone.publishForTest(makeBuffer())
+        await env.session.handleDeactivate()
+        #expect(env.session.currentState == .idle)
+        await waitUntil { !env.microphone.isListening }
+        #expect(!env.microphone.isListening)
+        await env.session.stop()
+    }
+
     @MainActor
     private struct TestEnv {
         let session: RiverSession
@@ -631,6 +752,7 @@ struct RiverSessionTests {
         let transcription: TranscriptionManager
         let accessibility: AccessibilityCapability
         let audio: AudioCaptureManager
+        let system: SystemAvailabilityMonitor
     }
 
     @MainActor
@@ -645,7 +767,14 @@ struct RiverSessionTests {
         accessibility.skipPostForTesting = true
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
+        // Granted, so the ready microphone (planning 0033) opens as it does in the field
+        // instead of following the host's TCC state; the readiness tests drive it.
+        microphone.setStatusForTesting(.granted)
+        let system = SystemAvailabilityMonitor()
         let inputMonitoring = InputMonitoringCapability()
+        // Granted like the other two, so onboarding reads complete and the ready
+        // microphone does not follow the host's Input Monitoring state.
+        inputMonitoring.setStatusForTesting(.granted)
         let hotkey = HotkeyManager(inputMonitoring: inputMonitoring, initialKeyCode: 62)
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
         let transcription = TranscriptionManager()
@@ -668,7 +797,8 @@ struct RiverSessionTests {
             audio: audio,
             textInsertion: TextInsertionManager(accessibility: accessibility),
             transcription: transcription,
-            settings: store
+            settings: store,
+            system: system
         )
         return TestEnv(
             session: session,
@@ -678,7 +808,8 @@ struct RiverSessionTests {
             microphone: microphone,
             transcription: transcription,
             accessibility: accessibility,
-            audio: audio
+            audio: audio,
+            system: system
         )
     }
 

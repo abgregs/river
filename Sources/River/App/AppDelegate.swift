@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let microphone = MicrophoneCapability()
     let inputMonitoring = InputMonitoringCapability()
     let settings = SettingsStore()
+    let system = SystemAvailabilityMonitor()
     // Lazy so the manager loads the persisted `selectedModel` (planning 0021) at
     // launch, not the compile-time default — otherwise a user who picked a different
     // model would load `small.en` first and immediately reload on the startup
@@ -34,7 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             audio: AudioCaptureManager(microphone: microphone),
             textInsertion: TextInsertionManager(accessibility: accessibility),
             transcription: transcription,
-            settings: settings
+            settings: settings,
+            system: system
         )
     }()
 
