@@ -45,6 +45,10 @@ final class MicrophoneCapability: Capability {
     // while listening, so a test can assert the handler is live after `startEngine`
     // and inert after `stopEngine` without a real device (the restart needs one).
     private(set) var deviceChangeCount = 0
+    // True while a device-change run is queued. CoreAudio fires the device-list
+    // listener 15–19 times per hardware event (measured 2026-10-26); the first
+    // callback queues one run on the main actor and the rest of the burst joins it.
+    private var deviceChangeScheduled = false
 
     // Throttle state for the level publisher: `nil` until the first sample so the
     // first buffer always emits. Injectable clock so the ~14 Hz throttle is tested
@@ -172,6 +176,19 @@ final class MicrophoneCapability: Capability {
         startUnit(on: device)
     }
 
+    // internal for testability — the listener's entry point, split from the handler
+    // so a test can fire a burst without a HAL property change. Coalesces the burst:
+    // every callback after the first finds the run already queued and returns.
+    func noteDeviceChange() {
+        guard !deviceChangeScheduled else { return }
+        deviceChangeScheduled = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            deviceChangeScheduled = false
+            handleDeviceChange()
+        }
+    }
+
     // MARK: - Device selection
 
     private func selectDevice() -> AudioDeviceID? {
@@ -297,7 +314,7 @@ final class MicrophoneCapability: Capability {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             // Delivered on the main queue, which is the main actor.
-            MainActor.assumeIsolated { self?.handleDeviceChange() }
+            MainActor.assumeIsolated { self?.noteDeviceChange() }
         }
         let status = AudioObjectAddPropertyListenerBlock(object, &address, .main, block)
         guard status == noErr else {

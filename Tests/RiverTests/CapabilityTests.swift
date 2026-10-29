@@ -428,6 +428,34 @@ struct MicrophoneDeviceChangeTests {
         mic.handleDeviceChange()
         #expect(mic.deviceChangeCount == 1)        // stopped: no longer listening
     }
+
+    // CoreAudio delivers one hardware event as a burst of listener callbacks (15–19
+    // seen on device). Each run of the handler queries the HAL and may restart the
+    // unit, so the burst must collapse to one run, and a burst after `stopEngine`
+    // must do nothing at all.
+    @MainActor
+    @Test("a burst of listener callbacks runs the handler once")
+    func burstRunsHandlerOnce() async {
+        let mic = MicrophoneCapability()
+        mic.skipEngineForTesting = true
+        await mic.startEngine()
+
+        mic.noteDeviceChange()
+        mic.noteDeviceChange()
+        mic.noteDeviceChange()
+        #expect(mic.deviceChangeCount == 0)        // queued, not yet run
+        await Task.yield()
+        #expect(mic.deviceChangeCount == 1)
+
+        mic.noteDeviceChange()                     // a later event is its own run
+        await Task.yield()
+        #expect(mic.deviceChangeCount == 2)
+
+        mic.stopEngine()
+        mic.noteDeviceChange()
+        await Task.yield()
+        #expect(mic.deviceChangeCount == 2)        // stopped: the queued run is inert
+    }
 }
 
 @Suite("MicrophoneCapability render buffer")
