@@ -11,6 +11,7 @@ The tap is created **`.listenOnly`** (least privilege): the callback only observ
 - The tap source must be added to `CFRunLoopGetCurrent()` from inside a `Thread` closure — never to `CFRunLoopGetMain()` or `RunLoop.main`.
 - The thread is created with `qualityOfService = .userInteractive` and `name = "com.river.eventtap"`.
 - Events from the tap are delivered to consumers on the main actor (via `Task { @MainActor in ... }`) before they touch shared state.
+- `startTap` reports the tap started only from inside the running loop (a block queued with `CFRunLoopPerformBlock` before `CFRunLoopRun`), and hands the tap and its run loop back through that same report. **Why:** each run of a run loop starts with its stop flag cleared, so a `CFRunLoopStop` sent before `CFRunLoopRun` begins is lost; reporting earlier let a quick `stopTap` miss, and the stop then waited for the thread forever (a hung test run, 2026-10-27).
 
 ## Why
 

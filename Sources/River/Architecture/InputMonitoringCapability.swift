@@ -58,13 +58,13 @@ final class InputMonitoringCapability: Capability {
     func startTap() async {
         guard tapThread == nil else { return }
         let tapLogger = self.tapLogger
-        let started: Bool = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+        let started: RunningTap? = await withCheckedContinuation { (cont: CheckedContinuation<RunningTap?, Never>) in
             var resumed = false
-            let resume: (Bool) -> Void = { result in
+            let resume: (RunningTap?) -> Void = { result in
                 if !resumed { resumed = true; cont.resume(returning: result) }
             }
             let thread = Thread { [weak self] in
-                guard let self else { resume(false); return }
+                guard let self else { resume(nil); return }
                 let mask: CGEventMask = 1 << CGEventType.flagsChanged.rawValue
                 let userInfo = Unmanaged.passUnretained(self).toOpaque()
                 guard let tap = CGEvent.tapCreate(
@@ -82,22 +82,24 @@ final class InputMonitoringCapability: Capability {
                     userInfo: userInfo
                 ) else {
                     tapLogger.warning("CGEvent.tapCreate returned nil — hotkey will not fire until Input Monitoring is granted and the app relaunched.")
-                    resume(false)
+                    resume(nil)
                     return
                 }
                 guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
                     tapLogger.warning("CFMachPortCreateRunLoopSource returned nil")
-                    resume(false)
+                    resume(nil)
                     return
                 }
-                let runLoop = CFRunLoopGetCurrent()
+                let runLoop: CFRunLoop = CFRunLoopGetCurrent()
                 CFRunLoopAddSource(runLoop, source, .commonModes)
                 CGEvent.tapEnable(tap: tap, enable: true)
-                Task { @MainActor in
-                    self.tap = tap
-                    self.tapRunLoop = runLoop
+                // Report the tap started from inside the running loop, never before it.
+                // Each run of a run loop starts with its stop flag cleared, so a
+                // `CFRunLoopStop` sent before `CFRunLoopRun` begins is lost: the loop then
+                // runs forever and `stopTap` waits for the thread forever.
+                CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue) {
+                    resume(RunningTap(tap: tap, runLoop: runLoop))
                 }
-                resume(true)
                 CFRunLoopRun()  // blocks the thread until CFRunLoopStop
             }
             thread.qualityOfService = .userInteractive
@@ -105,10 +107,14 @@ final class InputMonitoringCapability: Capability {
             self.tapThread = thread
             thread.start()
         }
-        if !started {
+        guard let started else {
             tapThread = nil
             return
         }
+        // Set before `startTap` returns, so a `stopTap` that follows always finds them;
+        // they used to arrive through a separate main-actor hop that a stop could beat.
+        tap = started.tap
+        tapRunLoop = started.runLoop
         tapLogger.info("CGEventTap started on com.river.eventtap")
     }
 
@@ -169,6 +175,14 @@ final class InputMonitoringCapability: Capability {
         if access == kIOHIDAccessTypeDenied { return .denied }
         return .unknown
     }
+}
+
+// The started tap, handed from its thread to the main actor once its run loop is running.
+// The main actor only calls `CGEvent.tapEnable` and `CFRunLoopStop` on these, which are
+// safe from another thread; the run loop itself stays on its own thread.
+private struct RunningTap: @unchecked Sendable {
+    let tap: CFMachPort
+    let runLoop: CFRunLoop
 }
 
 // File-level C callback: captures nothing, recovers the capability via the
