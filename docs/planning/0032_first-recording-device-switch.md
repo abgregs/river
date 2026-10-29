@@ -41,6 +41,10 @@ Smoke-tested by the maintainer on 2026-10-22 on `fix/device-switch` (MacBook Air
 
 The `engine restarted` log line was not captured: info-level `audioLogger` output is not persisted for `log show`, so only the behaviour was verified.
 
+## Field result (2026-10-27 – 2026-10-28)
+
+With a log stream open on the installed PR #76 build, 4 of 16 recordings were cut short, all during hours of heavy `swift build` and `swift test` runs; none of the 6 after them were, up to 176 s long. After each `Capture gap exceeded` line, `Capture unit stopped` followed 1.8 s and 2.6 s later, where the two normally land together: the main actor was stalled, so the watchdog likely counted buffers still queued for it as a gap. The toast also names a cause the code did not observe ("The audio device changed or stopped part-way"), and says River typed what it heard even when streaming is off and nothing was typed. Counting the gap on the audio clock and rewording the toast were deferred by the maintainer on 2026-10-28 (Open items in [_index.md](_index.md)).
+
 ## Related
 
 - [../architecture/river-pipeline.md](../architecture/river-pipeline.md) — "Device changes mid-recording"

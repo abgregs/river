@@ -1,6 +1,6 @@
 # Keep the microphone ready, so the first word is never clipped (0033)
 
-**Status: in progress.** Planned 2026-10-21 as a local draft. The capture path (decision 4, the HAL unit) landed in PR #76 on 2026-10-26 and was smoke-tested on device; ready mode, the pre-roll, the switch and the toggle land in `feat/warm-mic`. The maintainer ran the on-device acceptance criteria on 2026-10-29 in PR #79; the results follow the criteria.
+**Status: implemented in PR #79, smoke-tested on device 2026-10-29.** Planned 2026-10-21 as a local draft. The capture path (decision 4, the HAL unit) landed in PR #76 on 2026-10-26 and was smoke-tested on device; ready mode, the pre-roll, the switch and the toggle are PR #79. The maintainer ran the on-device acceptance criteria on 2026-10-29; the results follow the criteria.
 
 ## Problem
 
@@ -43,7 +43,7 @@ Fixes 3 and 4 of 0032 (the capture gap and its watchdog) count the gap from the 
 - The interface the rest of the app sees does not change: `startEngine()`, `stopEngine()`, `audioBuffers` (freshly allocated `AVAudioPCMBuffer`s on the main actor), `inputLevels`. Buffers are wrapped as `AVAudioPCMBuffer` at the callback so the resampler and `convert` keep working.
 - Unit lifetime and recording lifetime are separate. `startEngine()` and `stopEngine()` keep their meaning. The unit now simply runs for longer when the app keeps it ready. The capability reports whether the unit is running (`isCapturing`), so the manager can tell a ready unit from one that failed to start.
 - Selects the device (see "Which device") and re-selects on a default-input change or when the pinned device dies, restarting the unit on the new device.
-- Buffers and levels are published as now. While idle, nothing displays the levels, because the HUD shows the meter only while recording and `AppState` drops levels outside `.recording`. They still cost main-actor work: about 93 buffer hops per second (the HAL unit delivers the device's IO slice, 512 frames at 48 kHz, where the engine delivered ~100 ms buffers) and up to about 14 level emissions per second (`inputLevelPublishInterval`). AC 7 measures this; coalescing slices in the capture unit before the hop is the mitigation if it shows. If it shows, emit levels only during a recording.
+- Buffers and levels are published as now. While idle, nothing displays the levels, because the HUD shows the meter only while recording and `AppState` drops levels outside `.recording`. They still cost main-actor work: about 93 buffer hops per second (the HAL unit delivers the device's IO slice, 512 frames at 48 kHz, where the engine delivered ~100 ms buffers) and up to about 14 level emissions per second (`inputLevelPublishInterval`). AC 7 measured the total at about 1 % CPU at idle, and the maintainer accepted it on 2026-10-29, so neither mitigation (coalescing slices before the hop, emitting levels only during a recording) is taken.
 
 ### `AudioCaptureManager` (owns the unit's lifetime and the pre-roll)
 
@@ -51,7 +51,7 @@ Fixes 3 and 4 of 0032 (the capture gap and its watchdog) count the gap from the 
 - While the unit runs and no recording is active, it keeps a rolling window of the most recent buffers (`PreRollWindow`). Oldest buffers are dropped once the rest still cover `preRollSeconds`. Since PR #76 a buffer is one HAL IO slice, 512 frames (~10.7 ms at 48 kHz, ~93 per second), where `AVAudioEngine` delivered ~100 ms buffers. The window therefore holds `preRollSeconds` to within one slice, and the oldest-buffer drop runs ~93 times a second; it is amortised O(1) (a head index with periodic compaction), not an array scan.
 - `startRecording` seeds the recording with the window when the unit is running. If streaming is on, it also passes the window to `onSamples`, so `DictationStream` sees the pre-roll too. When the unit is not running at the press, it logs the fallback and takes today's path: stop, then start, so a unit that failed to start is rebuilt rather than skipped by `startEngine`'s idempotency guard.
 - `stopRecording` ends the recording without stopping the unit in ready mode. The window starts filling again. The 300 ms wait for a first buffer stays and, like the `.noAudioCaptured` error, keys on the first *live* buffer: a recording that received only the seed is still an error, because the pre-roll alone predates the press and is never typed on its own.
-- The pre-roll boundary is "the window at the moment the press is handled on the main actor". The main thread is usually idle at a press, so this delay should be small next to a 0.5 s pre-roll, and press timestamps are not needed. The delay has not been measured. AC 8 measures it, and press timestamps are reconsidered only if it is large.
+- The pre-roll boundary is "the window at the moment the press is handled on the main actor". The main thread is usually idle at a press, so this delay should be small next to a 0.5 s pre-roll, and press timestamps are not needed. AC 8 measured it on device: 1.1 ms on average and 10 ms at most, so press timestamps are not needed.
 
 ### Which device
 
@@ -61,7 +61,7 @@ Fixes 3 and 4 of 0032 (the capture gap and its watchdog) count the gap from the 
 ### Who decides ready or not
 
 - A pure decision type, `MicrophoneReadiness`, takes the setting, whether onboarding is complete, the model state and the system state, and returns whether the unit should be running. Bluetooth is no longer an input: decision 4 is handled by device selection, not by withholding ready mode. It follows the existing Presentation-enum pattern, so it is unit tested without a unit.
-- `RiverSession` subscribes to the switch, the Microphone `status` publisher, the model-load state and the system state, computes the answer, and calls `AudioCaptureManager.setReady(_:)`. The switch does not go through the hotkey apply-or-defer path; the manager's own end-of-recording apply is the deferral ([../architecture/river-session.md](../architecture/river-session.md)).
+- `RiverSession` subscribes to the switch, the three capabilities' `status` publishers (through `OnboardingGate`), the model-load state and the system state, computes the answer, and calls `AudioCaptureManager.setReady(_:)`. The switch does not go through the hotkey apply-or-defer path; the manager's own end-of-recording apply is the deferral ([../architecture/river-session.md](../architecture/river-session.md)).
 - The system state comes from these notifications, wrapped by `SystemAvailabilityMonitor`:
 
   | Event | Notification |
@@ -198,11 +198,11 @@ Two stacked PRs from `main`, so the capture path lands and is smoke-tested befor
 1. `feat/hal-capture`: `MicrophoneCapability` on the HAL unit, `InputDeviceSelection`, HAL listeners replacing the configuration-change notification, rule 3 and docs. Behaviour otherwise as before (unit starts on press). **Landed as PR #76 (2026-10-26)**, smoke-tested on device in five scenarios: the built-in mic; AirPods as default input and output with music; AirPods removed and reinserted mid-dictation; the built-in mic chosen with AirPods connected; a sample-rate change mid-dictation in both directions.
 2. `feat/warm-mic`, stacked on `fix/device-change-fanout` (PR #78): ready mode, pre-roll, `MicrophoneReadiness`, the setting, the toggle. Opened as PR #79; the on-device criteria were run on 2026-10-29 and are recorded under Acceptance criteria.
 
-The capture-gap watchdog revisit (a separate, untracked draft) is independent. This spec keeps 0032's gap semantics unchanged: the gap starts at the first live buffer of the recording.
+The capture-gap watchdog revisit is independent and was deferred by the maintainer on 2026-10-28 (Open items in [_index.md](_index.md)). This spec keeps 0032's gap semantics unchanged: the gap starts at the first live buffer of the recording.
 
 ## Out of scope
 
 - A microphone picker in Settings.
 - Keeping audio after the key release, and aligning clip boundaries to event and audio timestamps. Revisit both if the live test in AC 1 shows loss at the end of quick taps.
 - Any minimum hold length, or discarding short presses.
-- Idle-cost mitigation (coalescing buffer hops, emitting levels only while recording) until AC 7 shows a cost.
+- Idle-cost mitigation (coalescing buffer hops, emitting levels only while recording). AC 7 measured about 1 % CPU at idle, and the maintainer accepted it on 2026-10-29.

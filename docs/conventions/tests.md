@@ -151,7 +151,7 @@ Tests substitute these into `OnboardingGate`, managers, and `RiverSession` to ex
 ```bash
 swift test                                       # all tests
 swift test --filter RiverSessionTests        # one suite
-swift test --filter "activation while idle"      # one test
+swift test --filter RiverSessionTests/preRollAloneIsNeverTyped   # one test, by type and function name
 ```
 
 If a test requires a permission or external resource and can't be made hermetic, mark it `.disabled` with a reason and document the gap in `docs/planning/_index.md`:
@@ -160,6 +160,8 @@ If a test requires a permission or external resource and can't be made hermetic,
 @Test(.disabled("requires accessibility grant; run manually before release"))
 func endToEndPaste() { ... }
 ```
+
+`--filter` matches type and function names, not `@Test` display names. A run in a terminal that holds Input Monitoring starts real event taps, and tests leave their tap threads running; a modifier key pressed during the run reaches a capability that is already freed and can hang the run. Keep hands off modifier keys while `swift test` runs (tracked under Open items in [../planning/_index.md](../planning/_index.md)).
 
 ## Harnesses and generated assets
 
