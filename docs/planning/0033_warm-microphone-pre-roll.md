@@ -1,6 +1,6 @@
 # Keep the microphone ready, so the first word is never clipped (0033)
 
-**Status: in progress.** Planned 2026-10-21 as a local draft. The capture path (decision 4, the HAL unit) landed in PR #76 on 2026-10-26 and was smoke-tested on device; ready mode, the pre-roll, the switch and the toggle land in `feat/warm-mic`. The on-device acceptance criteria (AC 1, 7, 8) are recorded here when they are run.
+**Status: in progress.** Planned 2026-10-21 as a local draft. The capture path (decision 4, the HAL unit) landed in PR #76 on 2026-10-26 and was smoke-tested on device; ready mode, the pre-roll, the switch and the toggle land in `feat/warm-mic`. The maintainer ran the on-device acceptance criteria on 2026-10-29 in PR #79; the results follow the criteria.
 
 ## Problem
 
@@ -138,6 +138,17 @@ What this overturned: the 2026-10-22 failure was specific to `AVAudioEngine`, wh
    Baseline before ready mode (2026-10-26, PR #76 at `6c39c11`, MacBook Air, unit stopped between dictations): 0 % CPU idle; 20–30 % during dictation and 35–40 % at peak, the streaming decoder dominant. The unit delivers 93 buffers/s (512 frames at 48 kHz). Warm start to first buffer 0.07–0.09 s, cold first start after idle 0.19–0.21 s, a same-device rate-change restart 0.13–0.19 s; gap 0.00–0.08 s normal, 0.19–0.40 s with a restart. Same result with the built-in mic as default and with AirPods as default (captured on the built-in mic). The idle figure with the switch on is measured against the 0 % here.
 8. The delay from the press to the recording start is measured and recorded on device. A debug log line in the tap callback is read against the existing `State -> recording` line, over the AC 1 taps. If the delay is more than about 50 ms (a tenth of the pre-roll), revisit press timestamps.
 
+### Results (2026-10-29, on device)
+
+The maintainer ran the build of PR #79 (`f5eb5b9`, installed with `make install`) on a MacBook Air with the built-in microphone, reading a debug log stream of River's subsystem.
+
+- **AC 1: pass.** Two runs of 15 quick single-word taps. With the switch off every recording opened with 0.50 s of pre-roll (one with 0.32 s, pressed 0.3 s after the previous release, before the window had refilled); 14 of 15 typed text and one decoded as no speech. With the switch on the unit started at each press, 0.07 to 0.11 s before its first buffer, and no recording carried pre-roll. One switch-on tap shows the loss this spec fixes: "hello" begun just before the press typed "Oh.", because the "hell-" fell before the unit started. The maintainer found nothing else out of the ordinary. Misheard words came from diction and timing on very short taps. A paired run that starts each word deliberately before the press was not done.
+- **AC 3 (idle half) and AC 5: pass.** AirPods connected while River was idle: the default input became Bluetooth and capture stayed on the built-in microphone (device 78). Disconnecting them left capture on device 78. The next dictation captured with its pre-roll and no relaunch.
+- **AC 4: pass.** The switch turned on closed the unit, and turned off reopened it. The lock closed it and it reopened after the wake and unlock. At launch, a press while the model was loading was ignored, and ready mode began only when the model was ready, so the microphone stays closed during the first-run download. The onboarding half was not run on device, because it needs the permissions reset; unit tests cover it.
+- **AC 6: not observed.** The unit was running at every press, so the fallback never ran and its warning never appeared. The unit tests cover the path.
+- **AC 7: measured.** Ten idle minutes each, Activity Monitor: switch off (unit running) 0.8 to 1.1 % CPU and an energy impact of 0.8 to 1.0; switch on 0 % CPU and 0 energy impact, the baseline above. Ready mode costs about 1 % CPU at idle. The mitigation under Out of scope is not taken in PR #79.
+- **AC 8: pass.** Over 33 presses, `State -> recording` followed the tap callback's "Tap event received" by 1.1 ms on average and 10 ms at most (the two presses after a long idle). Under the 50 ms threshold, so press timestamps are not needed.
+
 ## Tests (swift-testing)
 
 **`MicrophoneReadiness`:** each input that must close the mic closes it:
@@ -185,7 +196,7 @@ All inputs favourable means ready.
 Two stacked PRs from `main`, so the capture path lands and is smoke-tested before anything depends on it:
 
 1. `feat/hal-capture`: `MicrophoneCapability` on the HAL unit, `InputDeviceSelection`, HAL listeners replacing the configuration-change notification, rule 3 and docs. Behaviour otherwise as before (unit starts on press). **Landed as PR #76 (2026-10-26)**, smoke-tested on device in five scenarios: the built-in mic; AirPods as default input and output with music; AirPods removed and reinserted mid-dictation; the built-in mic chosen with AirPods connected; a sample-rate change mid-dictation in both directions.
-2. `feat/warm-mic`, stacked on `fix/device-change-fanout` (PR #78): ready mode, pre-roll, `MicrophoneReadiness`, the setting, the toggle. AC 1 and AC 7/8 are measured on device once the current installed build has finished its field-log run, and recorded here.
+2. `feat/warm-mic`, stacked on `fix/device-change-fanout` (PR #78): ready mode, pre-roll, `MicrophoneReadiness`, the setting, the toggle. Opened as PR #79; the on-device criteria were run on 2026-10-29 and are recorded under Acceptance criteria.
 
 The capture-gap watchdog revisit (a separate, untracked draft) is independent. This spec keeps 0032's gap semantics unchanged: the gap starts at the first live buffer of the recording.
 
