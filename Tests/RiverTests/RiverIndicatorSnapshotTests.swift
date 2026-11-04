@@ -123,6 +123,60 @@ struct RiverIndicatorSnapshotTests {
         return GlassRenderer.load(library)
     }
 
+    // The frost forming over the strokes must read as one move: the strokes' clarity, their CIE L*
+    // distance from the ground beside them, never peaks on the way in or on the way out. The shader
+    // once aimed the ink at its cleared strength until the frost had formed, so the strokes
+    // brightened under the thin veil and dimmed as it thickened: about 6 L* in Light mode and 10 in
+    // Dark, seen on device as a pulse (2026-11-04). Silent, so no ripple moves the strokes.
+    @Test("the strokes' clarity never peaks as the frost forms or lifts, on light and dark appearance",
+          arguments: [ColorScheme.light, .dark])
+    func frostFormsInOneMove(scheme: ColorScheme) throws {
+        let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))
+            .appendingPathComponent("clarity-\(scheme == .dark ? "dark" : "light")")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard let glass = try Self.compileGlassLibrary(into: directory) else {
+            print("Skipping the clarity check: the shader did not compile (is Xcode's Metal compiler selected?)")
+            return
+        }
+        func render(_ view: some View) throws -> NSBitmapImageRep {
+            let renderer = ImageRenderer(content: view.frame(width: Constants.indicatorPanelWidth, height: Constants.indicatorPanelHeight))
+            renderer.scale = 2
+            return NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        }
+        func lightness(_ color: NSColor) -> Double {
+            let c = color.usingColorSpace(.sRGB)!
+            func linear(_ v: CGFloat) -> Double { let v = Double(v); return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+            let y = 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent) + 0.0722 * linear(c.blueComponent)
+            return y > 0.008856 ? 116 * pow(y, 1.0 / 3) - 16 : 903.3 * y
+        }
+        // The pixels inside the strokes and well clear of them, from the strokes drawn solid.
+        let mask = try render(Canvas { context, _ in context.fill(KawaMutedStrokes.path, with: .color(.black)) }.background(Color.white))
+        var strokes: [(Int, Int)] = [], ground: [(Int, Int)] = []
+        for y in 0..<mask.pixelsHigh {
+            for x in 0..<mask.pixelsWide {
+                let brightness = mask.colorAt(x: x, y: y)!.brightnessComponent
+                if brightness < 0.02 { strokes.append((x, y)) } else if brightness > 0.999 { ground.append((x, y)) }
+            }
+        }
+        let events = KawaIndicatorEvents(press: 0.3, audio: 0.32, release: 2.5, typed: 3.2)
+        func clarity(at t: Double) throws -> Double {
+            let channels = KawaIndicatorTimeline.channels(at: t, events: events, reduceMotion: false)
+            let frame = try render(KawaMarkFrame(channels: channels, time: t, reduceMotion: false, engine: KawaIndicatorEngine(seed: 0),
+                                                 glassLibrary: glass)
+                .background(Color(nsColor: Palette.HUD.for(scheme).tint))
+                .environment(\.colorScheme, scheme))
+            func mean(_ pixels: [(Int, Int)]) -> Double { pixels.map { lightness(frame.colorAt(x: $0.0, y: $0.1)!) }.reduce(0, +) / Double(pixels.count) }
+            return abs(mean(strokes) - mean(ground))
+        }
+        // Entry: from the frost starting until it has formed. Exit: from release
+        // until the layer is gone, before the strokes fade. One 8-bit step is about 0.6 L* on the
+        // dark tint, so a single frame may wobble that much; the old pulse was ten times larger.
+        let entry = try stride(from: 0.6, through: 1.3, by: 0.025).map(clarity)
+        let exit = try stride(from: 2.5, through: 3.2, by: 0.025).map(clarity)
+        #expect(entry.max()! - entry.last! < 1, "the strokes brighten, then dim, as the frost forms: \(entry)")
+        #expect(exit.max()! - exit.first! < 1, "the strokes brighten, then dim, as the frost lifts: \(exit)")
+    }
+
     // The whole panel content from a real `AppState`, for the stacking and message checks.
     @Test("write the full indicator with its message rectangle, 2x, on light and dark appearance")
     func writeStackSnapshots() throws {

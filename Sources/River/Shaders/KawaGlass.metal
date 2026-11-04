@@ -105,9 +105,13 @@ static float grain(float2 p) {
     col /= 12.0;
 
     // Ink: muted at first, rising with the frost to its strength, which is dimmer under the
-    // frost than where the voice has cleared it.
-    float target = mix(inkClear, inkFrost, form * (1.0 - open));
-    col *= half(muted + (target - muted) * inkUp);
+    // frost than where the voice has cleared it. The strokes as seen through the veil move
+    // straight from muted to that strength, so they never brighten under a thin veil and dim as
+    // it thickens. Aiming at the cleared ink until the frost had formed pulsed the entry and the
+    // exit (maintainer, on device, 2026-11-04).
+    float target = mix(inkFrost, inkClear, open);
+    float veiled = veilAmount * fro, veiledFormed = veilAmount * frost * (1.0 - open);
+    col *= half((muted + (target * (1.0 - veiledFormed) - muted) * inkUp) / (1.0 - veiled));
 
     // Overlays, premultiplied: the grained veil, then the light catching each ripple's slope,
     // and the shade on the far side.
