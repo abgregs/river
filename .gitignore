@@ -23,3 +23,10 @@ eval-*.txt
 # the real ones live on the GitHub Release — see scripts/make-dmg)
 *.dmg
 *.dmg.sha256
+
+# Local-only snapshot of the kawa identity drafts (every round, template and render), kept
+# beside the committed study as a reference; the committed pages are the record.
+docs/design/studies/kawa/local/
+# The Glass and surface study (round 1) stays local for now; its chosen values are in the code.
+docs/design/studies/kawa/build-glass.mjs
+docs/design/studies/kawa/kawa-glass*.html
