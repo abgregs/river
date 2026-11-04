@@ -85,9 +85,10 @@ final class RecordingIndicatorCoordinator {
         panel.orderFrontRegardless()
     }
 
-    // Delay the actual `orderOut` so the SwiftUI opacity fade completes on screen
-    // before the window is removed (planning 0002: "the fade must outlive the state
-    // change; animate-then-remove").
+    // Delay the actual `orderOut` so every exit completes on screen before the window is
+    // removed (planning 0002: "the fade must outlive the state change; animate-then-remove"):
+    // the surfaces' SwiftUI fades, and the mark's longer exit, which mirrors its entry
+    // (`KawaIndicatorTimeline.longestExit`).
     //
     // A panel that has been on screen is then replaced by a new one that hasn't
     // (planning 0030). When a full-screen Space closes, the window server can take a
@@ -107,8 +108,10 @@ final class RecordingIndicatorCoordinator {
             }
         }
         orderOutWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Constants.hudFadeSeconds, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.orderOutDelay, execute: work)
     }
+
+    static let orderOutDelay = max(Constants.hudFadeSeconds, KawaIndicatorTimeline.longestExit)
 
     private func makePanel() -> NSPanel {
         let panel = NonActivatingPanel(

@@ -27,6 +27,10 @@ final class AppState {
     /// Live input level (0...1) during recording (planning 0020). Zero at rest and
     /// whenever not recording, so the HUD meter sits still outside a capture.
     private(set) var inputLevel: Float = 0
+    /// Whether the microphone has delivered audio this recording: true from the first level
+    /// reading during `.recording` (the first buffer always publishes), false in any other state.
+    /// The indicator starts its voice layer on it, so a dead microphone never looks live.
+    private(set) var isAudioFlowing = false
     /// Whether the session has retained a transcript for recovery (planning 0019).
     /// Availability only — the retained transcript itself stays in the session.
     private(set) var hasLastTranscript: Bool = false
@@ -103,6 +107,7 @@ final class AppState {
             // The meter sits at rest outside a live recording; a late buffer must
             // not leave the last level frozen on screen after the cycle ends.
             inputLevel = 0
+            isAudioFlowing = false
         }
     }
 
@@ -142,6 +147,7 @@ final class AppState {
     func apply(inputLevel level: Float) {
         guard state == .recording else { return }
         inputLevel = level
+        isAudioFlowing = true
     }
 
     // internal for testability — drives `hasLastTranscript` from the session's

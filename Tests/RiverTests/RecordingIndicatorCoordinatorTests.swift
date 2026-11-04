@@ -25,7 +25,7 @@ struct RecordingIndicatorCoordinatorTests {
         #expect(first.isVisible)
 
         appState.apply(.idle)
-        try await Task.sleep(for: .seconds(Constants.hudFadeSeconds + 0.2))
+        try await Task.sleep(for: .seconds(RecordingIndicatorCoordinator.orderOutDelay + 0.2))
         let second = try #require(coordinator.panel)
         // A reused panel keeps whatever Spaces the window server last left it on;
         // after a full-screen Space closed, that can be none at all.
@@ -41,6 +41,27 @@ struct RecordingIndicatorCoordinatorTests {
         appState.apply(.idle)
     }
 
+    // The mark leaves in a sequence that mirrors its entry, longer than the surfaces' fade.
+    // Ordering the window out on the fade's clock would cut the strokes and panel off mid-exit.
+    @Test("the window stays up until the mark's exit has finished")
+    func outlivesMarkExit() async throws {
+        let appState = AppState()
+        appState.apply(modelLoadState: .ready)
+        let coordinator = RecordingIndicatorCoordinator(appState: appState)
+        coordinator.start()
+        let panel = try #require(coordinator.panel)
+        panel.alphaValue = 0
+        appState.apply(.recording)
+        try await waitForObservation()
+
+        appState.apply(.idle)
+        #expect(RecordingIndicatorCoordinator.orderOutDelay >= KawaIndicatorTimeline.longestExit)
+        try await Task.sleep(for: .seconds(Constants.hudFadeSeconds + 0.1))
+        #expect(panel.isVisible)
+        try await Task.sleep(for: .seconds(RecordingIndicatorCoordinator.orderOutDelay))
+        #expect(!panel.isVisible)
+    }
+
     @Test("a panel that was never shown is kept, so the first recording still fades in from a prepared panel")
     func keepsUnshownPanel() async throws {
         let appState = AppState()
@@ -49,7 +70,7 @@ struct RecordingIndicatorCoordinatorTests {
         coordinator.start()
         let first = try #require(coordinator.panel)
 
-        try await Task.sleep(for: .seconds(Constants.hudFadeSeconds + 0.2))
+        try await Task.sleep(for: .seconds(RecordingIndicatorCoordinator.orderOutDelay + 0.2))
         #expect(coordinator.panel === first)
     }
 
