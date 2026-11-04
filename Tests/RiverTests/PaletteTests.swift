@@ -45,6 +45,21 @@ struct PaletteTests {
         }
     }
 
+    // Glass's frost veils the strokes as it forms while their ink rises under it. A veil the tint
+    // moved toward the text color dims them part way, so they settle stronger than muted; a veil
+    // past the tint, the light near-white of 2026-11-04, washed them back to muted and left the
+    // frost unseen on the tint, so the entrance pulsed. One fraction in both appearances keeps
+    // light's entrance and exit the same as dark's.
+    @Test("Glass's veil is the tint moved toward the text color by the same fraction in each appearance")
+    func glassVeilMirrorsAcrossAppearances() {
+        func fraction(_ colors: Palette.HUD) -> [Double] {
+            zip(zip(channels(colors.glassVeil), channels(colors.tint)), channels(colors.text)).map { ($0.0 - $0.1) / ($1 - $0.1) }
+        }
+        let dark = fraction(.dark)
+        for value in dark + fraction(.light) { #expect(abs(value - dark[0]) < 0.01) }
+        #expect(dark[0] > 0 && dark[0] < 0.5)
+    }
+
     // The recording dot carries meaning, so it needs 3:1 against the bar behind it. The bar's
     // ground follows the wallpaper; these are modelled light and dark bars, each at the end of
     // its range nearest the red (a mid gray, and the lightest dark ground).

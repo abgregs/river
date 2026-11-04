@@ -115,7 +115,9 @@ The maintainer noted that the raised takes are the least reliable: they were spo
 
 **Menu bar dots (2026-11-04).** The maintainer judged the red and the muted dot good; the fade between them did not show, and was removed.
 
-**Not yet recorded on device:** AC 1 (the icon check), the dead-microphone half of AC 5, preparing (AC 6) and AC 7.
+**Smoke round 3 (2026-11-04), on the PR build.** The PR's checks passed: the icon and the Ready glyph (AC 1), a dead microphone (AC 5), Reduce Motion (AC 7) and the dots in both modes, with one bug. In Light mode the entrance pulsed: as the frost formed, the strokes went from muted to near full ink and back to muted, where Dark mode settles smoothly; the exit had the same flaw, less visibly. **Cause:** the shader aimed the ink at its cleared strength (0.9) until the frost had formed, so the strokes brightened under the thin frost and dimmed as it thickened. Measured as the strokes' CIE L* distance from the ground on rendered frames: muted 11.9, a peak of 20.3, settled 14.3 in Light mode; 26.0, 36.4 and 26.1 in Dark, which pulses too. The timing is the same in both modes. A first fix, mirroring the veil, left the pulse in place. **Fix:** the strokes as seen through the frost move straight between muted and their strength ([../design/kawa-identity.md](../design/kawa-identity.md)); peaks now 0.0 L* in Light and 0.2 in Dark. `frostFormsInOneMove`, in the env-gated snapshot suite, fails on the old shader in both modes. Separately, the light veil now mirrors the dark one, the tint moved 16 % toward the text color, so the light frost shows as it forms ([../design/color.md](../design/color.md)); `PaletteTests` holds the two to one fraction.
+
+**Not yet recorded on device:** preparing (AC 6), and the light entrance after the fix.
 
 ## Tests (swift-testing)
 
@@ -127,7 +129,7 @@ The maintainer noted that the raised takes are the least reliable: they were spo
 - **Glass's interface and voice (2026-11-04):** every shader argument matches `KawaGlass.metal`'s parameters by name, kind and place; drops pack at its stride; the ripple life and the light are the engine's and the surface's; Reduce Motion's clearing holds through release; each new cycle starts a fresh engine.
 - **Menu bar (2026-11-04):** the dot never touches the mark at 1x or 2x; it is the appearance's red while listening and the text color at 55 % while transcribing; each red holds 3:1 on a modelled bar.
 - **Plumbing:** `AppState.isAudioFlowing` follows the first level; the coordinator outlives the mark's exit. (The `indicatorStyle` default and round-trip test went with the setting, 2026-11-03.)
-- **Snapshots** (env-gated, [../conventions/test-harnesses.md](../conventions/test-harnesses.md)): Glass (both styles until 2026-11-03) at the study's filmstrip times plus soft, normal and loud speech, a dead microphone, preparing and Reduce Motion, in light and dark, fed through `KawaIndicatorVoice` at 60 fps and drawn through `KawaMarkPanelFace`, as the app does.
+- **Snapshots** (env-gated, [../conventions/test-harnesses.md](../conventions/test-harnesses.md)): Glass (both styles until 2026-11-03) at the study's filmstrip times plus soft, normal and loud speech, a dead microphone, preparing and Reduce Motion, in light and dark, fed through `KawaIndicatorVoice` at 60 fps and drawn through `KawaMarkPanelFace`, as the app does. `frostFormsInOneMove` asserts that the strokes' clarity never peaks as the frost forms or lifts, in both modes (2026-11-04).
 
 ## Docs updated in the same change
 

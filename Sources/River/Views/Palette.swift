@@ -69,15 +69,18 @@ enum Palette {
         let glassShade: NSColor
         let glassShadeAmount: Double
 
-        // Over the dark tint the veil is the tint lifted toward the ink, the light is the ink and
-        // the shade a deeper tint; over the light tint, a near-white veil, white light and an ink
-        // shade.
+        // The veil is the tint moved toward the text color, by one fraction in both appearances,
+        // so the frost dims the strokes alike in each: a near-white veil over the light tint washed
+        // them back to muted as it formed (2026-11-04). Over the dark tint the light is the ink and
+        // the shade a deeper tint; over the light tint, white light and an ink shade.
+        private static let veilFraction = 0.16
+
         static let dark = HUD(
             tint: deepCharcoal, text: ink,
             rimOpacities: Constants.hudDarkRimOpacities, farEdgeShadeOpacity: Constants.hudDarkFarEdgeShadeOpacity,
             sheenOpacity: Constants.hudDarkSheenOpacity, innerShadeOpacity: Constants.hudDarkInnerShadeOpacity,
             outerLineOpacity: Constants.hudDarkOuterLineOpacity,
-            glassVeil: mix(ink, 0.16, over: deepCharcoal),
+            glassVeil: mix(ink, veilFraction, over: deepCharcoal),
             glassHighlight: ink, glassHighlightAmount: Constants.kawaGlassDarkHighlightAmount,
             glassShade: deepCharcoal.blended(withFraction: 0.4, of: .black) ?? deepCharcoal,
             glassShadeAmount: Constants.kawaGlassDarkShadeAmount)
@@ -86,7 +89,7 @@ enum Palette {
             rimOpacities: Constants.hudLightRimOpacities, farEdgeShadeOpacity: Constants.hudLightFarEdgeShadeOpacity,
             sheenOpacity: Constants.hudLightSheenOpacity, innerShadeOpacity: Constants.hudLightInnerShadeOpacity,
             outerLineOpacity: Constants.hudLightOuterLineOpacity,
-            glassVeil: NSColor(srgbRed: 0.97, green: 0.975, blue: 0.98, alpha: 1),
+            glassVeil: mix(charcoal, veilFraction, over: mist),
             glassHighlight: .white, glassHighlightAmount: Constants.kawaGlassLightHighlightAmount,
             glassShade: charcoal, glassShadeAmount: Constants.kawaGlassLightShadeAmount)
 

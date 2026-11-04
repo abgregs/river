@@ -76,7 +76,8 @@ The mark is the HUD's text color at a few strengths ([kawa-identity.md](kawa-ide
 
 Glass's cleared ink carries "River hears you" and clears 3:1 on both tints. The frosted ink falls below 3:1 on the light tint; whether it needs a lift is open. The muted strokes, at the approved strength (maintainer, 2026-11-02), sit below it: the panel itself shows that River is on, and while the model prepares the label above it speaks. Whether the muted strokes need a lift under Increase Contrast is open. The stones' rule, solid and never below 3:1 with no Increase Contrast floor, no longer holds ([stones-identity.md](stones-identity.md); [pixel-identity.md](pixel-identity.md) recorded the earlier dimmed values).
 
-Glass's veil, the light its ripples catch, and the shade on their far side are `Palette.HUD` colors too: over the dark tint the veil is the tint lifted toward `ink`, the light is `ink` and the shade a deeper tint; over the light tint, a near-white veil, white light and a `charcoal` shade.
+Glass's veil, the light its ripples catch, and the shade on their far side are `Palette.HUD` colors too. The veil is the tint moved 16 % toward the text color in both appearances: `ink` over `deepCharcoal`, `charcoal` over `mist`. Over the dark tint the light is `ink` and the shade a deeper tint; over the light tint, white light and a `charcoal` shade.
+**Why:** revised 2026-11-04, after the on-device check of the light entrance. The light veil was a near-white past `mist`, so the frost never showed on the light tint: the strokes went from muted to frosted with nothing visibly forming over them, where the dark frost visibly forms. The entrance's pulse in both appearances was the ink, not the veil ([kawa-identity.md](kawa-identity.md)).
 
 ## Status colors
 
