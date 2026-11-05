@@ -196,13 +196,21 @@ struct KawaMarkPanelFace: View {
     let reduceMotion: Bool
     let engine: KawaIndicatorEngine
     var glassLibrary: ShaderLibrary? = GlassRenderer.library
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        KawaMarkFrame(channels: channels, time: time, reduceMotion: reduceMotion, engine: engine, glassLibrary: glassLibrary)
+        let face = KawaMarkFrame(channels: channels, time: time, reduceMotion: reduceMotion, engine: engine, glassLibrary: glassLibrary)
             .frame(width: Constants.indicatorPanelWidth, height: Constants.indicatorPanelHeight)
             .modifier(HUDSurface(cornerRadius: Constants.indicatorPanelCornerRadius))
-            .opacity(channels.panel)
-            .offset(y: channels.rise)
+        // The opacity reaches each of the surface's layers on its own, so where they stack, at
+        // the rim, the edge outlasts the fill. In Light mode the bright rim then stood out over a
+        // dark desktop as the panel left (maintainer, on device, 2026-11-04), so the light panel
+        // is flattened first and fades as one. Dark mode fades as it was approved.
+        Group {
+            if colorScheme == .light { face.compositingGroup() } else { face }
+        }
+        .opacity(channels.panel)
+        .offset(y: channels.rise)
     }
 }
 

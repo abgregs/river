@@ -687,3 +687,34 @@ struct KawaIndicatorVoiceTests {
         #expect(next.drops.isEmpty && next.level == 0)
     }
 }
+
+@Suite("Mark panel fade")
+@MainActor
+struct MarkPanelFadeTests {
+    // The panel's opacity reaches each layer of its surface on its own unless the panel is
+    // flattened first, and the rim stacks several. In Light mode the bright rim then stood out
+    // over a dark desktop as the panel left, as if the fill dropped out first (on device,
+    // 2026-11-04): 14 L* above the fill at a quarter opacity, against 3 L* at full.
+    @Test("the light panel's rim fades with its fill over a dark desktop")
+    func lightRimFadesWithFill() throws {
+        let margin = Constants.hudShadowMargin, width = Constants.indicatorPanelWidth, height = Constants.indicatorPanelHeight
+        let channels = KawaIndicatorChannels(panel: 0.25, rise: 0, muted: 0, form: 0, inkUp: 0, clearTime: 0, live: .infinity)
+        let view = KawaMarkPanelFace(channels: channels, time: 0, reduceMotion: false, engine: KawaIndicatorEngine(seed: 0), glassLibrary: nil)
+            .padding(margin)
+            .background(Color(white: 0.15))
+            .environment(\.colorScheme, .light)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        let image = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        func lightness(x: Double, y: Double) -> Double {
+            let c = image.colorAt(x: Int(x * 2), y: Int(y * 2))!.usingColorSpace(.sRGB)!
+            func linear(_ v: CGFloat) -> Double { let v = Double(v); return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+            let luminance = 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent) + 0.0722 * linear(c.blueComponent)
+            return luminance > 0.008856 ? 116 * pow(luminance, 1.0 / 3) - 16 : 903.3 * luminance
+        }
+        let fill = lightness(x: margin + width / 2, y: margin + height / 2)
+        // The rim along the top edge, brightest toward the lit corner.
+        let rim = stride(from: margin + 14, to: margin + width / 2, by: 0.5).map { lightness(x: $0, y: margin + 0.25) }.max()!
+        #expect(rim - fill < 3, "rim \(rim) against fill \(fill)")
+    }
+}
