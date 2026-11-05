@@ -63,6 +63,8 @@ A pending error overrides **only the `.idle` icon** with `exclamationmark.triang
 
 A notice belongs to the recording it describes. `apply(_:)` clears it both when a recording **starts** and when one ends. **Why:** `handleCancel` sends `.idle` and *then* the cancel notice, so clearing only on the way out cannot catch it, and the message rode into the next recording (planning [0017](../planning/0017_cancel-recording.md)'s canceled-notice bleed, seen on device 2026-09-17).
 
+`lastRecordingWasCanceled` records how the most recent recording ended. `apply(_:)` sets it as the state leaves `.recording`: only a cancel goes straight to `.idle`, and a stop always passes through `.processing`. **Why:** an observer of `state` runs once per turn, not once per change. An all-silence recording leaves `.processing` in the same turn it enters it (planning [0023](../planning/0023_silence-decoding-hardening.md)), so the sound cues ([0016](../planning/0016_recording-sound-cues.md)) see `.recording → .idle` for both a cancel and a silent stop. They read this flag to choose the cancel cue or the end cue.
+
 ## Related
 
 - [river-session.md](river-session.md) — the UI-agnostic cycle owner whose `state`/`errors` publishers this bridges

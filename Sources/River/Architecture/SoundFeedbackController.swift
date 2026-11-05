@@ -1,8 +1,8 @@
 import AppKit
 import Foundation
 
-/// Which audible cue to play. Begin fires on `.idle → .recording`;
-/// end fires on `.recording → .processing`; cancel fires on `.recording → .idle`.
+/// Which audible cue to play. Begin fires on `.idle → .recording`; end fires when a
+/// recording is stopped; cancel fires when one is canceled.
 enum SoundCue: Equatable {
     case begin
     case end
@@ -75,26 +75,34 @@ final class SoundFeedbackController {
     func handleStateChange() {
         let newState = appState.state
         defer { previousState = newState }
-        guard let cue = SoundFeedbackController.cue(from: previousState, to: newState) else { return }
+        guard let cue = SoundFeedbackController.cue(
+            from: previousState, to: newState, recordingWasCanceled: appState.lastRecordingWasCanceled
+        ) else { return }
         guard settings.value(for: Settings.playFeedbackSounds) else { return }
         player.play(cue)
     }
 
     // internal for testability — pure transition → cue mapping. Returns nil for
     // transitions that carry no sound (e.g. `.processing → .idle`).
-    static func cue(from: RiverState, to: RiverState) -> SoundCue? {
+    // `recordingWasCanceled` is `AppState.lastRecordingWasCanceled`; it matters only
+    // for `.recording → .idle`, the one transition a snapshot cannot tell apart.
+    static func cue(from: RiverState, to: RiverState, recordingWasCanceled: Bool) -> SoundCue? {
         switch (from, to) {
         case (.idle, .recording):       return .begin
         case (.recording, .processing): return .end
-        // A canceled recording (planning 0017) transitions `.recording → .idle`
-        // directly, never through `.processing`. It gets its OWN cue rather than
+        // Seen as `.recording → .idle` either way: a cancel goes there directly,
+        // and a stopped all-silence recording passes `.processing` within the same
+        // turn, before this observer runs (planning 0023). Silence was a stop, so
+        // it gets the end cue (0016 AC1: "an end cue on recording stop").
+        //
+        // A canceled recording (planning 0017) gets its OWN cue rather than
         // the end cue — the end cue means "speech captured, now transcribing,"
         // which a discard is not — and rather than silence, because 0016 exists
         // for the moment the user's eyes are on the text field rather than the
         // HUD, which is exactly when a discard needs confirming. The menu/HUD
         // "Recording canceled." notice remains; this is additive, not a
         // replacement.
-        case (.recording, .idle):       return .cancel
+        case (.recording, .idle):       return recordingWasCanceled ? .cancel : .end
         default:                        return nil
         }
     }
