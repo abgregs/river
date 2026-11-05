@@ -101,6 +101,14 @@ enum Constants {
     // room for a busy target, and adds about 0.2 s per 1,000 characters (planning 0031).
     static let keystrokeChunkGapSeconds: Double = 0.004
 
+    // Accessibility messaging timeout for the focused-element read before typing
+    // (planning 0001). The read runs on the main thread, and the system default lets an
+    // app that does not answer block it for several seconds per call. A healthy app
+    // answers in milliseconds. A read that times out classifies as `.unknown` and typing
+    // proceeds, so a value that is too short loses only the guard, never the dictation.
+    // The read is at most three AX calls, so a hung app costs at most 1.5 s.
+    static let focusedElementReadTimeoutSeconds: Float = 0.5
+
     // Silence-trim energy gate: a 16 kHz window whose RMS is below this (linear
     // amplitude, not dBFS) is treated as silence and dropped from the ends of the
     // recording. Internal tunable, not a setting — the user shouldn't reason about
