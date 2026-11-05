@@ -12,6 +12,7 @@ The tap is created **`.listenOnly`** (least privilege): the callback only observ
 - The thread is created with `qualityOfService = .userInteractive` and `name = "com.river.eventtap"`.
 - Events from the tap are delivered to consumers on the main actor (via `Task { @MainActor in ... }`) before they touch shared state.
 - `startTap` reports the tap started only from inside the running loop (a block queued with `CFRunLoopPerformBlock` before `CFRunLoopRun`), and hands the tap and its run loop back through that same report. **Why:** each run of a run loop starts with its stop flag cleared, so a `CFRunLoopStop` sent before `CFRunLoopRun` begins is lost; reporting earlier let a quick `stopTap` miss, and the stop then waited for the thread forever (a hung test run, 2026-10-27).
+- The tap reaches its capability only through a context that holds it weakly, and the thread holds the context, never the capability. Freeing the capability stops the run loop from its `deinit`, so the thread ends with it. **Why:** most tests start a tap and never stop it. The thread used to keep its capability, and the tap thread, alive for the rest of the run, and the callback recovered the capability from an unretained pointer, so a modifier key pressed during `swift test` could hang the run.
 
 ## Why
 

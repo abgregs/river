@@ -61,6 +61,7 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `HotkeyManager.handle(_:)` / `bindEventStream()` — interpretation and Combine binding seams, exercised by feeding synthetic `TapEvent`s
 - `InputMonitoringCapability.decode(_:)` — pure `CGEvent` → `TapEvent` decoder, `nonisolated` so the C tap callback can call it without crossing an actor boundary
 - `InputMonitoringCapability.publishForTest(_:)` — pushes a synthetic `TapEvent` into the stream, bypassing the real tap (which requires an Input Monitoring grant on the running process)
+- `InputMonitoringCapability.tapThread` — read-only, so `InputMonitoringLifecycleTests` can hold the tap thread and see it end once the capability is freed
 - `RecordingIndicatorCoordinator.panel` — read-only, so `RecordingIndicatorCoordinatorTests` can check which real panel is up across a show and fade (planning 0030); the tests make each panel transparent so nothing flashes on screen
 - `MicrophoneCapability.publishForTest(_:)` — pushes a synthetic `AVAudioPCMBuffer` into the stream, bypassing the capture unit
 - `MicrophoneCapability.skipEngineForTesting` — flag that keeps `startEngine()` from opening a capture unit (the capability still marks itself listening, so `handleDeviceChange` counts). Required because the test runner usually *does* have Microphone permission, so without it the capture unit starts and silent audio races with `publishForTest` buffers (M4 got this for free because `tapCreate` returns nil without IM grant; mic capture has no natural skip)
@@ -162,7 +163,7 @@ If a test requires a permission or external resource and can't be made hermetic,
 func endToEndPaste() { ... }
 ```
 
-`--filter` matches type and function names, not `@Test` display names. A run in a terminal that holds Input Monitoring starts real event taps, and tests leave their tap threads running; a modifier key pressed during the run reaches a capability that is already freed and can hang the run. Keep hands off modifier keys while `swift test` runs (tracked under Open items in [../planning/_index.md](../planning/_index.md)).
+`--filter` matches type and function names, not `@Test` display names. A run in a terminal that holds Input Monitoring starts real event taps. Most session tests never stop theirs; freeing the capability stops its tap thread, and an event already on its way to the main actor finds the capability gone and is dropped (`InputMonitoringLifecycleTests`, [../architecture/threading-invariant.md](../architecture/threading-invariant.md)). Before that, the threads kept running and a modifier key pressed during the run could hang it.
 
 ## Harnesses and generated assets
 

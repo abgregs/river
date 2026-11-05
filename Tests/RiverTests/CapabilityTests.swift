@@ -417,6 +417,28 @@ struct InputMonitoringLifecycleTests {
             try #require(didStop, "stopTap did not return within 2 s of startTap")
         }
     }
+
+    // Most session tests start the tap and never stop it. The tap used to reach its
+    // capability through a raw pointer and keep running after the test freed it, so a
+    // modifier key pressed during `swift test` reached freed memory and hung the run.
+    // Freeing the capability must now end its tap thread. Like the test above, this
+    // passes trivially where `tapCreate` returns nil.
+    @MainActor
+    @Test("freeing the capability ends its tap thread")
+    func freeingTheCapabilityEndsTheThread() async throws {
+        var capability: InputMonitoringCapability? = InputMonitoringCapability()
+        await capability?.startTap()
+        guard let thread = capability?.tapThread else { return }
+        weak var freed = capability
+        capability = nil
+        #expect(freed == nil, "the running tap still holds its capability")
+
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !thread.isFinished, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(thread.isFinished, "the tap thread outlived its capability")
+    }
 }
 
 @Suite("MicrophoneCapability device change")

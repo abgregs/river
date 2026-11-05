@@ -26,7 +26,9 @@ final class InputMonitoringCapability: Capability {
     fileprivate let eventSubject = PassthroughSubject<TapEvent, Never>()
     fileprivate var tap: CFMachPort?
     private var tapRunLoop: CFRunLoop?
-    private var tapThread: Thread?
+    // Read-only for testability — so a test can hold the thread and see it end once
+    // the capability is freed.
+    private(set) var tapThread: Thread?
 
     var status: AnyPublisher<CapabilityStatus, Never> { subject.eraseToAnyPublisher() }
     var currentStatus: CapabilityStatus { subject.value }
@@ -38,6 +40,14 @@ final class InputMonitoringCapability: Capability {
 
     init() {
         subject = CurrentValueSubject(Self.readStatus())
+    }
+
+    // A capability freed with its tap still running (a test that never calls `stopTap`)
+    // stops the loop here, so the tap thread ends with the capability instead of
+    // outliving it. Both calls are safe from any thread; the thread is not joined.
+    deinit {
+        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+        if let tapRunLoop { CFRunLoopStop(tapRunLoop) }
     }
 
     func recheck() async {
@@ -65,15 +75,17 @@ final class InputMonitoringCapability: Capability {
     func startTap() async {
         guard tapThread == nil else { return }
         let tapLogger = self.tapLogger
+        let context = TapContext(capability: self)
         let started: RunningTap? = await withCheckedContinuation { (cont: CheckedContinuation<RunningTap?, Never>) in
             var resumed = false
             let resume: (RunningTap?) -> Void = { result in
                 if !resumed { resumed = true; cont.resume(returning: result) }
             }
-            let thread = Thread { [weak self] in
-                guard let self else { resume(nil); return }
+            // The thread holds the context, never the capability, so the capability can
+            // still be freed while the loop runs, and its `deinit` stops the loop.
+            let thread = Thread {
                 let mask: CGEventMask = 1 << CGEventType.flagsChanged.rawValue
-                let userInfo = Unmanaged.passUnretained(self).toOpaque()
+                let userInfo = Unmanaged.passUnretained(context).toOpaque()
                 guard let tap = CGEvent.tapCreate(
                     tap: .cgSessionEventTap,
                     place: .headInsertEventTap,
@@ -107,7 +119,9 @@ final class InputMonitoringCapability: Capability {
                 CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue) {
                     resume(RunningTap(tap: tap, runLoop: runLoop))
                 }
-                CFRunLoopRun()  // blocks the thread until CFRunLoopStop
+                // Blocks the thread until CFRunLoopStop. The context lives at least as long
+                // as the loop, so the callback's `userInfo` always points at a live context.
+                withExtendedLifetime(context) { CFRunLoopRun() }
             }
             thread.qualityOfService = .userInteractive
             thread.name = "com.river.eventtap"
@@ -192,7 +206,22 @@ private struct RunningTap: @unchecked Sendable {
     let runLoop: CFRunLoop
 }
 
-// File-level C callback: captures nothing, recovers the capability via the
+// What the tap callback reaches through `userInfo`. It holds the capability weakly, so
+// an event that reaches the main actor after the capability is freed finds nil instead
+// of freed memory. The callback used to recover the capability from an unretained
+// pointer, valid only because the thread kept the capability alive for the whole run,
+// so every test that never stopped its tap left a live tap behind it.
+// `@unchecked Sendable`: the one field is set in `init` and only read after, and weak
+// references load atomically.
+private final class TapContext: @unchecked Sendable {
+    weak var capability: InputMonitoringCapability?
+
+    init(capability: InputMonitoringCapability) {
+        self.capability = capability
+    }
+}
+
+// File-level C callback: captures nothing, recovers the `TapContext` via the
 // `userInfo` pointer, and hops to the main actor before touching `eventSubject`
 // (threading-invariant.md). Re-enables the tap on `.tapDisabled*` so a timeout
 // or user-input disablement self-heals without a manager round trip.
@@ -205,10 +234,11 @@ private func handleTapCallback(
     guard let userInfo else { return Unmanaged.passUnretained(event) }
     if let decoded = InputMonitoringCapability.decode(event) {
         tapEventLogger.debug("Tap event received")
-        let ptrInt = UInt(bitPattern: userInfo)
+        // Taken here, while the loop runs and so the context is alive; the task then
+        // keeps it alive until it reads the capability.
+        let context = Unmanaged<TapContext>.fromOpaque(userInfo).takeUnretainedValue()
         Task { @MainActor in
-            guard let ptr = UnsafeMutableRawPointer(bitPattern: ptrInt) else { return }
-            let capability = Unmanaged<InputMonitoringCapability>.fromOpaque(ptr).takeUnretainedValue()
+            guard let capability = context.capability else { return }
             if case .tapDisabled = decoded, let tap = capability.tap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
