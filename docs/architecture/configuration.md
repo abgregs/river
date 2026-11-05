@@ -14,7 +14,7 @@ Two stores. Different responsibilities. Mixing them is the bug.
 
 ## Build-variant compile flags (neither store)
 
-A third category is neither a `Constants` value nor a `SettingKey`: the `RIVER_RELEASE` Swift compile condition, set only by the [release pipeline](release-pipeline.md) (`make … SWIFT_FLAGS="-Xswiftc -DRIVER_RELEASE"`). It selects between **build variants** rather than configuring behavior at runtime — its only use today is compiling out the dev-only onboarding Skip button in notarized builds (see [permissions.md](permissions.md)). Reach for a compile flag only when the difference is genuinely build-time (local/self-signed vs. notarized) and must *not* be a runtime toggle; user-facing behavior still belongs in `SettingsStore`.
+A third category is neither a `Constants` value nor a `SettingKey`: the `RIVER_RELEASE` Swift compile condition, set only by the [release pipeline](release-pipeline.md) (`make … SWIFT_FLAGS="-Xswiftc -DRIVER_RELEASE"`). It selects between **build variants** rather than configuring behavior at runtime — it compiles out the dev-only onboarding Skip button in notarized builds (see [permissions.md](permissions.md)), and it is the only condition under which `UpdaterManager` starts Sparkle (see [distribution.md](distribution.md) "Updates"). Reach for a compile flag only when the difference is genuinely build-time (local/self-signed vs. notarized) and must *not* be a runtime toggle; user-facing behavior still belongs in `SettingsStore`.
 
 ## `SettingsStore` — runtime configuration
 

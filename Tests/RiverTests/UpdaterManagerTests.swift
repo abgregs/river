@@ -30,3 +30,36 @@ struct UpdaterManagerTests {
         #expect(UpdaterManager.isUsableEdDSAPublicKey(Data(count: 32).base64EncodedString()))
     }
 }
+
+@Suite("UpdaterManager release gate")
+struct UpdaterManagerReleaseGateTests {
+    // A dev build has CFBundleVersion 1, so a running updater sees the public
+    // release as newer and silently replaces the dev build in /Applications.
+    // Only a release build may start the updater, even with a real key.
+
+    private let realKey = Data(count: 32).base64EncodedString()
+
+    @Test("a dev build never starts the updater, even with a real key")
+    func devBuildDoesNotStart() {
+        #expect(!UpdaterManager.shouldStart(isReleaseBuild: false, publicKey: realKey))
+    }
+
+    @Test("a release build with a real key starts the updater")
+    func releaseBuildStarts() {
+        #expect(UpdaterManager.shouldStart(isReleaseBuild: true, publicKey: realKey))
+    }
+
+    @Test("a release build with the placeholder key does not start")
+    func releaseBuildWithPlaceholderDoesNotStart() {
+        #expect(!UpdaterManager.shouldStart(isReleaseBuild: true, publicKey: "REPLACE_WITH_SPARKLE_ED_PUBLIC_KEY"))
+    }
+
+    @Test("the compile condition sets isReleaseBuild")
+    func compileConditionSetsFlag() {
+        #if RIVER_RELEASE
+        #expect(UpdaterManager.isReleaseBuild)
+        #else
+        #expect(!UpdaterManager.isReleaseBuild)
+        #endif
+    }
+}

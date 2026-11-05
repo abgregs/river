@@ -12,11 +12,29 @@ final class UpdaterManager {
     private var controller: SPUStandardUpdaterController?
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "update")
 
-    /// Whether this build carries a usable EdDSA public key. Read straight from
-    /// the bundle, so it is known before `start()` runs and the menu can decide
-    /// whether to offer "Check for Updates…" at all.
-    static var isConfigured: Bool {
-        isUsableEdDSAPublicKey(Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String)
+    /// Whether the release pipeline compiled this binary (`RIVER_RELEASE`). A
+    /// local `make install` build has `CFBundleVersion` 1, so a running updater
+    /// would see the public release as newer and replace the dev build with it.
+    nonisolated static let isReleaseBuild: Bool = {
+        #if RIVER_RELEASE
+        true
+        #else
+        false
+        #endif
+    }()
+
+    /// Whether the updater may start in this build. Known before `start()` runs,
+    /// so the menu can decide whether to offer "Check for Updates…" at all.
+    static var isEnabled: Bool {
+        shouldStart(
+            isReleaseBuild: isReleaseBuild,
+            publicKey: Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+        )
+    }
+
+    // internal for testability — only a release build with a usable key starts.
+    nonisolated static func shouldStart(isReleaseBuild: Bool, publicKey: String?) -> Bool {
+        isReleaseBuild && isUsableEdDSAPublicKey(publicKey)
     }
 
     // internal for testability — an Ed25519 public key is 32 bytes, base64-encoded.
@@ -34,11 +52,17 @@ final class UpdaterManager {
     /// keeping the second network behaviour transparent (core-feature.md item 6).
     func start() {
         guard controller == nil else { return }
+        // A dev build never starts the updater: no scheduled checks, no feed
+        // requests, and no chance to overwrite itself with the public release.
+        guard Self.isReleaseBuild else {
+            logger.info("Sparkle not started: dev build (compiled without RIVER_RELEASE)")
+            return
+        }
         // Sparkle validates SUPublicEDKey on start and shows a blocking "updater
         // failed to start" alert when it is invalid. If the key is missing or a
         // placeholder (a malformed bundle, or a fork without its own keypair),
         // don't start at all: no alert, no feed requests.
-        guard Self.isConfigured else {
+        guard Self.isEnabled else {
             logger.info("Sparkle not started: SUPublicEDKey is missing or a placeholder")
             return
         }
