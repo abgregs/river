@@ -396,11 +396,18 @@ enum Constants {
     static let kawaGlassFrostedInk: Double = 0.45
     static let kawaGlassClearInk: Double = 0.9
     // How strongly a ripple's light and its shade on the far side show, per appearance
-    // (`Palette.HUD` holds their colors).
+    // (`Palette.HUD` holds their colors). Light's are set so its ripples measure as strong as
+    // Dark's: the shader mixes in linear light, where a fraction of charcoal over the light tint
+    // shows about half as strongly as the same fraction of ink over the dark one (2026-11-04).
     static let kawaGlassDarkHighlightAmount: Double = 0.55
     static let kawaGlassDarkShadeAmount: Double = 0.5
-    static let kawaGlassLightHighlightAmount: Double = 0.75
-    static let kawaGlassLightShadeAmount: Double = 0.22
+    static let kawaGlassLightHighlightAmount: Double = 0.95
+    static let kawaGlassLightShadeAmount: Double = 0.15
+    // How much charcoal Light's ripple light holds, mixed over the light tint, and how far its
+    // far side is blended toward white: full charcoal and a 40 % blend read too dark and too
+    // strong on device (maintainer, 2026-11-04).
+    static let kawaGlassLightHighlightInk: Double = 0.65
+    static let kawaGlassLightShadeWhite: Double = 0.2
     // The frost forms evenly and the ink rises under it over these, together.
     static let kawaGlassFormSeconds: Double = 0.6
     static let kawaGlassInkSeconds: Double = 0.6

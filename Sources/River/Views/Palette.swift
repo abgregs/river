@@ -69,10 +69,12 @@ enum Palette {
         let glassShade: NSColor
         let glassShadeAmount: Double
 
-        // The veil is the tint moved toward the text color, by one fraction in both appearances,
-        // so the frost dims the strokes alike in each: a near-white veil over the light tint washed
-        // them back to muted as it formed (2026-11-04). Over the dark tint the light is the ink and
-        // the shade a deeper tint; over the light tint, white light and an ink shade.
+        // Glass mirrors between the appearances. The veil is the tint moved toward the text
+        // color, by one fraction in both, so the frost shows as it forms over either tint: the
+        // near-white light veil never showed (2026-11-04). A ripple's lit side moves toward the
+        // text color and its far side to the tint pushed away from it, so light's ripples show
+        // as Dark's do, in charcoal: a white light on the near-white tint barely showed. Both of
+        // light's sides are lifted toward the tint, which read too dark at full strength.
         private static let veilFraction = 0.16
 
         static let dark = HUD(
@@ -90,8 +92,10 @@ enum Palette {
             sheenOpacity: Constants.hudLightSheenOpacity, innerShadeOpacity: Constants.hudLightInnerShadeOpacity,
             outerLineOpacity: Constants.hudLightOuterLineOpacity,
             glassVeil: mix(charcoal, veilFraction, over: mist),
-            glassHighlight: .white, glassHighlightAmount: Constants.kawaGlassLightHighlightAmount,
-            glassShade: charcoal, glassShadeAmount: Constants.kawaGlassLightShadeAmount)
+            glassHighlight: mix(charcoal, Constants.kawaGlassLightHighlightInk, over: mist),
+            glassHighlightAmount: Constants.kawaGlassLightHighlightAmount,
+            glassShade: mist.blended(withFraction: Constants.kawaGlassLightShadeWhite, of: .white) ?? mist,
+            glassShadeAmount: Constants.kawaGlassLightShadeAmount)
 
         static func `for`(_ scheme: ColorScheme) -> HUD { scheme == .dark ? dark : light }
     }

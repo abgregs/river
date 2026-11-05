@@ -45,19 +45,28 @@ struct PaletteTests {
         }
     }
 
-    // Glass's frost veils the strokes as it forms while their ink rises under it. A veil the tint
-    // moved toward the text color dims them part way, so they settle stronger than muted; a veil
-    // past the tint, the light near-white of 2026-11-04, washed them back to muted and left the
-    // frost unseen on the tint, so the entrance pulsed. One fraction in both appearances keeps
-    // light's entrance and exit the same as dark's.
-    @Test("Glass's veil is the tint moved toward the text color by the same fraction in each appearance")
-    func glassVeilMirrorsAcrossAppearances() {
-        func fraction(_ colors: Palette.HUD) -> [Double] {
-            zip(zip(channels(colors.glassVeil), channels(colors.tint)), channels(colors.text)).map { ($0.0 - $0.1) / ($1 - $0.1) }
+    // Glass mirrors between the appearances, so Light shows what Dark shows. The veil is the tint
+    // moved toward the text color: the light near-white of 2026-11-04 sat past the tint and never
+    // showed as the frost formed. A ripple's lit side is the text color and its far side the tint
+    // pushed away from it: light's white light barely showed on the near-white tint.
+    @Test("Glass's veil and ripple colors mirror between the appearances")
+    func glassMirrorsAcrossAppearances() {
+        // How far `color` sits from the tint toward `pole`, per channel.
+        func fraction(_ color: NSColor, of colors: Palette.HUD, toward pole: NSColor) -> [Double] {
+            zip(zip(channels(color), channels(colors.tint)), channels(pole)).map { ($0.0 - $0.1) / ($1 - $0.1) }
         }
-        let dark = fraction(.dark)
-        for value in dark + fraction(.light) { #expect(abs(value - dark[0]) < 0.01) }
-        #expect(dark[0] > 0 && dark[0] < 0.5)
+        let veil = fraction(Palette.HUD.dark.glassVeil, of: .dark, toward: Palette.HUD.dark.text)
+        #expect(veil[0] > 0 && veil[0] < 0.5)
+        for value in veil + fraction(Palette.HUD.light.glassVeil, of: .light, toward: Palette.HUD.light.text) {
+            #expect(abs(value - veil[0]) < 0.01)
+        }
+        // The far side is a blend (`NSColor.blended`, which does not mix in sRGB), so it is held
+        // to its side of the tint, away from the text color, rather than to one sRGB fraction.
+        for (colors, pole) in [(Palette.HUD.dark, NSColor.black), (.light, .white)] {
+            for value in fraction(colors.glassShade, of: colors, toward: pole) { #expect(value > 0.1 && value < 1) }
+            // Light's is lifted toward the tint (`kawaGlassLightHighlightInk`), but stays nearer the text.
+            for value in fraction(colors.glassHighlight, of: colors, toward: colors.text) { #expect(value > 0.5 && value <= 1.0001) }
+        }
     }
 
     // The recording dot carries meaning, so it needs 3:1 against the bar behind it. The bar's
