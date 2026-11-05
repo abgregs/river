@@ -38,6 +38,11 @@ enum TranscriptionError: Error, LocalizedError {
     /// 0002/0018/0020 feedback surface can later explain "nothing was pasted"
     /// without conflating it with a real decode failure.
     case noSpeechDetected
+    /// A tokenizer folder WhisperKit could load from has `tokenizer.json` and
+    /// `config.json` but no `tokenizer_config.json` naming a `tokenizer_class`.
+    /// Loading it would crash the app, so the load fails with this instead.
+    /// `folderName` is the folder's last path component only (no user path).
+    case unusableTokenizerConfig(folderName: String)
 
     var errorDescription: String? {
         switch self {
@@ -49,6 +54,8 @@ enum TranscriptionError: Error, LocalizedError {
             return "Transcription returned no text."
         case .noSpeechDetected:
             return "No speech was detected in the recording."
+        case .unusableTokenizerConfig(let folderName):
+            return "The tokenizer files in \(folderName) are incomplete: tokenizer_config.json is missing or names no tokenizer class."
         }
     }
 }
@@ -129,6 +136,41 @@ final class TranscriptionManager {
             || fm.fileExists(atPath: dir.appendingPathComponent("AudioEncoder.mlpackage").path)
     }
 
+    // internal for testability — throws `.unusableTokenizerConfig` when a folder
+    // WhisperKit could load the tokenizer from would crash the app. WhisperKit 0.18.0
+    // takes the first of these with a `tokenizer.json`: {base}/models/openai/whisper-{variant},
+    // {base}, the model folder, {model folder}/models/openai/whisper-{variant}. If that
+    // folder has a `config.json` but its `tokenizer_config.json` is missing or names no
+    // `tokenizer_class`, swift-transformers looks for a fallback config in its `Hub`
+    // resource bundle, which River.app does not carry, and the missing bundle is a
+    // `fatalError`. A tokenizer download cut off before `tokenizer_config.json` leaves
+    // that state. The variant is known only after the CoreML load, so every
+    // `whisper-*` folder is checked. Pure file reads, no network.
+    static func checkTokenizerFiles(downloadBase: URL, modelName: String) throws {
+        let fm = FileManager.default
+        let model = modelFolder(downloadBase: downloadBase, modelName: modelName)
+        func tokenizerRepos(under base: URL) -> [URL] {
+            let dir = base.appendingPathComponent("models/openai", isDirectory: true)
+            return (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        }
+        let candidates = tokenizerRepos(under: downloadBase) + [downloadBase, model] + tokenizerRepos(under: model)
+        for folder in candidates
+        where fm.fileExists(atPath: folder.appendingPathComponent("tokenizer.json").path)
+            && fm.fileExists(atPath: folder.appendingPathComponent("config.json").path)
+            && !namesTokenizerClass(folder.appendingPathComponent("tokenizer_config.json")) {
+            throw TranscriptionError.unusableTokenizerConfig(folderName: folder.lastPathComponent)
+        }
+    }
+
+    // swift-transformers reads the key as `tokenizerClass` or `tokenizer_class` and
+    // needs a string value; anything else sends it to the fallback lookup.
+    private static func namesTokenizerClass(_ tokenizerConfig: URL) -> Bool {
+        guard let data = try? Data(contentsOf: tokenizerConfig),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return false }
+        return (json["tokenizerClass"] ?? json["tokenizer_class"]) is String
+    }
+
     /// Idempotent. AppDelegate kicks this off as fire-and-forget at launch.
     /// Coalesces concurrent callers onto the same `Task` so a second `loadModel`
     /// while the first is in-flight doesn't start a second download.
@@ -153,6 +195,9 @@ final class TranscriptionManager {
         let task = Task<WhisperKit, Error> { [weak self] in
             // Download under Application Support (planning 0010).
             try FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+            // An unusable tokenizer folder fails the load here rather than crash it.
+            // Outside the cached branch's catch: a fresh download does not repair it.
+            try Self.checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
             // A cached model loads straight from its folder with downloading off: no
             // network, so a warm launch is quick and works offline. WhisperKit's
             // download path asks Hugging Face for the file list first, even when every
@@ -187,6 +232,8 @@ final class TranscriptionManager {
             if let self, self.loadGeneration == generation {
                 self.emitLoadState(.loading)
             }
+            // Again after the download, which can add files to the model folder.
+            try Self.checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
             try await wk.loadModels()
             return wk
         }
