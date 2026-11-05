@@ -297,6 +297,21 @@ struct FocusedTargetClassificationTests {
         capability.focusedTargetForTesting = .nonEditable
         #expect(capability.classifyFocusedTarget() == .nonEditable)
     }
+
+    @MainActor
+    @Test("a focused-element read that times out classifies as .unknown (fail open)")
+    func readTimeoutFailsOpen() {
+        // An app that does not answer the AX read in time returns
+        // kAXErrorCannotComplete. The guard must still let typing proceed:
+        // a hung app is not evidence that the focused element is non-editable.
+        let capability = AccessibilityCapability()
+        capability.setStatusForTesting(.granted)
+        // Control: the seam is reached, so a readable non-editable role blocks.
+        capability.focusedElementReadForTesting = { ("AXButton", nil, nil) }
+        #expect(capability.classifyFocusedTarget() == .nonEditable)
+        capability.focusedElementReadForTesting = { (nil, nil, .cannotComplete) }
+        #expect(capability.classifyFocusedTarget() == .unknown)
+    }
 }
 
 @Suite("Accessibility recheck reads OS trust only")

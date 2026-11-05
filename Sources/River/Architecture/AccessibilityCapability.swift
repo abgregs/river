@@ -5,11 +5,11 @@ import CoreGraphics
 import Foundation
 import os
 
-/// Classification of the system-wide focused UI element, read before posting
-/// the synthesized ⌘V (the paste guard, planning 0001). `.unknown` must fail
-/// OPEN: AX role reporting is unreliable in web/Electron content, and blocking
-/// on ambiguity would regress working dictation. Only a clearly non-editable
-/// role skips the paste.
+/// Classification of the system-wide focused UI element, read before typing
+/// the transcript as synthesized keystrokes (the insertion guard, planning
+/// 0001). `.unknown` must fail OPEN: AX role reporting is unreliable in
+/// web/Electron content, and blocking on ambiguity would regress working
+/// dictation. Only a clearly non-editable role skips insertion.
 enum FocusedTargetClassification: Equatable {
     case editable
     case nonEditable
@@ -75,6 +75,12 @@ final class AccessibilityCapability: Capability {
     // Mirrors `skipPostForTesting`.
     var focusedTargetForTesting: FocusedTargetClassification?
 
+    // internal for testability — replaces the real focused-element read in
+    // `classifyFocusedTarget()` so tests can pin what the OS reports, including
+    // an AX error such as a messaging timeout. `nil` in production. Mirrors
+    // `trustReadForTesting`.
+    var focusedElementReadForTesting: (() -> (role: String?, subrole: String?, error: AXError?))?
+
     var status: AnyPublisher<CapabilityStatus, Never> { subject.eraseToAnyPublisher() }
     var currentStatus: CapabilityStatus { subject.value }
 
@@ -118,9 +124,9 @@ final class AccessibilityCapability: Capability {
     /// Read-only focused-element role check for the paste guard (planning
     /// 0001). Reads the system-wide focused UI element's role/subrole and
     /// classifies it against the editable-role tables. This is read-only AX —
-    /// it only gates whether the clipboard + ⌘V paste is attempted and never
-    /// becomes the insertion mechanism (the "No AX-API path" decision in
-    /// river-pipeline.md rejected AX *writes*).
+    /// it only gates whether keystroke injection runs and never becomes the
+    /// insertion mechanism (the "No AX-API path" decision in river-pipeline.md
+    /// rejected AX *writes*).
     func classifyFocusedTarget() -> FocusedTargetClassification {
         if let focusedTargetForTesting { return focusedTargetForTesting }
         // Without trust the AX read fails anyway (kAXErrorAPIDisabled) — fail
@@ -129,11 +135,14 @@ final class AccessibilityCapability: Capability {
         // Under the test flag, never touch the real AX read — the host's
         // live focus would leak into the classification.
         if skipPostForTesting { return .unknown }
-        let (role, subrole) = readFocusedElementRole()
+        let (role, subrole, error) = focusedElementReadForTesting?() ?? readFocusedElementRole()
         let classification = Self.classifyFocusedTarget(role: role, subrole: subrole)
         switch classification {
         case .unknown:
-            insertLogger.info("Paste guard: focused-element role unknown (role=\(role ?? "nil", privacy: .public), subrole=\(subrole ?? "nil", privacy: .public)) — failing open.")
+            // `error` is the AX error that stopped the read, if any:
+            // kAXErrorCannotComplete (-25204) is a timeout from an app that
+            // did not answer in time.
+            insertLogger.info("Paste guard: focused-element role unknown (role=\(role ?? "nil", privacy: .public), subrole=\(subrole ?? "nil", privacy: .public), axError=\(error.map { String($0.rawValue) } ?? "none", privacy: .public)) — failing open.")
         case .nonEditable:
             insertLogger.info("Paste guard: focused element is not editable (role=\(role ?? "nil", privacy: .public)) — skipping paste.")
         case .editable:
@@ -190,21 +199,29 @@ final class AccessibilityCapability: Capability {
 
     // The OS-call leaf of the paste guard (untestable in CI — reading another
     // app's focused element requires a real Accessibility grant). Any AX error
-    // collapses to nil so classification falls through to `.unknown`.
-    private func readFocusedElementRole() -> (role: String?, subrole: String?) {
+    // collapses to nil so classification falls through to `.unknown`; the
+    // focused-element read's error is returned for the log.
+    private func readFocusedElementRole() -> (role: String?, subrole: String?, error: AXError?) {
+        let systemWide = AXUIElementCreateSystemWide()
+        // On the system-wide element the timeout is this process's global
+        // default (AXUIElement.h), so it also bounds the role and subrole
+        // reads on the returned element. A timeout returns
+        // kAXErrorCannotComplete.
+        AXUIElementSetMessagingTimeout(systemWide, Constants.focusedElementReadTimeoutSeconds)
         var focused: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(
-            AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &focused
+            systemWide, kAXFocusedUIElementAttribute as CFString, &focused
         )
         guard result == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else {
-            return (nil, nil)
+            return (nil, nil, result == .success ? nil : result)
         }
         // Safe: the CFGetTypeID guard above proves the CF type; `as!` on a CF
         // ref is a bitcast, so the type-id check is the real validation.
         let element = focused as! AXUIElement
         return (
             copyStringAttribute(kAXRoleAttribute, of: element),
-            copyStringAttribute(kAXSubroleAttribute, of: element)
+            copyStringAttribute(kAXSubroleAttribute, of: element),
+            nil
         )
     }
 
