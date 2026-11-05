@@ -354,6 +354,83 @@ struct TranscriptionManagerShortClipTests {
     }
 }
 
+@Suite("TranscriptionManager tokenizer file check")
+struct TranscriptionManagerTokenizerCheckTests {
+    // A tokenizer folder with `tokenizer.json` and `config.json` but no usable
+    // `tokenizer_config.json` sends swift-transformers to its `Hub` resource bundle,
+    // which River.app lacks: a `fatalError`, so every launch would crash. The check
+    // must turn that folder into a typed load error before WhisperKit reads it, and
+    // must pass the complete folders a normal download leaves.
+
+    private static let model = "openai_whisper-small.en"
+
+    private static func makeBase() throws -> URL {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("river-tokenizer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base
+    }
+
+    // Writes a tokenizer folder where WhisperKit's Hub search looks first.
+    private static func writeTokenizer(in base: URL, tokenizerConfig: String?) throws {
+        let dir = base.appendingPathComponent("models/openai/whisper-small.en", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(#"{"model_type": "whisper"}"#.utf8).write(to: dir.appendingPathComponent("config.json"))
+        try Data(#"{"model": {}}"#.utf8).write(to: dir.appendingPathComponent("tokenizer.json"))
+        if let tokenizerConfig {
+            try Data(tokenizerConfig.utf8).write(to: dir.appendingPathComponent("tokenizer_config.json"))
+        }
+    }
+
+    private static func isUnusableTokenizerError(_ error: any Error) -> Bool {
+        if case .unusableTokenizerConfig(folderName: "whisper-small.en") = error as? TranscriptionError { return true }
+        return false
+    }
+
+    @MainActor
+    @Test("a missing tokenizer_config.json throws a typed load error")
+    func missingTokenizerConfigThrows() throws {
+        let base = try Self.makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        try Self.writeTokenizer(in: base, tokenizerConfig: nil)
+        #expect(performing: {
+            try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+        }, throws: Self.isUnusableTokenizerError)
+    }
+
+    @MainActor
+    @Test("a tokenizer_config.json without a tokenizer_class string throws", arguments: [
+        #"{"chat_template": "x"}"#,
+        #"{"tokenizer_class": null}"#,
+        "not json",
+    ])
+    func tokenizerConfigWithoutClassThrows(tokenizerConfig: String) throws {
+        let base = try Self.makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        try Self.writeTokenizer(in: base, tokenizerConfig: tokenizerConfig)
+        #expect(performing: {
+            try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+        }, throws: Self.isUnusableTokenizerError)
+    }
+
+    @MainActor
+    @Test("a complete tokenizer folder passes")
+    func completeTokenizerPasses() throws {
+        let base = try Self.makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        try Self.writeTokenizer(in: base, tokenizerConfig: #"{"tokenizer_class": "WhisperTokenizer"}"#)
+        try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+    }
+
+    @MainActor
+    @Test("no tokenizer on disk passes, so WhisperKit can fetch it")
+    func emptyCachePasses() throws {
+        let base = try Self.makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+    }
+}
+
 /// Manual offline-load check (planning 0004 follow-up) — env-gated like the eval
 /// harness, because it needs a model River has already downloaded. A cached model
 /// must load with no network: warm launches used to ask Hugging Face for the file
