@@ -4,20 +4,21 @@ The project status log and the maintainer's queue; kept current by the maintaine
 
 ## Status
 
-**`v0.3.0` planned: twelve PRs, landed one at a time** (2026-11-04). The maintainer set the scope of `v0.3.0`, the first release since `v0.2.1`, in a planning session after PR #82 merged. It ships the unshipped work on `main` plus a custom settings panel, a recorded dictation shortcut, the live text hidden by default, and a first-run model choice. The PRs, in order:
+**`v0.3.0` planned: thirteen PRs, landed one at a time** (2026-11-04). The maintainer set the scope of `v0.3.0`, the first release since `v0.2.1`, in a planning session after PR #82 merged. It ships the unshipped work on `main` plus a custom settings panel, a recorded dictation shortcut, the live text hidden by default, and a first-run model choice. The PRs, in order:
 
 1. `fix/test-run-hangs`: no test leaves an event-tap thread running; the capture warmup test waits on an injected clock, not a real sleep.
 2. `fix/ax-messaging-timeout`: a short messaging timeout on the focused-element read, a timeout counting as unknown so typing proceeds ([0001](0001_focused-element-paste-guard.md)); the stale ⌘V comments corrected.
 3. `fix/model-load-guards`: WhisperKit pinned to 0.18.0; a model without a usable tokenizer config fails with a load error, not Hub's `fatalError`.
 4. `fix/silence-cue`: an all-silent recording no longer plays the cancel cue.
 5. `chore/sparkle-release-only`: Sparkle starts only under `RIVER_RELEASE`, so a `make install` build is not replaced by the public release.
-6. `docs/settings-and-shortcuts`: one docs PR with a new settings spec (every setting with its key, default, section and label; how the panel opens; the old Settings window and "Transcribe while I speak" removed), the shortcut research note, and spec 0034 (live text and microphone settings, committed with this PR) amended for this release (hidden by default, a shortcut only; the hover menu and the click toggle are cut).
+6. `docs/settings-and-shortcuts`: one docs PR with a new settings spec (every setting with its key, default, section and label; how the panel opens; the old Settings window and "Transcribe while I speak" removed), the shortcut research note, and spec 0034 (live text and microphone settings, committed with this PR) amended for this release (hidden by default, a shortcut only; the hover menu and the click toggle are cut). The spec lists every shortcut: the dictation key; paste last transcription and show or hide the live text, each with a default the user can record over or clear; and cancel, the fn tap plus Esc while recording (maintainer, 2026-11-04).
 7. `feat/settings-panel`: the settings panel on `HUDSurface`, after design rounds for its layout, icons and size.
 8. `feat/shortcut-recorder`: the user records the dictation key instead of picking it from a list. The recorder sets only which key; Activation Mode stays its own setting, and every recorded key works in all three modes.
-9. `feat/live-text-visibility`: the live text hidden by default, first run included, shown or hidden with the shortcut; no preview decodes while hidden; the streaming toggle removed once the real-speech parity replay passes.
-10. `feat/preparing-treatment`: the preparing and downloading look in the panel, after a design round ([0035](0035_kawa-identity-and-indicator-styles.md) AC 6 moves here).
-11. `feat/onboarding-model-step`: nothing downloads until the user picks a model in onboarding.
-12. `docs/release-v0.3.0`: the CHANGELOG since `v0.2.1` with its known issues, this log, and the Open items.
+9. `feat/paste-last-shortcut`: a shortcut types the last transcription again at the cursor, through the same insertion path, so the clipboard is never touched; Esc cancels a recording, registered only while recording, if the research in PR 6 confirms it needs no event-tap change. The menu's "Copy Last Transcription" stays.
+10. `feat/live-text-visibility`: the live text hidden by default, first run included, shown or hidden with the shortcut; no preview decodes while hidden; the streaming toggle removed once the real-speech parity replay passes.
+11. `feat/preparing-treatment`: the preparing and downloading look in the panel, after a design round ([0035](0035_kawa-identity-and-indicator-styles.md) AC 6 moves here).
+12. `feat/onboarding-model-step`: nothing downloads until the user picks a model in onboarding.
+13. `docs/release-v0.3.0`: the CHANGELOG since `v0.2.1` with its known issues, this log, and the Open items.
 
 PRs 1 to 5 are independent and are worked in parallel. The number of release candidates is decided at the end. Deferred past `v0.3.0`: the two core dictation bugs of 2026-10-28, the 0035 contrast items, and the live text's panel controls (Open items in [_index.md](_index.md)).
 
