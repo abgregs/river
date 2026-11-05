@@ -37,6 +37,13 @@ final class AppState {
     /// The current recording's streaming transcript (0025 prototype), shown in the
     /// transcript panel. Empty when streaming is off or nothing has been decoded yet.
     private(set) var liveTranscript: String = ""
+    /// Whether the most recent recording was canceled (planning 0017) rather than stopped.
+    /// Set as the state leaves `.recording`, which `apply(_:)` sees one change at a time:
+    /// only a cancel goes straight to `.idle`, and a stop always passes through
+    /// `.processing`. An observer that reads `state` later can miss that `.processing`,
+    /// since an all-silence recording leaves it in the same turn (planning 0023), so it
+    /// reads this instead of inferring a cancel from `.recording → .idle`.
+    private(set) var lastRecordingWasCanceled = false
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private let scheduleToastDismiss: ToastScheduler
@@ -90,6 +97,9 @@ final class AppState {
     // last cycle's failure over a new one. A recording-context notice is tied to
     // the live recording, so it clears the moment that recording ends.
     func apply(_ newState: RiverState) {
+        if state == .recording && newState != .recording {
+            lastRecordingWasCanceled = newState == .idle
+        }
         state = newState
         if newState == .recording {
             errorMessage = nil

@@ -289,6 +289,35 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("an all-silence recording plays the end cue, and a cancel the cancel cue, through AppState")
+    func allSilenceRecordingPlaysEndCue() async throws {
+        // The silence branch never suspends after `.processing`, so the sound cues
+        // observe `.recording → .idle`, the same snapshot pair as a cancel. Silence is
+        // a stopped recording (planning 0023), so it must cue end; the cancel cue stays
+        // with a real cancel (planning 0017).
+        let env = makeSession()
+        let appState = AppState()
+        appState.bind(to: env.session)
+        env.store.setValue(true, for: Settings.playFeedbackSounds)
+        let player = FakeSoundFeedbackPlayer()
+        let controller = SoundFeedbackController(appState: appState, settings: env.store, player: player)
+        controller.start()
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeBuffer())  // silent zeros → trims to empty
+        await env.session.handleDeactivate()
+        await waitUntil { player.cues.count == 2 }
+        #expect(player.cues == [.begin, .end])
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.session.handleCancel()
+        await waitUntil { player.cues.count == 4 }
+        #expect(player.cues == [.begin, .end, .begin, .cancel])
+    }
+
+    @MainActor
     @Test("pending reconfiguration applies on return to .idle")
     func pendingReconfigurationAppliesOnReturnToIdle() async throws {
         // The M3 deferral slot closes here: a settings change during a cycle is

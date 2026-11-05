@@ -71,6 +71,24 @@ struct AppStateTests {
     }
 
     @MainActor
+    @Test("a recording that goes straight to idle is recorded as canceled; one that passes processing is not")
+    func lastRecordingWasCanceledTracksHowTheRecordingEnded() {
+        // The sound cues read this to tell a cancel from a stopped all-silence
+        // recording, whose `.processing` can pass before they observe the state
+        // (planning 0023). Each recording overwrites the previous answer, so a cancel
+        // cannot leak its cancel cue into the next, stopped recording.
+        let appState = AppState()
+        appState.apply(.recording)
+        appState.apply(.idle)                     // canceled (planning 0017)
+        #expect(appState.lastRecordingWasCanceled)
+
+        appState.apply(.recording)
+        appState.apply(.processing)               // stopped
+        appState.apply(.idle)
+        #expect(!appState.lastRecordingWasCanceled)
+    }
+
+    @MainActor
     @Test("bind(to:) wires state, notices, and errors from a real session end to end")
     func bindWiresAllThreeChannels() async throws {
         // `apply(_:)` is unit-tested above, but nothing asserts `bind` actually
