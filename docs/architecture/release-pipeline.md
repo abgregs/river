@@ -27,7 +27,8 @@ On a `v*` tag push, on an Apple Silicon runner:
    and checks the identifier, the icon and glyphs, the stripped binary, and the
    arm64-only Sparkle. Passes
    `SWIFT_FLAGS=-Xswiftc -DRIVER_RELEASE` so the dev-only Skip button is
-   compiled out (see [permissions.md](permissions.md)).
+   compiled out (see [permissions.md](permissions.md)) and the Sparkle updater
+   starts. A build without the flag never starts it.
 5. Notarizes the app via `notarytool --wait`, staples it.
 6. Packages the DMG ([`scripts/make-dmg`](../../scripts/make-dmg)), signs,
    notarizes, and staples it.

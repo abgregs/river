@@ -52,6 +52,10 @@ If the Homebrew cask is installed, `/Applications/River.app` belongs to it. Remo
 
 Each `make install` re-signs with the self-signed "River Dev" identity. The Accessibility row survives a same-identity rebuild, and the app should launch reading `.granted`. The Grant → Refresh round-trip that earlier builds needed on every launch came from the app's own delivery probe racing an asynchronous event post, not from TCC; the probe is removed (planning 0012 section 6). If a rebuild launches reading not granted now, treat it as a real finding and check the logs before pressing Refresh.
 
+### A dev build does not update itself
+
+A `make install` build is compiled without `RIVER_RELEASE`, so it never starts the Sparkle updater: no scheduled checks, no feed requests, and no "Check for Updates…" menu item. Before this gate, Sparkle saw the public release as newer than the dev build's `CFBundleVersion` 1 and replaced `/Applications/River.app` with it within minutes of launch. The `defaults write com.river.app SUEnableAutomaticChecks -bool false` workaround is no longer needed; a value already written is harmless to a dev build, but it does carry over to a release build installed on the same machine. To undo it, run `defaults delete com.river.app SUEnableAutomaticChecks`.
+
 ### Switching between a dev build and a release build costs the Accessibility grant
 
 A `make install` build is signed with the self-signed "River Dev" identity; a build installed from the release DMG is signed with Developer ID. Same bundle identifier, different code signature — and TCC keys each grant to the identifier **plus** the signature's designated requirement, so it treats them as two different apps.

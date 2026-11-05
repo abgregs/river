@@ -146,9 +146,10 @@ private struct MenuBarContent: View {
         Button("Copy Last Transcription", action: copyLastTranscript)
             .disabled(!appState.hasLastTranscript)
         Divider()
-        // Hidden until a real Sparkle key is configured — a menu item that does
-        // nothing, or raises an error alert, is worse than no item.
-        if UpdaterManager.isConfigured {
+        // Hidden in dev builds and until a real Sparkle key is configured — a
+        // menu item that does nothing, or raises an error alert, is worse than
+        // no item.
+        if UpdaterManager.isEnabled {
             Button("Check for Updates…", action: checkForUpdates)
         }
         Button("Permissions…", action: openPermissions)
