@@ -42,14 +42,16 @@ struct AudioCaptureCycleTests {
         // Engine-warmup race: a short tap that releases right when the engine
         // first produces audio. The wait inside stopRecording is what saves this
         // case. We model it by running stopRecording in a child Task and publishing
-        // the buffer from the test's own timeline. The wait is long here because the
-        // shipped 300 ms is wall-clock time: a loaded CI runner oversleeping the
-        // 100 ms below by 200 ms failed this test with `.noAudioCaptured`. The wait
-        // ends at the first buffer, so the test still takes about 100 ms;
-        // stopRecordingThrowsWhenSilent covers the shipped window expiring. The clock
-        // is frozen for the same reason: with suites running in parallel the 100 ms
-        // below has measured 1.8 s, which the capture-gap check would report as lost
-        // audio. That check has its own suite; this test is about the warmup wait.
+        // the buffer only once it is waiting: the yield below lets the task run on the
+        // main actor up to its first poll, so without the wait it would already have
+        // thrown `.noAudioCaptured`. The test sleeps for nothing, so a loaded runner
+        // cannot push the buffer past the window (a real 100 ms sleep inside the shipped
+        // 300 ms once failed this way in CI); the wait is long so the deadline stays out
+        // of play, and it ends at the first buffer. stopRecordingThrowsWhenSilent covers
+        // the shipped window expiring. The clock is frozen for the same reason: with
+        // suites running in parallel the wall time has measured 1.8 s, which the
+        // capture-gap check would report as lost audio. That check has its own suite;
+        // this test is about the warmup wait.
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone, now: { 100 })
@@ -58,7 +60,7 @@ struct AudioCaptureCycleTests {
         let stopTask = Task { @MainActor in
             try await manager.stopRecording(warmupWait: 10)
         }
-        try await Task.sleep(nanoseconds: 100_000_000)
+        await Task.yield()
         // Voiced buffer: stopRecording trims silence, so zeros would trim to empty.
         microphone.publishForTest(makeSineBuffer(milliseconds: 50, frequency: 440, amplitude: 0.5))
 
