@@ -5,8 +5,8 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// Renders the app icon — the stones r in ink on a charcoal squircle, from the same shapes
-/// as the panel and the menu bar (docs/design/stones-identity.md). The checked-in script:
+/// Renders the app icon: 川 in ink on a charcoal squircle, from the same shapes as the panel
+/// and the menu bar (docs/design/kawa-identity.md). The checked-in script:
 /// `RIVER_WRITE_ICON=1 swift test --filter AppIcon` regenerates `River.icns`; the normal
 /// suite checks the shipped file still carries every size macOS asks for.
 enum AppIconRenderer {
@@ -38,15 +38,10 @@ enum AppIconRenderer {
         context.setFillColor(Palette.charcoal.cgColor)
         context.fillPath()
 
-        // The r at rest in ink, centered on its own shape: the icon carries no cycle state.
-        let height = side * Constants.appIconMarkFraction
-        let box = StoneMark.boundingBox(StoneMark.pieces)
-        let width = box.width * height / box.height
-        let transform = StoneMark.transform(fitting: box, into: CGRect(x: (Constants.appIconCanvas - width) / 2,
-                                                                       y: (Constants.appIconCanvas - height) / 2,
-                                                                       width: width, height: height))
+        // 川 in ink, centred halfway like every surface: the icon carries no cycle state.
+        let centre = CGPoint(x: Constants.appIconCanvas / 2, y: Constants.appIconCanvas / 2)
         context.setFillColor(Palette.ink.cgColor)
-        for piece in StoneMark.pieces { context.addPath(StoneMark.path(piece, transform: transform)) }
+        context.addPath(KawaMark.path(transform: KawaMark.transform(height: side * Constants.appIconMarkFraction, centredAt: centre)))
         context.fillPath()
 
         guard let image = context.makeImage() else { throw ContextUnavailable() }
@@ -109,7 +104,28 @@ struct AppIconTests {
         let first = try #require(inkColumns.first), last = try #require(inkColumns.last)
         #expect(Double(first) > squircleStart + 8)
         #expect(Double(last) < squircleEnd - 8)
-        // Centered: the ink's margins match on both sides.
-        #expect(abs((Double(first) - squircleStart) - (squircleEnd - Double(last))) < 2)
+    }
+
+    // Centred halfway, as on every surface: the point halfway between the ink's box centre and
+    // its centroid sits on the icon's centre, on both axes. Box centring alone left the tall
+    // right strokes off to the right (docs/design/kawa-identity.md).
+    @Test("the mark is centred halfway between its box and its ink")
+    func markIsCentredHalfway() throws {
+        let pixels = 256
+        let rep = NSBitmapImageRep(cgImage: try AppIconRenderer.render(pixels: pixels))
+        var minX = Double(pixels), maxX = 0.0, minY = Double(pixels), maxY = 0.0
+        var sum = 0.0, sumX = 0.0, sumY = 0.0
+        for y in 0..<pixels {
+            for x in 0..<pixels {
+                let ink = rep.colorAt(x: x, y: y)?.brightnessComponent ?? 0
+                guard ink > 0.5 else { continue }
+                minX = min(minX, Double(x)); maxX = max(maxX, Double(x))
+                minY = min(minY, Double(y)); maxY = max(maxY, Double(y))
+                sum += 1; sumX += Double(x); sumY += Double(y)
+            }
+        }
+        let halfwayX = ((minX + maxX) / 2 + sumX / sum) / 2, halfwayY = ((minY + maxY) / 2 + sumY / sum) / 2
+        #expect(abs(halfwayX + 0.5 - Double(pixels) / 2) < 1.5)
+        #expect(abs(halfwayY + 0.5 - Double(pixels) / 2) < 1.5)
     }
 }

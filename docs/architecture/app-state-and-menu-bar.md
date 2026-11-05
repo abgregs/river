@@ -36,7 +36,7 @@ The icon/label contract is a pure function, extracted from the view so it's unit
 
 ```swift
 enum MenuBarPresentation {
-    enum Glyph: String, CaseIterable { case ready, active }   // asset names
+    enum Glyph: CaseIterable { case ready, listening, transcribing; var assetName: String }
     enum Icon: Equatable { case glyph(Glyph); case symbol(String) }
     struct Visual: Equatable { let icon: Icon; let statusLabel: String }
     static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState) -> Visual
@@ -47,19 +47,19 @@ Mapping (per [../requirements/core-feature.md](../requirements/core-feature.md) 
 
 | State | Icon | Label |
 |---|---|---|
-| `.idle` | the r (`MenuBarReady`, template) | Ready |
-| `.recording` | the bars (`MenuBarActive`, template) | Recording... |
-| `.processing` | the bars (`MenuBarActive`, template) | Processing... |
+| `.idle` | 川 (`MenuBarReady`, template) | Ready |
+| `.recording` | 川 with the red recording dot (`MenuBarWithDot`, the dot drawn by River) | Recording... |
+| `.processing` | 川 with the dot in muted ink (`MenuBarWithDot`, the dot drawn by River) | Processing... |
 
-The cycle states draw River's own mark ([../design/stones-identity.md](../design/stones-identity.md), replacing planning 0029's pixel r): Ready is the r (`MenuBarReady`) and Listening and Transcribing share one image of the bars (`MenuBarActive`), both template images the system tints. **Why:** the menu bar takes its look from the wallpaper, not from Light or Dark mode, so only a template image follows it; a colored image per mode measured about 1.5:1 on a tinted bar (on device, 2026-10-15; [../design/color.md](../design/color.md)). Every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
+The cycle states draw River's own mark: Ready is 川 (`MenuBarReady`, [../design/kawa-identity.md](../design/kawa-identity.md), replacing the stones r since 2026-11-02), Listening adds the red recording dot, and Transcribing turns it to muted ink (2026-11-04). The PNGs are template images the system tints. **Why:** the menu bar takes its look from the wallpaper, not from Light or Dark mode, so only a template image follows it; a colored image per mode measured about 1.5:1 on a tinted bar (on device, 2026-10-15; [../design/color.md](../design/color.md)). A template image cannot carry the red, so Listening and Transcribing are drawn when the bar draws them (`MenuBarGlyphImages.withDot`): the mark in the bar's text color and the dot in the red for the bar's own appearance, or in the text color at `menuBarMutedDotOpacity`, so both still follow the wallpaper. Every other state keeps an SF Symbol — `exclamationmark.triangle` for an error or a failed load, `arrow.down.circle` while downloading, `ellipsis` while loading. **Why:** the cycle states are the identity's glyph set, so they are assets, not symbols; the exceptional states are system vocabulary and stay system-drawn.
 
 A pending error overrides **only the `.idle` icon** with `exclamationmark.triangle`; an active state's icon always wins (errors surface at end-of-cycle, so a live `.recording`/`.processing` glyph is never masked by a stale error). The label always reflects the raw state.
 
-`RiverApp`'s `MenuBarExtra` label and content both render from `MenuBarPresentation.visual(state:hasError:modelLoadState:)` — the label switching on `Icon` to draw either a template `NSImage` or an SF Symbol — with the error message and any recording-context `notice` shown as extra menu lines when present.
+`RiverApp`'s `MenuBarExtra` label and content both render from `MenuBarPresentation.visual(state:hasError:modelLoadState:)` — the label switching on `Icon` to draw either a glyph image (`MenuBarGlyphImages`: the template PNG, or the PNG with its dot drawn over it) or an SF Symbol — with the error message and any recording-context `notice` shown as extra menu lines when present.
 
 ## The seam is reusable
 
-`AppState` is the shared observation seam: the recording indicator ([../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md), rebuilt as the river indicator in [0028](../planning/0028_identity-implementation.md)) is just another observer of the same `state`, `toast`, `notice`, `inputLevel`, `modelLoadState`, and `liveTranscript` — not a new path into the session. The mark, its messages, and the streaming transcript render as one bottom-anchored stack in one window ([../decisions/0003-floating-ui-one-window-stack.md](../decisions/0003-floating-ui-one-window-stack.md)).
+`AppState` is the shared observation seam: the recording indicator ([../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md), rebuilt as the river indicator in [0028](../planning/0028_identity-implementation.md)) is just another observer of the same `state`, `toast`, `notice`, `inputLevel`, `isAudioFlowing`, `modelLoadState`, and `liveTranscript` — not a new path into the session. `isAudioFlowing` turns true on the first level reading of a recording and false in any other state; the mark starts its voice layer on it, so a dead microphone never looks live ([../design/kawa-identity.md](../design/kawa-identity.md)). The mark, its messages, and the streaming transcript render as one bottom-anchored stack in one window ([../decisions/0003-floating-ui-one-window-stack.md](../decisions/0003-floating-ui-one-window-stack.md)).
 
 A notice belongs to the recording it describes. `apply(_:)` clears it both when a recording **starts** and when one ends. **Why:** `handleCancel` sends `.idle` and *then* the cancel notice, so clearing only on the way out cannot catch it, and the message rode into the next recording (planning [0017](../planning/0017_cancel-recording.md)'s canceled-notice bleed, seen on device 2026-09-17).
 

@@ -218,10 +218,8 @@ enum Constants {
     // Dock icons, so the mark sits just above the Dock like one more tile.
     static let hudBottomMargin: Double = 8
 
-    // River's mark: three stones inspired by a bold lowercase r that morph into level bars
-    // (docs/design/stones-identity.md). Every number was tuned on the study page
-    // (docs/design/studies/stones-motion.html) and is ported as is. The shapes themselves live in
-    // `StoneMark`, in their own design units.
+    // River's mark, 川 (docs/design/kawa-identity.md). The shapes live in `KawaMark`, in their
+    // own design units.
 
     // The mark is drawn 30 pt tall, centered in a 34 pt square, so it keeps 9 pt of room above
     // and below inside the panel (filling the square read as crammed, maintainer 2026-10-14).
@@ -236,36 +234,65 @@ enum Constants {
     // About a Dock icon's corner at this size, so the mark reads as one more tile.
     static let indicatorPanelCornerRadius: Double = 11
 
-    // The HUD surface every floating shape shares, matched to a native dark HUD window
-    // (Raycast Notes, measured 2026-10-09): the desktop behind blurred, a tint over it, a light
-    // inner hairline that brightens along the top edge, and a dark outer line that holds the
-    // edge over light desktops. It follows Light and Dark mode (`Palette.HUD`). Reduce
-    // Transparency swaps blur and tint for the tint, opaque. Dark, measured on screen
-    // 2026-10-09: over black the ground is #131315 (Raycast's is #151719); over a white page,
-    // the lightest ground the blur produces, ink holds 9.65:1 and the accent 7.27:1.
-    static let hudDarkTintOpacity: Double = 0.72
-    static let hudDarkHairlineOpacity: Double = 0.2
-    static let hudDarkHairlineTopOpacity: Double = 0.35
-    static let hudDarkOuterLineOpacity: Double = 0.8
-    // Light, 2026-10-15: at 0.72 a light panel over a black desktop leaves the deep accent at
-    // 2.13:1; 0.88 holds 3:1 with the blur ignored, the worst case. A white hairline only shows
-    // as sheen on a light tint, and a black outer line at the dark value would read as a frame.
-    // The lines are first values, to tune on device.
-    static let hudLightTintOpacity: Double = 0.88
-    static let hudLightHairlineOpacity: Double = 0.5
-    static let hudLightHairlineTopOpacity: Double = 0.9
-    static let hudLightOuterLineOpacity: Double = 0.12
-    // Secondary text on the HUD (a toast's hint, the notice): the text color at this opacity.
-    // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface and 3.71:1
-    // on the dark one's lightest measured ground. With the blur ignored, the worst case, the
-    // light surface needs 0.7 and the dark 0.8 for 4.5:1; one value keeps both above it.
-    static let hudSecondaryTextOpacity: Double = 0.8
-    static let hudHairlineWidth: Double = 1
+    // The HUD surface every floating shape shares: an opaque tint (`Palette.HUD`, following
+    // Light and Dark mode) and a lit glass edge (below). Opaque since 2026-11-04 (maintainer): a
+    // crisp, high-contrast panel that looks the same over any desktop, so nothing behind it
+    // changes how the mark or the text reads.
+    // The lit edge, chosen on the Glass study (docs/design/studies/kawa/kawa-glass-r1.html,
+    // maintainer, 2026-11-03): the panel is a thin sheet lit from the upper left, at the angle
+    // Glass lights its ripples from, so the mark and its panel share one light. A 1 pt rim inside
+    // the edge is brightest at that corner and dies away along the edges into a shade at the far
+    // corner; a sheen falls across the tint from the same corner; the far edges carry a soft
+    // shade inside; a dark outer line holds the edge over light desktops. The edge lies over the
+    // content, so text and the frost never cover it.
+    //
+    // The light's direction in CSS degrees (0 points up, 90 right), as the study draws it.
+    static let hudLightAngle: Double = 147
+    // Each appearance's opacities (below) scale by these: edge light, far-edge shade, sheen.
+    static let hudEdgeLight: Double = 1.5
+    static let hudFarEdgeShade: Double = 1.2
+    static let hudSheen: Double = 1.0
+    // Along the light, the rim is bright at the first stop and fades through the next two; the
+    // shade is at its end. The sheen is gone by `hudSheenReach`.
+    static let hudRimStops: [Double] = [0, 0.26, 0.58]
+    static let hudSheenReach: Double = 0.52
+    static let hudRimWidth: Double = 1
     static let hudOuterLineWidth: Double = 0.5
-    // One soft shadow, drawn outside the edge only: the blur hides whatever lies beneath it.
-    static let hudShadowRadius: Double = 18
+    // The inner shade: the outside of the edge moved toward the light and blurred, so it falls
+    // inside the far edges only.
+    static let hudInnerShadeOffsetX: Double = -2
+    static let hudInnerShadeOffsetY: Double = -3
+    static let hudInnerShadeRadius: Double = 3
+    // Dark: the rim's three stops, the far-edge shade, the sheen, the inner shade, the outer line.
+    static let hudDarkRimOpacities: [Double] = [0.62, 0.22, 0.05]
+    static let hudDarkFarEdgeShadeOpacity: Double = 0.4
+    static let hudDarkSheenOpacity: Double = 0.085
+    static let hudDarkInnerShadeOpacity: Double = 0.3
+    static let hudDarkOuterLineOpacity: Double = 0.6
+    // Light: white light only shows on the light tint near full strength, so the rim and sheen
+    // run brighter and the shades lighter; a black outer line at the dark value would read as a
+    // frame.
+    static let hudLightRimOpacities: [Double] = [1, 0.75, 0.35]
+    static let hudLightFarEdgeShadeOpacity: Double = 0.1
+    static let hudLightSheenOpacity: Double = 0.5
+    static let hudLightInnerShadeOpacity: Double = 0.07
+    static let hudLightOuterLineOpacity: Double = 0.14
+    // Two shadows, drawn outside the edge only, falling
+    // straight down like every window's: the panel shares the screen's light, whatever lights
+    // its edge. A wide soft one, and a tight one where the panel meets the desktop. Each opacity
+    // scales by `hudShadowStrength`; the radii are half the study's CSS blur, as SwiftUI's
+    // shadow radius is about the blur's standard deviation.
+    static let hudShadowStrength: Double = 1.4
+    static let hudShadowOpacity: Double = 0.34
+    static let hudShadowRadius: Double = 11
     static let hudShadowOffset: Double = 8
-    static let hudShadowOpacity: Double = 0.3
+    static let hudContactShadowOpacity: Double = 0.22
+    static let hudContactShadowRadius: Double = 1
+    static let hudContactShadowOffset: Double = 1
+    // Secondary text on the HUD (a toast's hint, the notice): the text color at this opacity.
+    // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface; 0.8 holds
+    // 4.5:1 on both tints (PaletteTests).
+    static let hudSecondaryTextOpacity: Double = 0.8
     // Transparent margin around the HUD content so the far shadow is not clipped by the panel.
     static let hudShadowMargin: Double = 48
     // Enter rises and exit drops by this much over `hudFadeSeconds`; Reduce Motion drops the rise.
@@ -292,51 +319,134 @@ enum Constants {
     static let transcriptPanelVerticalPadding: Double = 14
     static let transcriptFontSize: Double = 14
 
-    // Motion. The panel opens on the r and holds it, then each stone morphs into its bar on its
-    // own critically damped spring, the three starting a stagger apart, left to right. On
-    // release the morph runs back right to left, and the r holds until the panel fades.
-    static let markHoldSeconds: Double = 0.35
-    static let markStaggerSeconds: Double = 0.04
-    // The spring's response: the period it would ring at without damping.
-    static let markMorphResponse: Double = 0.24
-    // Reduce Motion: no morph; the mark dips out and back while the r and the bars swap.
-    static let markFadeThroughSeconds: Double = 0.24
-    // The smoothed level Reduce Motion's bars follow.
-    static let markLevelAttackRate: Double = 10
-    static let markLevelReleaseRate: Double = 5
-    // Longest frame interval the engine advances by, so a resumed timeline does not leap.
-    static let markMaxFrameInterval: Double = 0.05
+    // The kawa indicator (docs/design/kawa-identity.md): every number below was tuned on the
+    // study page (docs/design/studies/kawa/kawa-studies-r1.html) and approved by the maintainer on
+    // 2026-11-02; they are ported as is. The choreography lives in `KawaIndicatorTimeline`, the
+    // voice in `KawaIndicatorEngine`.
+    //
+    // Entry: the panel fades in, then the muted strokes on a sine ease-in-out; the Glass layer
+    // starts the overlap before the strokes are in, so the two flow into each other.
+    static let kawaPanelInSeconds: Double = 0.22
+    static let kawaPanelRise: Double = 6
+    static let kawaMutedDelaySeconds: Double = 0.08
+    static let kawaMutedFadeSeconds: Double = 0.45
+    static let kawaLayerOverlapSeconds: Double = 0.2
+    // The muted strokes' opacity: one value for Glass and for preparing.
+    static let kawaMutedOpacity: Double = 0.2
+    // Exit: the layer leaves just after release over this long; the panel fades over its own time.
+    static let kawaLayerOutDelaySeconds: Double = 0.05
+    static let kawaLayerOutSeconds: Double = 0.4
+    static let kawaPanelOutSeconds: Double = 0.3
+    // Reduce Motion: every envelope becomes a linear fade this long.
+    static let kawaReducedFadeSeconds: Double = 0.2
 
-    // The bars read loudness in decibels of full scale (dBFS); a linear scale left quiet
+    // The voice: one shared level, stepped at a fixed rate so it is the same at any frame rate.
+    // It rises fast and falls slowly, with a ±18 % jitter re-drawn on its own clock so it never
+    // sits perfectly still while you speak.
+    static let kawaEngineStepsPerSecond: Double = 240
+    static let kawaLevelRiseSeconds: Double = 0.05
+    static let kawaLevelFallSeconds: Double = 0.25
+    static let kawaLevelJitter: Double = 0.36
+    static let kawaLevelJitterClockSeconds: Double = 0.06
+
+    // Glass: a pane of frost over the strokes. While the level is above the threshold, drops
+    // fall on the strokes at a steady cadence, each in one of three tiers (soft, normal, raised)
+    // picked by the loudest level since the previous drop.
+    static let kawaGlassCadence: Double = 2
+    static let kawaGlassRippleSize: Double = 1.6
+    static let kawaGlassSensitivity: Double = 0.6
+    static let kawaGlassThreshold: Double = 0.32 - 0.26 * kawaGlassSensitivity
+    static let kawaGlassNormalFrom: Double = 0.32
+    static let kawaGlassLoudFrom: Double = 0.6
+    // Glass's look was retuned on the Glass study (docs/design/studies/kawa/kawa-glass-r1.html,
+    // maintainer, 2026-11-03), so a normal voice plainly shows, a raised one more, and the
+    // frosted and cleared states read apart. Per tier, soft to raised: the ring's strength,
+    // which sets its light and its bend, and the radius of the window it clears in the frost,
+    // in points: small for soft, about the mark's width for normal, most of the panel for raised.
+    static let kawaGlassRingStrengths: [Double] = [0.6, 1.2, 1.4]
+    static let kawaGlassWindowRadii: [Double] = [12, 20, 28]
+    // A window holds open this long after its drop, then fades back to frost over this, on the
+    // clock that stops at release.
+    static let kawaGlassWindowHoldSeconds: Double = 1.2
+    static let kawaGlassWindowFadeSeconds: Double = 0.6
+    // A ripple's front travels this fast, in points a second, and its rings are this far apart,
+    // in points; both scale with the ripple's size (front by its square root, rings by the size).
+    static let kawaGlassRippleSpeed: Double = 16
+    static let kawaGlassWavelength: Double = 3.4
+    // A drop's ripple lasts this long. The shader reads it too, so a ripple and the drop that
+    // makes it end together.
+    static let kawaGlassRippleSeconds: Double = 2.2 * kawaGlassRippleSize.squareRoot()
+    // The engine keeps a drop while its ripple or its window may still show, so a window never
+    // snaps shut instead of fading.
+    static let kawaGlassDropSeconds: Double = max(kawaGlassRippleSeconds, kawaGlassWindowHoldSeconds + kawaGlassWindowFadeSeconds)
+    // The shader: how far a ripple bends the strokes and how bright its light (the study's
+    // sliders, 0…1); the frost's strength, its blur radius in points and its veil, each scaled
+    // by the frost's strength; the grain in the veil; and how strong the ink is under the frost
+    // and where the voice has cleared it.
+    static let kawaGlassRefraction: Double = 0.4
+    static let kawaGlassHighlights: Double = 0.8
+    // The shader's scale for each slider: the study multiplies its 0…1 refraction and light by
+    // these before they reach the shader, so the sliders above copy across from the study as is.
+    static let kawaGlassRefractionScale: Double = 1.6
+    static let kawaGlassHighlightScale: Double = 1.4
+    static let kawaGlassFrost: Double = 0.72
+    static let kawaGlassBlur: Double = 1.2
+    static let kawaGlassVeil: Double = 0.6
+    static let kawaGlassGrain: Double = 0.24
+    static let kawaGlassFrostedInk: Double = 0.45
+    static let kawaGlassClearInk: Double = 0.9
+    // How strongly a ripple's light and its shade on the far side show, per appearance
+    // (`Palette.HUD` holds their colors). Light's are set so its ripples measure as strong as
+    // Dark's: the shader mixes in linear light, where a fraction of charcoal over the light tint
+    // shows about half as strongly as the same fraction of ink over the dark one (2026-11-04).
+    static let kawaGlassDarkHighlightAmount: Double = 0.55
+    static let kawaGlassDarkShadeAmount: Double = 0.5
+    static let kawaGlassLightHighlightAmount: Double = 0.95
+    static let kawaGlassLightShadeAmount: Double = 0.15
+    // How much charcoal Light's ripple light holds, mixed over the light tint, and how far its
+    // far side is blended toward white: full charcoal and a 40 % blend read too dark and too
+    // strong on device (maintainer, 2026-11-04).
+    static let kawaGlassLightHighlightInk: Double = 0.65
+    static let kawaGlassLightShadeWhite: Double = 0.2
+    // The frost forms evenly and the ink rises under it over these, together.
+    static let kawaGlassFormSeconds: Double = 0.6
+    static let kawaGlassInkSeconds: Double = 0.6
+
+    // The indicator reads loudness in decibels of full scale (dBFS); a linear scale left quiet
     // speech invisible on a built-in mic (maintainer's smoke, 2026-09-24). The floor is the
-    // capture trim's floor, so the bars never move for a recording the trim then discards as
-    // silence: bars that moved for a dictation River threw away would claim it heard you. Below
-    // the floor they hold still at their resting height, so motion always means sound. The
-    // ceiling is a full bar. Display only: the bars read `inputLevel`, which the capture path
-    // never uses.
+    // capture trim's floor, so the indicator never moves for a recording the trim then discards
+    // as silence: a voice layer that moved for a dictation River threw away would claim it heard
+    // you. Below the floor it reads silence, so motion always means sound; the ceiling reads as
+    // full. Display only: it reads `inputLevel`, which the capture path never uses.
+    // The ceiling sits at raised speech and a curve keeps quiet speech low, so soft, normal
+    // and raised read apart: at -28 dBFS with no curve, quiet speech filled half the scale and
+    // normal speech nearly all of it (maintainer's level trace, 2026-11-02: built-in mic, quiet
+    // room -62, soft speech to about -39, normal to about -33, raised to about -22 and peaks
+    // near -15).
     static let markMeterFloorDecibels: Double = 20 * log10(Double(silenceTrimFloor))
-    static let markMeterCeilingDecibels: Double = -28
-    // Each bar is its own readout: it re-reads the voice on its own clock, at a random interval
-    // in this range, at its own gain and a random spread, so the three move out of step.
-    static let markBarSampleInterval: ClosedRange<Double> = 0.06...0.11
-    static let markBarGains: [Double] = [0.82, 1, 0.9]
-    static let markBarSpread: ClosedRange<Double> = 0.85...1.15
-    // Bars rise fast and fall slowly, like a level meter (about 0.05 s up, 0.25 s down).
-    static let markBarRiseRate: Double = 20
-    static let markBarFallRate: Double = 4
-
-    // Menu bar glyphs: the mark in an 18 pt image, 16 pt tall. Ready is the r; Listening and
-    // Transcribing are one frozen reading of the bars. Both are template images the system tints.
+    static let markMeterCeilingDecibels: Double = -16
+    static let markMeterCurve: Double = 1.5
+    // Menu bar glyphs: the mark in an 18 pt image (docs/design/kawa-identity.md). Ready is 川,
+    // 16 pt tall. While River listens or transcribes, 川 steps down to 14 pt, left of centre, and
+    // a dot sits at the top right: red while the microphone records, then muted ink while River
+    // transcribes, the same dot at a reduced strength. Every state is the same 18 pt, so the
+    // icons beside it never shift.
     static let menuBarGlyphSize: Double = 18
     static let menuBarMarkHeight: Double = 16
-    static let menuBarActiveLevels: [Double] = [0.55, 1, 0.75]
+    static let menuBarSignedMarkHeight: Double = 14
+    static let menuBarSignedMarkCentre = CGPoint(x: 7.6, y: 10)
+    // The dot's box, top-left origin in points.
+    static let menuBarSign = CGRect(x: 13, y: 0.6, width: 4.4, height: 4.4)
+    // Transcribing's dot: the bar's text color at this strength, the least that still holds 3:1
+    // on the modelled light and dark bars (docs/design/color.md).
+    static let menuBarMutedDotOpacity: Double = 0.55
 
-    // App icon: the stones r in ink on a charcoal squircle (maintainer, 2026-10-14), drawn on
+    // App icon: 川 in ink on a charcoal squircle (maintainer, 2026-10-29), drawn on
     // Apple's 1024 grid where the rounded square occupies 824 of the canvas.
     static let appIconCanvas: Double = 1024
     static let appIconSquircleInset: Double = 100
     static let appIconCornerRadius: Double = 185.4
-    // The r's height as a fraction of the squircle's.
+    // The mark's height as a fraction of the squircle's.
     static let appIconMarkFraction: Double = 0.56
     static let appIconFileName = "River.icns"
 
@@ -356,18 +466,13 @@ enum Constants {
     ]
 
     // Mic level (planning 0020). The publish interval throttles the level publisher
-    // to ~14 Hz (the indicator smooths per display frame, far below the ~93
-    // buffers/sec the capture unit delivers); the reference RMS is the linear amplitude that
-    // maps to a full level of 1.
-    //
-    // The reference was 0.2 (about -14 dBFS) to match the study page's `rms / 0.2`.
-    // On-device that mapping left loud speech below level 0.3 and full scale
-    // unreachable: a browser applies automatic gain control to its mic, while
-    // CoreAudio delivers the raw signal, so the same voice lands far lower here
-    // (maintainer's smoke, 2026-09-17). Lowering the reference scales every level
-    // threshold down together and leaves the indicator's own tuned numbers untouched.
-    // Conservative first value: room tone has been measured near 0.02 RMS in places
-    // (see `silenceTrimEnergyThreshold`), which must stay well below the waking range.
+    // to ~14 Hz, each reading the loudest buffer since the last (the indicator smooths per
+    // display frame, far below the ~93 buffers/sec the capture unit delivers); the
+    // reference RMS is the linear amplitude that maps to a full level of 1. The indicator
+    // converts the level back to decibels (`markMeter*`), so the reference only sets where
+    // the level clips: -12 dBFS, above the indicator's ceiling. At 0.08 (-22 dBFS) it
+    // clipped raised speech before the indicator could read it (maintainer's level trace,
+    // 2026-11-02).
     static let inputLevelPublishInterval: Double = 0.07
-    static let inputLevelReferenceRMS: Float = 0.08
+    static let inputLevelReferenceRMS: Float = 0.25
 }

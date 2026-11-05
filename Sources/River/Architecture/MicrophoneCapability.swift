@@ -55,6 +55,8 @@ final class MicrophoneCapability: Capability {
     // deterministically (planning 0020 acceptance criterion 3).
     private let now: () -> TimeInterval
     private var lastLevelEmit: TimeInterval?
+    // The loudest buffer since the last emission, so a syllable between two emissions is not lost.
+    private var levelPeak: Float = 0
 
     // internal for testability — when true, `startEngine` opens no capture unit. The
     // test runner often has Microphone permission, so without this the unit starts
@@ -138,6 +140,7 @@ final class MicrophoneCapability: Capability {
         // Reset the throttle so the next recording's first buffer emits a level
         // immediately rather than being gated by the previous recording's timestamp.
         lastLevelEmit = nil
+        levelPeak = 0
         audioLogger.info("Capture unit stopped")
     }
 
@@ -360,14 +363,17 @@ final class MicrophoneCapability: Capability {
 
     // internal for testability — the throttled level emission, split from the render
     // callback so the ~14 Hz throttle is tested with an injected clock without a
-    // real device (planning 0020 AC3). Emits the normalized level on the main actor;
-    // buffers arriving inside `inputLevelPublishInterval` of the last emission are
-    // dropped (the meter doesn't need every buffer).
+    // real device (planning 0020 AC3). Emits the normalized level on the main actor at
+    // most once per `inputLevelPublishInterval`, holding the loudest buffer in between:
+    // emitting whichever buffer came last caught the gap between syllables as often as
+    // the syllable (maintainer's level trace, 2026-11-02).
     func emitLevel(rms: Float) {
         let t = now()
+        levelPeak = max(levelPeak, rms)
         if let last = lastLevelEmit, t - last < Constants.inputLevelPublishInterval { return }
         lastLevelEmit = t
-        levelSubject.send(Self.normalizedLevel(rms: rms))
+        levelSubject.send(Self.normalizedLevel(rms: levelPeak))
+        levelPeak = 0
     }
 
     // internal for testability — the buffer a render callback hands to

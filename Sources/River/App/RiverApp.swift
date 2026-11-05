@@ -45,27 +45,59 @@ private struct MenuBarLabel: View {
     }
 }
 
-/// The mark's menu bar images, loaded once from the bundle's Resources, where `make bundle`
-/// copies them and `make verify` asserts they ship. Template images, because the menu bar
-/// takes its look from the wallpaper behind it, not from Light or Dark mode: a fixed color
-/// picked from the system appearance measured about 1.5:1 on a tinted bar (2026-10-15).
+/// The mark's menu bar images. The PNGs are loaded once from the bundle's Resources, where
+/// `make bundle` copies them and `make verify` asserts they ship, as template images, because
+/// the menu bar takes its look from the wallpaper behind it, not from Light or Dark mode: a fixed
+/// color picked from the system appearance measured about 1.5:1 on a tinted bar (2026-10-15). A
+/// template image cannot carry the recording red, so Listening and Transcribing are drawn when the
+/// bar draws them, and both their mark and their dot follow the bar's own appearance.
 @MainActor
-private enum MenuBarGlyphImages {
+enum MenuBarGlyphImages {
     private static let logger = Logger(subsystem: Constants.loggingSubsystem, category: "menu-bar")
-    private static var cache: [MenuBarPresentation.Glyph: NSImage] = [:]
+    private static var assets: [String: NSImage] = [:]
 
     static func image(for glyph: MenuBarPresentation.Glyph) -> NSImage {
-        if let cached = cache[glyph] { return cached }
+        let asset = asset(named: glyph.assetName)
+        switch glyph {
+        case .ready: return asset
+        case .listening: return withDot(asset, muted: false)
+        case .transcribing: return withDot(asset, muted: true)
+        }
+    }
+
+    private static func asset(named name: String) -> NSImage {
+        if let cached = assets[name] { return cached }
         let image: NSImage
-        if let loaded = Bundle.main.image(forResource: glyph.rawValue) {
+        if let loaded = Bundle.main.image(forResource: name) {
             image = loaded
         } else {
             // Only an unbundled `swift run` gets here; a bundle without the glyphs fails `make verify`.
-            logger.fault("Menu bar glyph \(glyph.rawValue, privacy: .public) missing from the bundle")
+            logger.fault("Menu bar glyph \(name, privacy: .public) missing from the bundle")
             image = NSImage(systemSymbolName: "mic", accessibilityDescription: nil) ?? NSImage()
         }
         image.isTemplate = true
-        cache[glyph] = image
+        assets[name] = image
+        return image
+    }
+
+    // internal for testability: the drawing is checked in each appearance without a menu bar.
+    /// `mark` in the menu bar's text color with the dot at its place: the recording red, or
+    /// the text color at `menuBarMutedDotOpacity` while River transcribes. Drawn each time the
+    /// bar draws it, under the bar's appearance, so a wallpaper that turns the bar dark turns
+    /// the mark white and the red to its dark-bar value, as the template icons beside it turn.
+    static func withDot(_ mark: NSImage, muted: Bool) -> NSImage {
+        let size = NSSize(width: Constants.menuBarGlyphSize, height: Constants.menuBarGlyphSize)
+        let image = NSImage(size: size, flipped: true) { rect in
+            NSColor.labelColor.setFill()
+            rect.fill()
+            mark.draw(in: rect, from: .zero, operation: .destinationIn, fraction: 1, respectFlipped: true, hints: nil)
+            // Resolved here, in the drawing's appearance.
+            let ink = NSColor.labelColor.usingColorSpace(.sRGB) ?? .labelColor
+            (muted ? ink.withAlphaComponent(ink.alphaComponent * Constants.menuBarMutedDotOpacity) : Palette.recording).setFill()
+            NSBezierPath(ovalIn: Constants.menuBarSign).fill()
+            return true
+        }
+        image.isTemplate = false
         return image
     }
 }

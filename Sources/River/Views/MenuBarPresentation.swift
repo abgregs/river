@@ -3,16 +3,20 @@ import Foundation
 /// Pure mapping from cycle state to the menu-bar icon + status label, extracted
 /// so the icon/label contract is unit-tested without standing up SwiftUI.
 enum MenuBarPresentation {
-    // The stones mark's menu bar glyphs (docs/design/stones-identity.md), shipped as PNGs in
-    // the bundle's Resources: Ready is the r; Active, for both Listening and Transcribing, is a
-    // frozen reading of the bars. Both are template images, which the system paints white or
-    // black to match the menu bar, as it does every other icon there.
-    enum Glyph: String, CaseIterable {
-        case ready = "MenuBarReady"
-        case active = "MenuBarActive"
+    // The mark's menu bar glyphs (docs/design/kawa-identity.md): Ready is 川; Listening is 川
+    // with the red recording dot; Transcribing the same dot in muted ink. They ship as two PNGs
+    // in the bundle's Resources, template images the system paints white or black to match the
+    // menu bar, as it does every other icon there: 川 alone, and 川 beside the dot's place, over
+    // which River draws the dot.
+    enum Glyph: CaseIterable {
+        case ready, listening, transcribing
+
+        var assetName: String { self == .ready ? "MenuBarReady" : "MenuBarWithDot" }
 
         // Every file `make bundle` copies and `make verify` asserts, without the scale suffix.
-        static var assetNames: [String] { allCases.map(\.rawValue) }
+        static var assetNames: [String] {
+            allCases.map(\.assetName).reduce(into: []) { names, name in if !names.contains(name) { names.append(name) } }
+        }
     }
 
     // The cycle states draw River's mark; the warning, downloading, and loading states keep
@@ -27,8 +31,8 @@ enum MenuBarPresentation {
         let statusLabel: String
     }
 
-    // core-feature.md item 5: Ready (.idle) shows the r; Listening (.recording) and
-    // Transcribing (.processing) show the bars; labels "Ready" / "Recording..." / "Processing...".
+    // core-feature.md item 5: Ready (.idle) shows 川; Listening (.recording) adds the red dot;
+    // Transcribing (.processing) the muted dot; labels "Ready" / "Recording..." / "Processing...".
     // A pending error overrides the *idle* icon with a warning glyph — errors
     // surface at end-of-cycle, so an active state's icon always wins.
     //
@@ -42,7 +46,8 @@ enum MenuBarPresentation {
             let glyph: Glyph
             switch state {
             case .idle: glyph = .ready  // unreachable (guard above), kept for exhaustiveness
-            case .recording, .processing: glyph = .active
+            case .recording: glyph = .listening
+            case .processing: glyph = .transcribing
             }
             let statusLabel: String
             switch state {

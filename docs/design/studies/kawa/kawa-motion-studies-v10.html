@@ -1,0 +1,1113 @@
+<title>Kawa Motion Studies</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one concept at a time behind tabs; each shows its filmstrip first, so the page reads
+   at rest, then the shared player with the concept's own controls beside it. River's tokens, monotone. */
+:root {
+  --paper: #F4F5F7;            /* mist */
+  --well: #FFFFFF;
+  --ink: #23262B;              /* charcoal */
+  --quiet: color-mix(in oklab, var(--ink) 70%, var(--paper));
+  --rule: color-mix(in oklab, var(--ink) 13%, var(--paper));
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --kanji: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "Songti SC", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  /* The panel, as River draws it (Palette.HUD), opaque as under Reduce Transparency, and the
+     accent, offered only as a comparison for the glow. Fixed in both page themes. */
+  --hud-dark: #101215; --hud-dark-fg: #ECEEF1; --accent-dark: #00E7E9;
+  --hud-light: #F4F5F7; --hud-light-fg: #23262B; --accent-light: #148284;
+  --desk-dark: #3A3D42; --desk-dark-text: #C8CCD2;
+  --desk-light: #C9CDD3; --desk-light-text: #3A3D42;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #101215; --well: #181B1F; --ink: #ECEEF1; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --paper: #101215; --well: #181B1F; --ink: #ECEEF1; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--sans); }
+::selection { background: color-mix(in oklab, var(--ink) 22%, var(--paper)); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 96px; display: grid; gap: 72px; }
+section { display: grid; gap: 20px; }
+.col { max-width: 66ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+h1 { font-size: clamp(30px, 4.4vw, 46px); font-weight: 650; line-height: 1.1; }
+h2 { font-size: 24px; font-weight: 650; line-height: 1.2; }
+h3 { font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--quiet); }
+p { margin: 0; text-wrap: pretty; }
+.stack { display: grid; gap: 12px; }
+.lede { font-size: 17px; color: var(--quiet); max-width: 64ch; }
+.note { color: var(--quiet); font-size: 14px; }
+.k { font-family: var(--kanji); font-weight: 400; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.meta { color: var(--quiet); font-size: 13px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 8px; padding: 2px; gap: 2px; background: var(--well); }
+.seg button { font: 500 12.5px var(--sans); color: var(--quiet); background: none; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; transition-property: background-color, color; transition-duration: .12s; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.seg button:disabled { opacity: .45; cursor: default; }
+
+/* Filmstrip */
+.desk { border-radius: 12px; padding: 18px 14px; display: grid; gap: 12px; }
+.desk.d { background: var(--desk-dark); color: var(--desk-dark-text); }
+.desk.l { background: var(--desk-light); color: var(--desk-light-text); }
+.desk .tag { font: 600 11.5px var(--sans); letter-spacing: .04em; text-transform: uppercase; }
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px 4px; }
+.strip figure { margin: 0; display: grid; justify-items: center; gap: 0; }
+.strip canvas { display: block; width: 120px; height: 120px; max-width: 100%; }
+.strip figcaption { font: 11.5px/1.35 var(--sans); text-align: center; display: grid; }
+.strip figcaption b { font-weight: 600; }
+.strip figcaption span { font: 10.5px var(--mono); opacity: .8; }
+
+/* Player */
+.player { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+.stages { display: grid; gap: 14px; }
+.stage { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 6px 10px; }
+.stage canvas { display: block; max-width: 100%; height: auto; }
+.stage .one { display: grid; justify-items: center; gap: 2px; font: 10.5px var(--mono); }
+.transport { display: grid; gap: 10px; }
+.trow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; font-size: 13px; color: var(--quiet); }
+.btn { font: 600 12.5px var(--sans); color: var(--ink); background: var(--well); border: 1px solid var(--ink); border-radius: 999px; padding: 6px 13px; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: none; transition-property: scale, background-color, color; transition-duration: .12s; }
+.btn:active, .btn[aria-pressed="true"] { scale: .96; }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.scrub { position: relative; flex: 1 1 260px; min-width: 200px; }
+.scrub input { width: 100%; accent-color: var(--ink); margin: 0; }
+.marks { position: relative; height: 16px; font: 10px var(--mono); color: var(--quiet); }
+.marks span { position: absolute; top: 0; translate: -50% 0; white-space: nowrap; }
+.marks span::before { content: ""; position: absolute; left: 50%; top: -6px; width: 1px; height: 5px; background: currentColor; }
+.marks span:first-child { translate: -3px 0; }
+.marks span:first-child::before { left: 3px; }
+.clock { font: 12px var(--mono); color: var(--quiet); min-width: 13ch; }
+.phase { font-weight: 600; color: var(--ink); }
+
+.panelctl { display: grid; gap: 16px; background: var(--well); border-radius: 14px; padding: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.ctl { display: grid; gap: 6px; }
+.ctl label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--quiet); cursor: pointer; }
+.ctl input[type="range"] { width: 100%; accent-color: var(--ink); margin: 0; }
+.ctl input[type="checkbox"] { accent-color: var(--ink); }
+.ctl .row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--quiet); }
+.ctl .row b { color: var(--ink); font-weight: 600; }
+
+.treat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 36px; }
+.treat h3 { color: var(--ink); font-size: 15px; margin-bottom: 4px; }
+.treat p { color: var(--quiet); font-size: 14px; }
+.questions { counter-reset: q; display: grid; gap: 14px; padding: 0; margin: 0; list-style: none; }
+.questions li { counter-increment: q; display: grid; grid-template-columns: 28px minmax(0, 1fr); color: var(--quiet); }
+.questions li::before { content: counter(q); font: 600 13px var(--mono); color: var(--ink); padding-top: 2px; }
+.questions b { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .player, .treat { grid-template-columns: minmax(0, 1fr); }
+  .panelctl { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0s !important; } }
+
+/* Concept tabs */
+.tabs { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; position: sticky; top: env(safe-area-inset-top, 0px); background: var(--paper); z-index: 2; padding-top: 10px; }
+.tablist { display: flex; flex-wrap: wrap; gap: 4px; }
+.tablist button { font: 600 14px var(--sans); color: var(--quiet); background: none; border: 0; border-radius: 8px; padding: 7px 12px; cursor: pointer; display: grid; text-align: left; transition-property: background-color, color; transition-duration: .12s; }
+.tablist button small { font: 500 11.5px var(--sans); color: var(--quiet); }
+.tablist button[aria-selected="true"] { background: var(--well); color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
+.tablist button:hover:not([aria-selected="true"]) { color: var(--ink); }
+.stepper { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--quiet); }
+.stepper button { font: 600 12.5px var(--sans); color: var(--ink); background: var(--well); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 11px; cursor: pointer; transition-property: scale; transition-duration: .12s; }
+.stepper button:active { scale: .96; }
+[hidden] { display: none !important; }
+.nogl { padding: 18px; border-radius: 12px; background: var(--well); color: var(--quiet); }
+</style>
+
+<main class="wrap">
+  <header class="stack">
+    <div class="top">
+      <span class="meta">Kawa mark · recording panel motion · 3C, centred halfway · round 1 · 30 October 2026</span>
+      <div class="seg" role="group" aria-label="Page appearance">
+        <button type="button" data-theme-set="system" aria-pressed="true">System</button>
+        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <h1><span class="k">川</span> listening</h1>
+    <p class="lede">Three ways the recording panel can show your voice, one per tab. In all three the strokes stay fixed, the panel and then the muted strokes come in on the key press, the concept's own layer arrives once the strokes are in and the microphone is live, and on release it all runs back while River transcribes, the strokes and the panel leaving on softer curves than they arrive on. Monochrome throughout.</p>
+  </header>
+
+  <nav class="tabs" aria-label="Concepts">
+    <div class="tablist" role="tablist" aria-label="Concept">
+      <button type="button" role="tab" id="tab-level" aria-controls="concept" data-c="level" aria-selected="true">Level<small>inside the strokes</small></button>
+      <button type="button" role="tab" id="tab-stream" aria-controls="concept" data-c="stream" aria-selected="false">Stream<small>through the strokes</small></button>
+      <button type="button" role="tab" id="tab-glass" aria-controls="concept" data-c="glass" aria-selected="false">Glass<small>over the strokes</small></button>
+    </div>
+    <div class="stepper"><button type="button" id="prev" aria-label="Previous concept">← Prev</button><span id="count" class="num">1 of 3</span><button type="button" id="next" aria-label="Next concept">Next →</button></div>
+  </nav>
+
+  <div id="concept" role="tabpanel" aria-labelledby="tab-level" class="wrap" style="padding:0;gap:64px">
+    <section class="stack col">
+      <h2 id="cTitle"></h2>
+      <p class="note" id="cLede"></p>
+    </section>
+
+    <section aria-labelledby="h-seq">
+      <div class="stack col">
+        <h2 id="h-seq">The sequence</h2>
+        <p class="note">One dictation, frame by frame, with this concept's settings from the player below.</p>
+      </div>
+      <div id="film" class="stack"></div>
+    </section>
+
+    <section aria-labelledby="h-play">
+      <div class="stack col">
+        <h2 id="h-play">Player</h2>
+        <p class="note">Play a scripted moment, scrub it, or hold the talk button and set your voice with the slider. The voice is simulated: a page cannot use the microphone.</p>
+      </div>
+      <div class="player">
+        <div class="stages">
+          <div class="transport">
+            <div class="trow">
+              <div class="seg" role="group" aria-label="Scripted moment" id="segScript">
+                <button type="button" data-v="dictation" aria-pressed="true">Dictation</button>
+                <button type="button" data-v="quiet" aria-pressed="false">Ending quiet</button>
+                <button type="button" data-v="steps" aria-pressed="false">Soft, normal, raised</button>
+                <button type="button" data-v="silence" aria-pressed="false">Silence</button>
+                <button type="button" data-v="dead" aria-pressed="false">Dead microphone</button>
+                <button type="button" data-v="preparing" aria-pressed="false">Preparing model</button>
+              </div>
+            </div>
+            <div class="trow">
+              <button type="button" class="btn" id="play" aria-pressed="true">Pause</button>
+              <div class="scrub"><input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Time"><div class="marks" id="marks"></div></div>
+              <span class="clock num" id="clock"></span>
+            </div>
+            <div class="trow">
+              <span>Speed</span>
+              <div class="seg" role="group" aria-label="Playback speed" id="segSpeed">
+                <button type="button" data-v="1" aria-pressed="true">1×</button>
+                <button type="button" data-v="0.25" aria-pressed="false">¼×</button>
+                <button type="button" data-v="0.1" aria-pressed="false">⅒×</button>
+              </div>
+              <span>Zoom</span>
+              <div class="seg" role="group" aria-label="Zoom" id="segZoom">
+                <button type="button" data-v="4" aria-pressed="true">4×</button>
+                <button type="button" data-v="6" aria-pressed="false">6×</button>
+              </div>
+              <label class="check" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="loop" checked> Loop</label>
+              <label class="check" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="reduce"> Reduce Motion</label>
+            </div>
+            <div class="trow">
+              <span>Strokes fade in over</span>
+              <input type="range" id="shMutedIn" min="15" max="90" value="45" aria-label="Time for the muted strokes to fade in" style="width:120px;accent-color:var(--ink)">
+              <b class="num" id="shMutedInOut" style="color:var(--ink)"></b>
+              <span>Next layer starts before they finish by</span>
+              <input type="range" id="shOverlap" min="0" max="40" value="20" aria-label="How early the next layer starts" style="width:120px;accent-color:var(--ink)">
+              <b class="num" id="shOverlapOut" style="color:var(--ink)"></b>
+            </div>
+            <div class="trow">
+              <button type="button" class="btn" id="talk" aria-pressed="false">Hold to talk</button>
+              <span>Voice</span>
+              <input type="range" id="voice" min="0" max="100" value="55" aria-label="Voice level while holding" style="width:160px;accent-color:var(--ink)">
+              <span class="phase" id="phase" aria-live="polite"></span>
+            </div>
+          </div>
+          <div class="desk d"><span class="tag">Dark appearance</span><div class="stage" id="stageDark"></div></div>
+          <div class="desk l"><span class="tag">Light appearance</span><div class="stage" id="stageLight"></div></div>
+        </div>
+
+        <aside class="panelctl" aria-label="Concept settings">
+          <!-- Level -->
+          <div data-for="level" class="stack" style="gap:16px">
+            <div class="ctl">
+              <h3>Level</h3>
+              <div class="seg" role="group" aria-label="Level treatment" id="lvForm">
+                <button type="button" data-v="solid" aria-pressed="false">Solid</button>
+                <button type="button" data-v="soak" aria-pressed="true">Soak</button>
+                <button type="button" data-v="written" aria-pressed="false">Written</button>
+                <button type="button" data-v="water" aria-pressed="false">Water</button>
+              </div>
+              <label class="check"><input type="checkbox" id="lvGrain"> Dry-brush grain</label>
+              <label class="check"><input type="checkbox" id="lvThree" checked> One readout per stroke</label>
+            </div>
+            <div class="ctl">
+              <div class="row"><span>Idle floor</span><b class="num" id="lvFloorOut"></b></div>
+              <input type="range" id="lvFloor" min="0" max="30" value="14" aria-label="Idle floor">
+              <div class="row"><span>Muted strokes</span><b class="num" id="lvMutedOut"></b></div>
+              <input type="range" id="lvMuted" min="8" max="45" value="24" aria-label="Muted stroke strength">
+            </div>
+          </div>
+          <!-- Stream -->
+          <div data-for="stream" class="stack" style="gap:16px" hidden>
+            <div class="ctl">
+              <h3>Form</h3>
+              <div class="seg" role="group" aria-label="Stream form" id="stForm">
+                <button type="button" data-v="grid" aria-pressed="true">Grid</button>
+                <button type="button" data-v="halftone" aria-pressed="false">Halftone</button>
+                <button type="button" data-v="bars" aria-pressed="false">Bars</button>
+                <button type="button" data-v="ribbon" aria-pressed="false">Ribbon</button>
+              </div>
+              <div class="seg" role="group" aria-label="Cell shape" id="stShape">
+                <button type="button" data-v="square" aria-pressed="true">Squares</button>
+                <button type="button" data-v="round" aria-pressed="false">Dots</button>
+              </div>
+              <label class="check"><input type="checkbox" id="stUndulate" checked> Undulate with the voice</label>
+              <label class="check"><input type="checkbox" id="stWhole"> Light whole cells inside the strokes</label>
+            </div>
+            <div class="ctl">
+              <div class="row"><span>Cell pitch</span><b class="num" id="stPitchOut"></b></div>
+              <input type="range" id="stPitch" min="10" max="34" value="20" aria-label="Cell pitch">
+              <div class="row"><span>Band height</span><b class="num" id="stHeightOut"></b></div>
+              <input type="range" id="stHeight" min="10" max="34" value="24" aria-label="Band height">
+              <div class="row"><span>Side room</span><b class="num" id="stPadOut"></b></div>
+              <input type="range" id="stPad" min="2" max="10" value="5" aria-label="Room at each side">
+              <div class="row"><span>Flow</span><b class="num" id="stFlowOut"></b></div>
+              <input type="range" id="stFlow" min="6" max="40" value="16" aria-label="Flow speed">
+            </div>
+            <div class="ctl">
+              <div class="row"><span>Outside the strokes</span><b class="num" id="stOutsideOut"></b></div>
+              <input type="range" id="stOutside" min="0" max="70" value="30" aria-label="Brightness outside the strokes">
+              <div class="row"><span>Muted strokes</span><b class="num" id="stMutedOut"></b></div>
+              <input type="range" id="stMuted" min="8" max="45" value="22" aria-label="Muted stroke strength">
+            </div>
+            <div class="ctl">
+              <h3>Glow</h3>
+              <div class="seg" role="group" aria-label="Glow form" id="stGlow">
+                <button type="button" data-v="off" aria-pressed="true">Off</button>
+                <button type="button" data-v="halo" aria-pressed="false">Halo</button>
+                <button type="button" data-v="rim" aria-pressed="false">Rim</button>
+              </div>
+              <div class="seg" role="group" aria-label="Glow colour" id="stGlowColour">
+                <button type="button" data-v="mono" aria-pressed="true">Foreground</button>
+                <button type="button" data-v="accent" aria-pressed="false">Accent</button>
+              </div>
+            </div>
+            <div class="ctl">
+              <h3>On release</h3>
+              <div class="seg" role="group" aria-label="On release" id="stRelease">
+                <button type="button" data-v="collapse" aria-pressed="true">Collapse</button>
+                <button type="button" data-v="flow" aria-pressed="false">Flow out</button>
+              </div>
+            </div>
+          </div>
+          <!-- Glass -->
+          <div data-for="glass" class="stack" style="gap:16px" hidden>
+            <div class="ctl">
+              <h3>Ripples</h3>
+              <div class="seg" role="group" aria-label="Where ripples start" id="glOrigin">
+                <button type="button" data-v="drops" aria-pressed="true">Drops</button>
+                <button type="button" data-v="rings" aria-pressed="false">Centre rings</button>
+              </div>
+              <div class="seg" role="group" aria-label="When ripples fall" id="glTiming">
+                <button type="button" data-v="cadence" aria-pressed="true">Steady cadence</button>
+                <button type="button" data-v="peaks" aria-pressed="false">On voice peaks</button>
+              </div>
+              <div class="row"><span>Ripples per second</span><b class="num" id="glCadenceOut"></b></div>
+              <input type="range" id="glCadence" min="1" max="12" value="3" aria-label="Ripples per second while audio is detected">
+              <div class="row"><span>Size</span><b class="num" id="glSizeOut"></b></div>
+              <input type="range" id="glSize" min="50" max="220" value="100" aria-label="Ripple size">
+              <div class="seg" role="group" aria-label="Where drops land" id="glPlace">
+                <button type="button" data-v="strokes" aria-pressed="true">On the strokes</button>
+                <button type="button" data-v="loudness" aria-pressed="false">Higher when louder</button>
+              </div>
+              <div class="row"><span>Strength</span><b class="num" id="glStrengthOut"></b></div>
+              <input type="range" id="glStrength" min="0" max="100" value="55" aria-label="Ripple strength">
+              <div class="row"><span>Highlights</span><b class="num" id="glSpecOut"></b></div>
+              <input type="range" id="glSpec" min="0" max="100" value="50" aria-label="Highlight strength">
+              <div class="row"><span>Sensitivity</span><b class="num" id="glSensOut"></b></div>
+              <input type="range" id="glSens" min="0" max="100" value="60" aria-label="How readily a drop falls">
+            </div>
+            <div class="ctl">
+              <h3>Ripple strength</h3>
+              <div class="seg" role="group" aria-label="How loudness sets a ripple's strength" id="glMode">
+                <button type="button" data-v="level" aria-pressed="true">Follows the level</button>
+                <button type="button" data-v="tiers" aria-pressed="false">Three strengths</button>
+              </div>
+              <div class="stack" id="glTiers" style="gap:8px" hidden>
+                <div class="row"><span>Soft</span><b class="num" id="glSoftOut"></b></div>
+                <input type="range" id="glSoft" min="5" max="150" value="30" aria-label="Strength of a soft ripple">
+                <div class="row"><span>Normal</span><b class="num" id="glNormalOut"></b></div>
+                <input type="range" id="glNormal" min="5" max="150" value="65" aria-label="Strength of a normal ripple">
+                <div class="row"><span>Loud</span><b class="num" id="glLoudOut"></b></div>
+                <input type="range" id="glLoud" min="5" max="150" value="100" aria-label="Strength of a loud ripple">
+                <div class="row"><span>Normal from level</span><b class="num" id="glNormalFromOut"></b></div>
+                <input type="range" id="glNormalFrom" min="20" max="90" value="40" aria-label="Level where ripples turn normal">
+                <div class="row"><span>Loud from level</span><b class="num" id="glLoudFromOut"></b></div>
+                <input type="range" id="glLoudFrom" min="30" max="100" value="58" aria-label="Level where ripples turn loud">
+              </div>
+            </div>
+            <div class="ctl">
+              <h3>Frost</h3>
+              <div class="row"><span>Frost</span><b class="num" id="glFrostOut"></b></div>
+              <input type="range" id="glFrost" min="0" max="100" value="70" aria-label="Frost">
+              <div class="row"><span>Frost returns in</span><b class="num" id="glReturnOut"></b></div>
+              <input type="range" id="glReturn" min="3" max="30" value="10" aria-label="Frost return time">
+              <div class="row"><span>Ink under the glass</span><b class="num" id="glInkOut"></b></div>
+              <input type="range" id="glInk" min="40" max="100" value="90" aria-label="Ink under the glass">
+              <label class="check"><input type="checkbox" id="glRest"> A trace of movement in silence</label>
+            </div>
+            <div class="ctl">
+              <h3>Arrival</h3>
+              <div class="row"><span>Frost forms over</span><b class="num" id="glFormInOut"></b></div>
+              <input type="range" id="glFormIn" min="15" max="90" value="40" aria-label="Time for the frost to form">
+              <div class="row"><span>Ink rises over</span><b class="num" id="glInkInOut"></b></div>
+              <input type="range" id="glInkIn" min="15" max="90" value="40" aria-label="Time for the ink to rise">
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-notes">
+      <h2 id="h-notes">How it works</h2>
+      <div class="treat" id="notes"></div>
+    </section>
+
+    <section aria-labelledby="h-q">
+      <h2 id="h-q">For this concept</h2>
+      <ol class="questions col" id="questions"></ol>
+    </section>
+  </div>
+</main>
+
+<script>
+const D = {"box":[220.7,84.7,765.8,913.1],"point":[517.8,474.8],"strokes":[{"d":"M221.5 831.8C220.9 831.2 220.6 831 220.7 830C221.3 824.9 226.8 813.4 228.9 808C237.9 784.3 245.4 760 251.8 735.5C262.1 696.3 266.6 656.2 271.4 616C273.7 596.8 276.6 577.7 278.6 558.5C282.9 517.9 286.1 477.1 290.1 436.5C295.3 384.3 298.7 331.9 301.2 279.5C302.2 259.3 303.8 239.2 303.9 219C304 208.9 303.5 198.9 301.9 189C300.3 179.6 291.6 161.9 301.8 155C305.8 152.3 311.2 153 315.5 154.2C325.8 157 335 163.7 342.7 171C379.1 205.6 370.5 257.2 367.8 302.5C361.1 412.2 356.1 541.9 319.7 646C312.4 667 303.1 687.2 293.1 707C277 739 260.1 770.8 241.5 801.5C239.1 805.5 223.7 831.2 221.5 831.8Z","box":[220.6,152.3,379.1,831.8],"spine":[[312,170],[318.8,175.2],[325.3,180.6],[330.1,187.6],[333.1,195.5],[335,203.8],[336.3,212.2],[336.9,220.7],[337.2,229.1],[337.1,237.6],[336.9,246.1],[336.5,254.6],[336.1,263.1],[335.6,271.6],[335.1,280.1],[334.6,288.6],[334.1,297.1],[333.7,305.6],[333.3,314],[332.8,322.5],[332.3,331],[331.8,339.5],[331.3,348],[330.7,356.5],[330.2,365],[329.6,373.4],[329,381.9],[328.3,390.4],[327.7,398.9],[327,407.3],[326.3,415.8],[325.5,424.3],[324.7,432.7],[323.9,441.2],[323.1,449.7],[322.2,458.1],[321.3,466.6],[320.3,475],[319.4,483.5],[318.4,491.9],[317.4,500.3],[316.4,508.8],[315.3,517.2],[314.2,525.6],[313,534.1],[311.8,542.5],[310.6,550.9],[309.3,559.3],[307.9,567.7],[306.5,576],[305,584.4],[303.4,592.8],[301.8,601.1],[300,609.4],[298.2,617.7],[296.3,626],[294.4,634.3],[292.3,642.5],[290.2,650.8],[288,659],[285.7,667.2],[283.4,675.3],[281,683.5],[278.5,691.6],[276,699.7],[273.4,707.8],[270.7,715.9],[267.9,723.9],[265,731.9],[262,739.9],[259,747.8],[255.8,755.7],[252.6,763.6],[249.4,771.4],[246,779.2],[242.7,787.1],[239.2,794.8],[235.5,802.5],[231.8,810.1],[228,817.7],[224.2,825.3],[222.1,829.9]]},{"d":"M472.4 308.5C495.6 303.9 524.2 336.1 533 354.9C537.6 364.9 540 376.1 541.1 387C542.5 401.3 541.4 415.7 541.3 430C540.9 467.7 539.7 505.4 538 543C537.4 556.1 536.3 607.5 528.5 615.8C525.3 619.2 520.3 619.6 516 618.6C493.5 613.5 490.9 588.9 489.1 570C484.1 515.7 484.2 460.9 480.7 406.5C480 394.3 479.9 382.1 478.5 370C477.8 364.3 476.7 358.8 474.5 353.5C470.4 343 450.4 312.8 472.4 308.5Z","box":[450.4,303.9,542.5,619.6],"spine":[[480,330],[482.8,332.1],[485.7,334],[488.7,335.9],[491.5,337.9],[494.3,340.1],[496.8,342.5],[498.9,345.3],[500.8,348.2],[502.5,351.3],[503.9,354.5],[505.1,357.8],[506.2,361.1],[507.1,364.5],[508,367.9],[508.7,371.3],[509.2,374.8],[509.6,378.3],[509.9,381.7],[510.2,385.2],[510.3,388.7],[510.5,392.2],[510.5,395.7],[510.6,399.2],[510.7,402.7],[510.7,406.2],[510.8,409.7],[510.8,413.2],[510.9,416.7],[511,420.2],[511.1,423.7],[511.2,427.2],[511.3,430.7],[511.4,434.2],[511.4,437.7],[511.5,441.2],[511.5,444.7],[511.6,448.2],[511.6,451.7],[511.7,455.2],[511.7,458.7],[511.7,462.2],[511.8,465.7],[511.8,469.2],[511.8,472.7],[511.8,476.2],[511.8,479.7],[511.9,483.2],[511.9,486.7],[511.9,490.2],[511.9,493.7],[511.9,497.2],[511.9,500.7],[511.9,504.2],[511.9,507.7],[511.9,511.2],[511.9,514.7],[511.9,518.2],[512,521.7],[512,525.2],[512,528.7],[512,532.2],[512,535.7],[512,539.2],[512,542.7],[512,546.2],[512,549.7],[512,553.2],[512,556.7],[512,560.2],[512,563.7],[512,567.2],[512,570.7],[512,574.2],[512,577.7],[512,581.2],[512,584.7],[512,588.2],[512,591.7],[512,595.2],[512,598.7],[512,599.7]]},{"d":"M667 913C666.4 912.5 665.8 912.3 665.7 911.5C664.8 907.7 667 887.9 667.3 882.5C669 851.1 671 819.8 673.3 788.5C679.5 701.8 685.4 614.9 687.9 528C689.1 487.2 689.6 446.3 690.1 405.5C690.8 354.7 690.5 303.8 690.9 253C691.1 224.7 692.8 196.3 691.7 168C691.3 157.3 690.4 146.8 687.4 136.5C683.7 123.5 674.1 111 675.3 97C676.7 80.3 694.8 83.8 705.5 88.7C718.1 94.5 729.2 103.8 738 114.4C746.2 124.1 753.2 135 757.5 147C769.6 180.2 765.2 225.9 764.1 261C759.2 410.1 764.4 577.4 734 723C723.4 773.8 708.9 824 686.7 871C684.3 876.2 669.5 911.5 668 912.9C667.7 913.2 667.3 913 667 913Z","box":[664.8,80.3,769.6,913.2],"spine":[[694,106],[701.8,112.3],[709.5,118.7],[715.6,126.5],[720.2,135.4],[723.5,144.8],[725.7,154.6],[727.2,164.4],[728.1,174.4],[728.5,184.4],[728.6,194.4],[728.6,204.4],[728.4,214.4],[728.2,224.4],[727.9,234.4],[727.7,244.4],[727.4,254.4],[727.2,264.4],[727,274.4],[727,284.4],[726.9,294.4],[726.8,304.4],[726.7,314.4],[726.6,324.4],[726.5,334.4],[726.4,344.4],[726.2,354.4],[726.1,364.4],[725.9,374.4],[725.8,384.4],[725.6,394.4],[725.4,404.4],[725.2,414.4],[725,424.4],[724.8,434.4],[724.5,444.4],[724.3,454.4],[724,464.4],[723.8,474.4],[723.5,484.3],[723.2,494.3],[722.9,504.3],[722.5,514.3],[722.2,524.3],[721.8,534.3],[721.4,544.3],[720.9,554.3],[720.3,564.3],[719.6,574.3],[719,584.2],[718.2,594.2],[717.5,604.2],[716.7,614.2],[715.8,624.1],[715,634.1],[714,644.1],[713.1,654],[712.1,664],[711,673.9],[709.9,683.9],[708.7,693.8],[707.5,703.8],[706.2,713.7],[704.8,723.6],[703.3,733.5],[701.8,743.4],[700.3,753.3],[698.6,763.2],[696.9,773.1],[695.1,783],[693.3,792.9],[691.3,802.8],[689.4,812.7],[687.3,822.6],[685.3,832.5],[683.1,842.4],[680.8,852.4],[678.4,862.3],[676,872.2],[673.7,882.1],[671.5,892],[669.2,901.9],[667,911.7]]}]};
+
+// Theme switch: an explicit choice sets data-theme; System clears it.
+(function () {
+  const root = document.documentElement, buttons = document.querySelectorAll('[data-theme-set]');
+  const apply = (mode) => {
+    if (mode === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+    buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === mode)));
+  };
+  let saved = 'system';
+  try { saved = localStorage.getItem('kawa-studies-theme') || 'system'; } catch (e) {}
+  apply(saved);
+  buttons.forEach((b) => b.addEventListener('click', () => {
+    apply(b.dataset.themeSet);
+    try { localStorage.setItem('kawa-studies-theme', b.dataset.themeSet); } catch (e) {}
+  }));
+})();
+
+// ---------------------------------------------------------------- shared geometry and timing
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const MARK_H = D.box[3] - D.box[1];
+const PT = MARK_H / 30;                                   // design units per point in the panel
+const STROKES = D.strokes.map((s) => ({ ...s, path: new Path2D(s.d) }));
+const ALL = new Path2D(); STROKES.forEach((s) => ALL.addPath(s.path));
+const toPt = ([x, y]) => [24 + (x - D.point[0]) / PT, 24 + (y - D.point[1]) / PT];   // design units → panel points
+
+// Three curves: a strong ease-out for things arriving, an ease-in-out for a material forming
+// or lifting and for the strokes leaving, and a gentler ease-out for the panel leaving.
+const bezier = (x1, y1, x2, y2) => {
+  const bx = (t) => 3 * x1 * t * (1 - t) ** 2 + 3 * x2 * t * t * (1 - t) + t ** 3;
+  const by = (t) => 3 * y1 * t * (1 - t) ** 2 + 3 * y2 * t * t * (1 - t) + t ** 3;
+  return (x) => {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    let lo = 0, hi = 1, t = x;
+    for (let i = 0; i < 24; i++) { t = (lo + hi) / 2; if (bx(t) < x) lo = t; else hi = t; }
+    return by(t);
+  };
+};
+const easeOut = bezier(0.23, 1, 0.32, 1), easeInOut = bezier(0.65, 0, 0.35, 1), exitOut = bezier(0.33, 1, 0.68, 1), gentle = bezier(0.37, 0, 0.63, 1);   // sine ease-in-out: the strokes' own unhurried fade
+
+// Settings, one object per concept, plus what they share.
+const SH = { reduce: matchMedia('(prefers-reduced-motion: reduce)').matches, mutedIn: 0.45, overlap: 0.2 };
+const SL = { form: 'soak', grain: false, three: true, floor: 0.14, muted: 0.24 };
+const SS = { form: 'grid', shape: 'square', undulate: true, whole: false, pitch: 2, height: 24, pad: 5, flow: 16, outside: 0.3, muted: 0.22, glow: 'off', glowColour: 'mono', release: 'collapse' };
+const SG = { origin: 'drops', timing: 'cadence', cadence: 3, size: 1, place: 'strokes', strength: 0.55, spec: 0.5, sens: 0.6, frost: 0.7, ret: 1.0, ink: 0.9, rest: false, formIn: 0.4, inkIn: 0.4,
+  mode: 'level', tiers: [0.3, 0.65, 1], normalFrom: 0.4, loudFrom: 0.58 };
+
+// Timing, in seconds. Every step starts on an event.
+// Entry runs as a sequence: the panel, then the strokes, then the concept's own layer, which
+// starts only once the strokes are fully in and the microphone is live. Exit runs it back, and
+// the strokes and the panel leave on softer curves than they arrive on.
+const T = { fade: 0.22, rise: 6, mutedDelay: 0.08, layerIn: 0.3, floorIn: 0.35, drain: 0.3,
+  layerOut: 0.4, inkOut: 0.3, liftDelay: 0.4, lift: 0.4,
+  hold: 0.85, strokesOut: 0.35, panelOutDelay: 0.2, panelOut: 0.3 };
+
+// Reduce Motion: every change becomes a plain 0.2 s fade.
+const tw = (t, start, dur, curve = easeOut) => (SH.reduce ? clamp((t - start) / 0.2) : curve(clamp((t - start) / dur)));
+function channels(t, ev) {
+  // The muted strokes fade in on their own gentle curve; the concept's layer starts a little
+  // before they finish (the overlap), so the two flow into each other instead of running one-two.
+  const strokesIn = ev.press + T.mutedDelay + SH.mutedIn;
+  const live = ev.mic === Infinity ? Infinity : Math.max(strokesIn - SH.overlap, ev.mic);
+  // Exit mirrors the entry: the layer leaves first, over the time it took to arrive; the strokes
+  // start their fade the same overlap before it finishes (or hold until the text is typed, while
+  // River transcribes); the panel finishes just after the strokes, as it led them in.
+  const layerOut = ev.release + 0.05, layerEnd = layerOut + T.layerOut;
+  const strokesOut = Math.max(ev.typed, layerEnd - SH.overlap), strokesGone = strokesOut + SH.mutedIn;
+  const panelIn = tw(t, ev.press, T.fade), panelOut = tw(t, strokesGone + T.mutedDelay - T.panelOut, T.panelOut, exitOut);
+  return {
+    panel: panelIn * (1 - panelOut),
+    rise: SH.reduce ? 0 : T.rise * (1 - panelIn) + T.rise * panelOut,
+    muted: tw(t, ev.press + T.mutedDelay, SH.mutedIn, gentle) * (1 - tw(t, strokesOut, SH.mutedIn, gentle)),
+    gate: tw(t, live, T.floorIn) * (1 - tw(t, layerOut, T.layerOut, easeInOut)),
+    glow: tw(t, live, T.layerIn) * (1 - tw(t, ev.release + 0.2, 0.25)),
+    stream: tw(t, live, T.layerIn) * (1 - (SS.release === 'collapse' ? tw(t, layerOut + T.layerOut - 0.15, 0.15, easeInOut) : tw(t, strokesOut, SH.mutedIn, gentle))),
+    collapse: SS.release === 'collapse' ? 1 - tw(t, layerOut, T.layerOut - 0.15, easeInOut) : 1,
+    // Glass: after the muted strokes are in, the frost forms (its blur grows) and the ink rises
+    // under it together, from the same moment, so the mark never dims under fresh frost. On
+    // release both run back together over the same durations.
+    form: tw(t, live, SG.formIn, easeInOut) * (1 - tw(t, layerOut, SG.formIn, easeInOut)),
+    inkUp: tw(t, live, SG.inkIn, easeInOut) * (1 - tw(t, layerOut, SG.inkIn, easeInOut)),
+    clearTime: Math.min(t, ev.release),
+    live, release: ev.release, strokesOut, on: t >= live && t < ev.release,
+  };
+}
+
+// ---------------------------------------------------------------- the simulated voice
+function sentence(start, end, pauseAt, pauseLen, seed, lo = 0.45, span = 0.5) {
+  let x = seed; const rnd = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  const words = []; let t = start;
+  while (t < end) {
+    if (t > pauseAt && t < pauseAt + pauseLen) { t = pauseAt + pauseLen; continue; }
+    const d = 0.16 + rnd() * 0.3; words.push([t, d, lo + rnd() * span]); t += d + 0.04 + rnd() * 0.12;
+  }
+  return (t) => {
+    let v = 0;
+    for (const [s, d, a] of words) if (t > s && t < s + d) {
+      const u = (t - s) / d; v = Math.max(v, a * Math.sin(Math.PI * u) ** 0.6 * (0.78 + 0.22 * Math.sin(2 * Math.PI * 5.5 * t + s * 9)));
+    }
+    return clamp(v);
+  };
+}
+const SCRIPTS = {
+  dictation: { press: 0.3, mic: 0.32, release: 6.2, typed: 6.9, end: 8.4, voice: sentence(1.3, 5.7, 3.2, 0.75, 11) },
+  quiet: { press: 0.3, mic: 0.32, release: 6.4, typed: 7.0, end: 8.7, voice: sentence(1.3, 4.5, 3.0, 0.6, 23) },
+  silence: { press: 0.3, mic: 0.32, release: 3.6, typed: 3.85, end: 5.4, voice: () => 0 },
+  steps: (() => {
+    // Three phrases, each held at one loudness, so the three strengths can be compared in turn.
+    const soft = sentence(1.3, 2.8, 9, 0, 31, 0.26, 0.08), normal = sentence(3.15, 4.65, 9, 0, 37, 0.58, 0.1), raised = sentence(5.0, 6.5, 9, 0, 41, 0.88, 0.1);
+    return { press: 0.3, mic: 0.32, release: 6.8, typed: 7.5, end: 9.0, voice: (t) => Math.max(soft(t), normal(t), raised(t)) };
+  })(),
+  dead: { press: 0.3, mic: Infinity, release: 4.2, typed: 4.45, end: 6.0, voice: sentence(1.3, 3.8, 9, 0, 5) },
+  preparing: { press: 0.3, mic: Infinity, release: 2.6, typed: 2.6, end: 4.3, voice: () => 0, preparing: true },
+};
+
+// ---------------------------------------------------------------- readouts and ripple events
+// One readout per stroke (the level concept), each with its own clock, gain and spread, plus one
+// shared readout (the stream and the glass). All rise quickly and fall slowly.
+const RATE = 240;
+const RO = [{ clock: 0.07, gain: 0.92, spread: 0.2 }, { clock: 0.055, gain: 1, spread: 0.22 }, { clock: 0.085, gain: 0.86, spread: 0.18 }];
+const hash = (i, n) => { let h = (i * 374761393 + n * 668265263) ^ 0x5bf03635; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+const smooth = (cur, target, dt) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? 0.05 : 0.25)));
+function newState() { return { lv3: [0, 0, 0], lv1: 0, act: 0, prev: 0, rising: false, peak: 0, lastDrop: -9, lastEmit: -9, n: 0, since: 0, events: [] }; }
+// A ripple's strength: the level itself, or one of three fixed strengths picked by the loudest
+// level since the last ripple, so a beat that lands between two loud syllables still reads loud.
+const strengthOf = (level) => (SG.mode !== 'tiers' ? level : SG.tiers[level >= SG.loudFrom ? 2 : level >= SG.normalFrom ? 1 : 0]);
+// Advances the readouts by one step and records any ripple. Returns the samples for this step.
+function step(s, v, t, dt, ch) {
+  const on = ch.on;
+  for (let i = 0; i < 3; i++) {
+    const p = SL.three ? RO[i] : RO[1], spread = SH.reduce ? 0 : p.spread, n = hash(SL.three ? i : 1, Math.floor(t / p.clock));
+    s.lv3[i] = smooth(s.lv3[i], on ? clamp(v * p.gain + spread * (n - 0.5) * v * 2) : 0, dt);
+  }
+  const n1 = hash(7, Math.floor(t / 0.06));
+  s.lv1 = smooth(s.lv1, on ? clamp(v + (SH.reduce ? 0 : 0.36 * (n1 - 0.5) * v)) : 0, dt);
+  s.act += ((on ? v : 0) - s.act) * (1 - Math.exp(-dt / 0.3));
+  // Ripples: rings leave the centre on a beat, sized by the level; drops fall on each peak.
+  s.since = on ? Math.max(s.since, s.lv1) : 0;
+  if (on && !SH.reduce) {
+    const thr = 0.32 - 0.26 * SG.sens;
+    if (SG.timing === 'cadence') {
+      // A steady cadence while sound is above the threshold, however fast or loud the speech;
+      // each ripple's strength is the level at the moment it falls.
+      if (s.lv1 > thr && t - s.lastEmit >= 1 / SG.cadence) {
+        const w = strengthOf(SG.mode === 'tiers' ? s.since : s.lv1);
+        s.events.push(SG.origin === 'rings' ? [24, 24, t, w] : dropAt(s.n++, s.lv1, t, w)); s.lastEmit = t; s.since = 0;
+      }
+    } else if (SG.origin === 'rings') {
+      if (s.lv1 > s.prev) { s.rising = true; s.peak = s.lv1; }
+      else if (s.rising && s.lv1 < s.peak - 0.02) { s.rising = false; if (s.peak > thr && t - s.lastEmit > 0.07) { s.events.push([24, 24, t, strengthOf(s.peak)]); s.lastEmit = t; s.since = 0; } }
+    } else {
+      if (s.lv1 > s.prev) { s.rising = true; s.peak = s.lv1; }
+      else if (s.rising && s.lv1 < s.peak - 0.02) {
+        s.rising = false;
+        if (s.peak > thr && t - s.lastDrop > 0.07) { s.events.push(dropAt(s.n++, s.peak, t, strengthOf(s.peak))); s.lastDrop = t; s.since = 0; }
+      }
+    }
+  }
+  s.prev = s.lv1;
+  return { lv3: [...s.lv3], lv1: ch.t >= ch.live && (SS.release === 'collapse' || ch.t < ch.release) ? s.lv1 : null, act: s.act, lvg: s.lv1 };
+}
+// A drop on one of the strokes: at random, or higher on the stroke when louder.
+function dropAt(k, amp, t, w = amp) {
+  const st = STROKES[Math.floor(hash(11, k) * 3) % 3];
+  const along = SG.place === 'loudness' ? clamp(1.05 - amp, 0.04, 0.96) : 0.08 + 0.84 * hash(13, k);
+  const [x, y] = toPt(pointAlong(st, along));
+  return [x + (hash(17, k) - 0.5) * 1.2, y + (hash(19, k) - 0.5) * 1.2, t, w];
+}
+function pointAlong(st, u) {
+  const want = u * st.len[st.len.length - 1];
+  for (let j = 1; j < st.spine.length; j++) if (st.len[j] >= want) {
+    const f = (want - st.len[j - 1]) / (st.len[j] - st.len[j - 1] || 1), a = st.spine[j - 1], b = st.spine[j];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  }
+  return st.spine[st.spine.length - 1];
+}
+for (const s of STROKES) {
+  s.len = [0]; for (let i = 1; i < s.spine.length; i++) s.len.push(s.len[i - 1] + Math.hypot(s.spine[i][0] - s.spine[i - 1][0], s.spine[i][1] - s.spine[i - 1][1]));
+}
+
+// A scripted run, precomputed at 240 Hz so it scrubs and replays exactly.
+function runScript(sc) {
+  const n = Math.ceil(sc.end * RATE) + 1, st = newState(), out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / RATE, ch = channels(t, sc); ch.t = t;
+    out[i] = step(st, ch.on ? sc.voice(t) : 0, t, 1 / RATE, ch);
+  }
+  return { samples: out, events: st.events };
+}
+const sampleAt = (track, t) => track.samples[clamp(Math.round(t * RATE), 0, track.samples.length - 1)];
+function frame(track, t, sc) {
+  const s = sampleAt(track, t), ch = channels(t, sc);
+  return { t, ch, lv3: s.lv3, act: s.act, lvg: s.lvg, level: (time) => (time < 0 ? null : sampleAt(track, time).lv1),
+    events: track.events.filter((e) => t >= e[2] && t - e[2] < 2.2 * Math.sqrt(SG.size)) };
+}
+
+// ---------------------------------------------------------------- colour helpers
+const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+const mix = (fg, bg, a) => { const f = hex(fg), b = hex(bg); return `rgb(${f.map((v, i) => Math.round(v * a + b[i] * (1 - a))).join(',')})`; };
+const rgba = (c, a) => `rgba(${hex(c).join(',')},${a})`;
+const pal = (theme) => ({ bg: css(`--hud-${theme}`), fg: css(`--hud-${theme}-fg`), accent: css(`--accent-${theme}`) });
+
+// ---------------------------------------------------------------- the panel, shared by every concept
+const M = 16, SIDE = 48 + 2 * M;
+function panelFrame(cv, k, theme, f, content) {
+  const W = Math.round(SIDE * k);
+  if (cv.width !== W) { cv.width = W; cv.height = W; }
+  const ctx = cv.getContext('2d'), P = pal(theme), ch = f.ch;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, W);
+  if (ch.panel <= 0.001) return;
+  const y0 = M + ch.rise, s = (30 * k) / MARK_H;
+  const X = [s, 0, 0, s, (M + 24) * k - D.point[0] * s, (y0 + 24) * k - D.point[1] * s];
+  ctx.globalAlpha = ch.panel;
+  ctx.save();
+  ctx.shadowColor = theme === 'dark' ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,.28)'; ctx.shadowBlur = 16 * k; ctx.shadowOffsetY = 8 * k;
+  ctx.fillStyle = P.bg; ctx.beginPath(); ctx.roundRect(M * k, y0 * k, 48 * k, 48 * k, 11 * k); ctx.fill();
+  ctx.restore();
+  content(ctx, { k, W, X, PX: [k, 0, 0, k, M * k, y0 * k], y0, P, ch, theme });
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = ch.panel;
+  ctx.lineWidth = k; ctx.strokeStyle = theme === 'dark' ? 'rgba(255,255,255,.20)' : 'rgba(255,255,255,.5)';
+  ctx.beginPath(); ctx.roundRect((M + 0.5) * k, (y0 + 0.5) * k, 47 * k, 47 * k, 10.5 * k); ctx.stroke();
+  ctx.lineWidth = 0.5 * k; ctx.strokeStyle = theme === 'dark' ? 'rgba(0,0,0,.8)' : 'rgba(0,0,0,.12)';
+  ctx.beginPath(); ctx.roundRect((M - 0.25) * k, (y0 - 0.25) * k, 48.5 * k, 48.5 * k, 11.25 * k); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+const scratch = () => { const c = document.createElement('canvas'); return c; };
+const sized = (c, W) => { if (c.width !== W) { c.width = W; c.height = W; } const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, W); return x; };
+function mutedStrokes(ctx, g, alpha, strength) {
+  if (alpha <= 0) return;
+  ctx.globalAlpha = g.ch.panel * alpha; ctx.setTransform(...g.X); ctx.fillStyle = mix(g.P.fg, g.P.bg, strength); ctx.fill(ALL); ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+// ---------------------------------------------------------------- concept 1: the level, inside the strokes
+const SHARE = STROKES.map((s) => {
+  const N = 500, cv = document.createElement('canvas'); cv.width = N; cv.height = N;
+  const c = cv.getContext('2d'); c.setTransform(N / 1000, 0, 0, N / 1000, 0, 0); c.fill(s.path);
+  const a = c.getImageData(0, 0, N, N).data, rows = new Float64Array(N);
+  for (let y = 0; y < N; y++) { let n = 0; for (let x = 0; x < N; x++) n += a[(y * N + x) * 4 + 3]; rows[y] = n; }
+  const cum = new Float64Array(N + 1);
+  for (let y = N - 1; y >= 0; y--) cum[y] = cum[y + 1] + rows[y];
+  const total = cum[0];
+  return (share) => {
+    const want = share * total; let y = N; while (y > 0 && cum[y - 1] <= want) y--;
+    const frac = clamp((want - cum[y]) / (rows[y - 1] || 1)); return ((y - frac) * 1000) / N;
+  };
+});
+const GRAIN = (() => {
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const lines = [];
+  for (const s of STROKES) for (let j = 0; j < 16; j++) {
+    const off = (j / 15 - 0.5) * 120 + (rnd() - 0.5) * 6, p = new Path2D();
+    s.spine.forEach(([x, y], i) => {
+      const a = s.spine[Math.max(0, i - 1)], b = s.spine[Math.min(s.spine.length - 1, i + 1)];
+      const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      i ? p.lineTo(x - (dy / l) * off, y + (dx / l) * off) : p.moveTo(x - (dy / l) * off, y + (dx / l) * off);
+    });
+    lines.push({ p, dash: [20 + rnd() * 160, 8 + rnd() * 40, 10 + rnd() * 90, 6 + rnd() * 30], w: 3 + rnd() * 5, off: rnd() * 200 });
+  }
+  return lines;
+})();
+const LV = scratch();
+function drawLevel(cv, k, theme, f) {
+  panelFrame(cv, k, theme, f, (ctx, g) => {
+    const { P, ch, X, W } = g;
+    mutedStrokes(ctx, g, ch.muted, SL.muted);
+    const levels = f.lv3.map((r) => ch.gate * (SL.floor + (1 - SL.floor) * r));
+    if (!levels.some((l) => l > 0.0005)) return;
+    const c = sized(LV, W); c.setTransform(...X);
+    STROKES.forEach((st, i) => {
+      const lvl = levels[i]; if (lvl <= 0.0005) return;
+      c.save(); c.clip(st.path);
+      const [bx0, , bx1, by1] = st.box;
+      if (SL.form === 'written') {
+        const want = lvl * st.len[st.len.length - 1]; c.beginPath(); c.moveTo(...st.spine[0]);
+        for (let j = 1; j < st.spine.length; j++) {
+          if (st.len[j] <= want) { c.lineTo(...st.spine[j]); continue; }
+          const u = (want - st.len[j - 1]) / (st.len[j] - st.len[j - 1]), a = st.spine[j - 1], b = st.spine[j];
+          c.lineTo(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u); break;
+        }
+        c.lineWidth = 220; c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = P.fg; c.stroke();
+      } else if (SL.form === 'water') {
+        const y = SHARE[i](lvl), amp = SH.reduce ? 0 : 0.7 * PT * clamp(f.act * 1.6), ph = f.t / 1.15;
+        const surf = (x) => y + amp * Math.sin(2 * Math.PI * (x / 340 - ph)) + amp * 0.35 * Math.sin(2 * Math.PI * (x / 130 - ph * 1.7));
+        c.beginPath(); c.moveTo(bx0 - 20, by1 + 20);
+        for (let x = bx0 - 20; x <= bx1 + 20; x += 4) c.lineTo(x, surf(x));
+        c.lineTo(bx1 + 20, by1 + 20); c.closePath(); c.fillStyle = mix(P.fg, P.bg, 0.86); c.fill();
+        c.beginPath(); for (let x = bx0 - 20; x <= bx1 + 20; x += 4) (x === bx0 - 20 ? c.moveTo : c.lineTo).call(c, x, surf(x) + 0.35 * PT);
+        c.lineWidth = 0.55 * PT; c.strokeStyle = theme === 'dark' ? P.fg : P.bg;
+        c.globalAlpha = theme === 'dark' ? 0.95 : 0.6 * (0.7 + 0.3 * Math.sin(2 * Math.PI * (f.t * 1.3 + i * 0.3))); c.stroke(); c.globalAlpha = 1;
+      } else {
+        const y = SHARE[i](lvl);
+        if (SL.form === 'soak') {
+          const fe = 2 * PT, gr = c.createLinearGradient(0, y - fe, 0, y + fe);
+          gr.addColorStop(0, rgba(P.fg, 0)); gr.addColorStop(1, P.fg);
+          c.fillStyle = gr; c.fillRect(bx0 - 20, y - fe, bx1 - bx0 + 40, fe * 2);
+          c.fillStyle = P.fg; c.fillRect(bx0 - 20, y + fe, bx1 - bx0 + 40, by1 - y + 20);
+        } else { c.fillStyle = P.fg; c.fillRect(bx0 - 20, y, bx1 - bx0 + 40, by1 - y + 20); }
+      }
+      c.restore();
+    });
+    if (SL.grain) {
+      c.globalCompositeOperation = 'destination-out'; c.globalAlpha = 0.55;
+      for (const gr of GRAIN) { c.setLineDash(gr.dash); c.lineDashOffset = gr.off; c.lineWidth = gr.w; c.strokeStyle = '#000'; c.stroke(gr.p); }
+      c.setLineDash([]); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    }
+    ctx.globalAlpha = ch.panel; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(LV, 0, 0);
+  });
+}
+
+// ---------------------------------------------------------------- concept 2: the stream, through the strokes
+function grid() {
+  const p = SS.pitch, cols = Math.max(1, Math.floor((48 - 2 * SS.pad) / p));
+  return { p, cols, rows: Math.max(1, Math.floor(SS.height / 2 / p)), left: 24 - (cols * p) / 2, get half() { return this.rows * p; } };
+}
+let insideMask = null, insideKey = '';
+function inside(g) {
+  const key = `${g.p}|${g.cols}|${g.rows}`; if (key === insideKey) return insideMask;
+  const c = document.createElement('canvas').getContext('2d'), m = new Set();
+  for (let j = 0; j < g.cols; j++) for (let r = -g.rows; r < g.rows; r++) {
+    const x = g.left + (j + 0.5) * g.p, y = 24 + (r + 0.5) * g.p;
+    if (c.isPointInPath(ALL, D.point[0] + (x - 24) * PT, D.point[1] + (y - 24) * PT)) m.add(`${j},${r}`);
+  }
+  insideKey = key; insideMask = m; return m;
+}
+function streamCells(c, f, g, pick) {
+  const ch = f.ch, floor = g.p / g.half;
+  const level = (x) => {
+    const v = f.level(f.t - (x - g.left) / SS.flow); if (v === null || v === undefined) return null;
+    let a = floor + (1 - floor) * v;
+    if (SS.undulate && !SH.reduce) a *= 1 + 0.22 * v * Math.sin(2 * Math.PI * (x / 14 - f.t / 0.9));
+    return clamp(a) * ch.collapse;
+  };
+  if (SS.form === 'ribbon') {
+    const top = [], xs = [];
+    for (let x = g.left; x <= g.left + g.cols * g.p + 0.001; x += 0.25) { const a = level(x); if (a !== null) { xs.push(x); top.push(a * g.half); } }
+    if (!xs.length) return;
+    c.beginPath(); xs.forEach((x, i) => (i ? c.lineTo(x, 24 - top[i]) : c.moveTo(x, 24 - top[i])));
+    for (let i = xs.length - 1; i >= 0; i--) c.lineTo(xs[i], 24 + top[i]);
+    c.closePath(); c.fill(); return;
+  }
+  for (let j = 0; j < g.cols; j++) {
+    const cx = g.left + (j + 0.5) * g.p, a = level(cx); if (a === null) continue;
+    const H = a * g.half;
+    if (SS.form === 'bars') {
+      if (!pick(j, null)) continue;
+      const w = g.p * 0.5, h = Math.max(H, w / 2); c.beginPath(); c.roundRect(cx - w / 2, 24 - h, w, 2 * h, w / 2); c.fill(); continue;
+    }
+    for (let r = -g.rows; r < g.rows; r++) {
+      if (!pick(j, r)) continue;
+      const d = r < 0 ? -r - 1 : r, lit = clamp((H - d * g.p) / g.p);
+      if (lit <= 0.01) continue;
+      const cy = 24 + (r + 0.5) * g.p;
+      let size = g.p * 0.72, alpha = lit;
+      if (SS.form === 'halftone') { size = g.p * 0.86 * Math.sqrt(lit); alpha = 1; }
+      c.globalAlpha = alpha; c.beginPath();
+      if (SS.shape === 'round') c.arc(cx, cy, size / 2, 0, Math.PI * 2); else c.rect(cx - size / 2, cy - size / 2, size, size);
+      c.fill();
+    }
+  }
+  c.globalAlpha = 1;
+}
+const STA = scratch(), STB = scratch();
+function drawStream(cv, k, theme, f) {
+  panelFrame(cv, k, theme, f, (ctx, g) => {
+    const { P, ch, X, PX, W } = g;
+    mutedStrokes(ctx, g, ch.muted, SS.muted);
+    if (SS.glow !== 'off' && ch.glow > 0) {
+      const c = sized(STA, W), col = SS.glowColour === 'accent' ? P.accent : P.fg; c.setTransform(...X);
+      if (SS.glow === 'halo') { c.shadowColor = col; c.shadowBlur = k; c.fillStyle = col; c.fill(ALL); c.shadowBlur = 0; }
+      else { c.lineWidth = 1.3 * PT; c.strokeStyle = col; c.lineJoin = 'round'; c.stroke(ALL); }
+      c.globalCompositeOperation = 'destination-out'; c.fill(ALL); c.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = ch.panel * ch.glow * 0.6; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(STA, 0, 0);
+    }
+    if (ch.stream <= 0.001) return;
+    const gr = grid();
+    const paint = (pick, clip) => {
+      const c = sized(STB, W);
+      if (clip) { c.save(); c.setTransform(...X); c.clip(ALL); }
+      c.setTransform(...PX); c.fillStyle = P.fg; c.globalAlpha = 1;
+      streamCells(c, f, gr, pick);
+      if (clip) c.restore();
+      c.setTransform(...PX); c.globalCompositeOperation = 'destination-in';
+      const fade = Math.min(3, SS.pad + 1), x0 = gr.left, x1 = gr.left + gr.cols * gr.p, e = fade / (x1 - x0), lg = c.createLinearGradient(x0, 0, x1, 0);
+      lg.addColorStop(0, 'rgba(0,0,0,0)'); lg.addColorStop(e, '#000'); lg.addColorStop(1 - e, '#000'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = lg; c.fillRect(x0 - 1, 0, x1 - x0 + 2, 48); c.globalCompositeOperation = 'source-over';
+    };
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    paint(() => true, false); ctx.globalAlpha = ch.panel * ch.stream * SS.outside; ctx.drawImage(STB, 0, 0);
+    const mask = SS.whole && SS.form !== 'ribbon' ? inside(gr) : null;
+    if (mask) paint((j, r) => (r === null ? [...mask].some((m) => m.startsWith(`${j},`)) : mask.has(`${j},${r}`)), false);
+    else paint(() => true, true);
+    ctx.globalAlpha = ch.panel * ch.stream; ctx.drawImage(STB, 0, 0);
+  });
+}
+
+// ---------------------------------------------------------------- concept 3: glass, over the strokes
+// One WebGL renderer draws the panel's face; the 2D panel composites it. The fragment shader is
+// the same maths a Metal layer effect would run: a height field from the ripples, the strokes
+// sampled through its slope (refraction), highlights from the same slope, and frost that the
+// passing ripples clear.
+const MAXR = 24;
+const FRAG = `
+precision highp float;
+uniform sampler2D uMask;
+uniform vec2 uRes; uniform float uK, uTime;
+uniform vec4 uDrops[${MAXR}]; uniform int uCount;
+uniform vec3 uBg, uFg, uVeil;
+uniform float uClearTime, uForm, uInkUp, uSize, uStrokeA, uMuted, uFrost, uRefract, uSpec, uReturn, uRest, uFlat, uLevel, uInk, uDark;
+const float SPEED = 16.0, WAVE = 3.4;
+float ripple(vec2 p, vec4 d, inout float clear) {
+  float age = uTime - d.z;
+  if (age < 0.0 || age > 2.2 * sqrt(uSize)) return 0.0;
+  float r = length(p - d.xy), front = SPEED * sqrt(uSize) * age, w = (1.5 + 2.6 * d.w) * uSize, u = r - front;
+  // The clearing reads a clock that stops at release, so the frost does not return before it lifts.
+  float ageC = uClearTime - d.z, frontC = SPEED * sqrt(uSize) * ageC;
+  if (ageC >= 0.0) clear += d.w * exp(-ageC / uReturn) * smoothstep(frontC + w, frontC - 2.0 * w, r);
+  return d.w * exp(-age / (0.55 * sqrt(uSize))) * sin(6.2831853 * u / (WAVE * uSize)) * exp(-(u * u) / (w * w));
+}
+float height(vec2 p, inout float clear) {
+  float h = 0.0;
+  for (int i = 0; i < ${MAXR}; i++) { if (i >= uCount) break; h += ripple(p, uDrops[i], clear); }
+  return h + uRest * 0.08 * sin(p.x * 0.55 + uTime * 0.9) * sin(p.y * 0.45 - uTime * 0.7);
+}
+float cover(vec2 p) { return texture2D(uMask, clamp(p / 48.0, 0.0, 1.0)).a; }
+float frosted(vec2 p, float R) {
+  float s = 0.0;
+  for (int i = 0; i < 12; i++) {
+    float a = float(i) * 2.39996, rr = R * sqrt((float(i) + 0.5) / 12.0);
+    s += cover(p + vec2(cos(a), sin(a)) * rr);
+  }
+  return s / 12.0;
+}
+float roundRect(vec2 p) { vec2 q = abs(p - 24.0) - vec2(24.0 - 11.0); return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 11.0; }
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uK;
+  float alpha = clamp(0.5 - roundRect(p) * uK, 0.0, 1.0);
+  float clear = 0.0, c2 = 0.0;
+  float h = height(p, clear);
+  vec2 g = vec2(height(p + vec2(0.08, 0.0), c2) - height(p - vec2(0.08, 0.0), c2),
+                height(p + vec2(0.0, 0.08), c2) - height(p - vec2(0.0, 0.08), c2)) / 0.16;
+  g *= (1.0 - uFlat);
+  clear = mix(clear, uLevel * 1.4, uFlat);
+  vec2 off = -g * uRefract;
+  vec3 ink = mix(mix(uBg, uFg, uMuted), mix(uBg, uFg, uInk), uInkUp);
+  // Frost is a blur that grows: its radius and its milky veil scale with how far the glass has
+  // formed and how much of it the voice has cleared here. At radius 0 the strokes are sharp.
+  float fro = uForm * uFrost * (1.0 - clamp(clear * 1.6, 0.0, 1.0));
+  float soft = frosted(p + off, 1.6 * fro) * uStrokeA;
+  vec3 col = mix(mix(uBg, ink, soft), uVeil, 0.4 * fro);
+  // Highlights: light from the upper left catching the slope of each ripple.
+  float lit = dot(g, normalize(vec2(-0.55, -0.85)));
+  float spec = clamp(lit * uSpec, 0.0, 1.0) * uForm;
+  float shade = clamp(-lit * uSpec * 0.6, 0.0, 1.0) * uForm;
+  col = mix(col, uDark > 0.5 ? uFg : vec3(1.0), spec * (uDark > 0.5 ? 0.55 : 0.75));
+  col = mix(col, uDark > 0.5 ? uBg * 0.6 : uFg, shade * (uDark > 0.5 ? 0.5 : 0.22));
+  gl_FragColor = vec4(col * alpha, alpha);
+}`;
+const GL = (() => {
+  const cv = document.createElement('canvas');
+  const gl = cv.getContext('webgl', { premultipliedAlpha: true, preserveDrawingBuffer: true, antialias: false });
+  if (!gl) return null;
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }'));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  // The strokes' coverage over the panel's face, 16 pixels per point.
+  const N = 768, mask = document.createElement('canvas'); mask.width = N; mask.height = N;
+  const m = mask.getContext('2d'), s = (30 * 16) / MARK_H;
+  m.setTransform(s, 0, 0, s, 24 * 16 - D.point[0] * s, 24 * 16 - D.point[1] * s); m.fillStyle = '#fff'; m.fill(ALL);
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, mask);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const U = {}; for (const n of ['uMask', 'uClearTime', 'uForm', 'uInkUp', 'uSize', 'uRes', 'uK', 'uTime', 'uDrops', 'uCount', 'uBg', 'uFg', 'uVeil', 'uStrokeA', 'uMuted', 'uFrost', 'uRefract', 'uSpec', 'uReturn', 'uRest', 'uFlat', 'uLevel', 'uInk', 'uDark']) U[n] = gl.getUniformLocation(prog, n);
+  const rgb = (c) => hex(c).map((v) => v / 255);
+  return {
+    canvas: cv,
+    render(k, theme, f) {
+      const W = Math.round(48 * k); if (cv.width !== W) { cv.width = W; cv.height = W; }
+      gl.viewport(0, 0, W, W); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      const P = pal(theme), ev = f.events.slice(-MAXR), drops = new Float32Array(MAXR * 4);
+      ev.forEach((e, i) => drops.set([e[0], e[1], e[2], e[3]], i * 4));
+      gl.uniform1i(U.uMask, 0); gl.uniform1f(U.uSize, SG.size); gl.uniform2f(U.uRes, W, W); gl.uniform1f(U.uK, k); gl.uniform1f(U.uTime, f.t);
+      gl.uniform4fv(U.uDrops, drops); gl.uniform1i(U.uCount, ev.length);
+      gl.uniform3fv(U.uBg, rgb(P.bg)); gl.uniform3fv(U.uFg, rgb(P.fg));
+      gl.uniform3fv(U.uVeil, theme === 'dark' ? rgb(mix(P.fg, P.bg, 0.16).replace(/rgb\((\d+),(\d+),(\d+)\)/, (_, r, g, b) => '#' + [r, g, b].map((v) => (+v).toString(16).padStart(2, '0')).join(''))) : [0.97, 0.975, 0.98]);
+      gl.uniform1f(U.uStrokeA, f.ch.muted); gl.uniform1f(U.uMuted, 0.24); gl.uniform1f(U.uForm, f.ch.form); gl.uniform1f(U.uInkUp, f.ch.inkUp); gl.uniform1f(U.uClearTime, f.ch.clearTime);
+      gl.uniform1f(U.uFrost, SG.frost); gl.uniform1f(U.uRefract, 1.6 * SG.strength); gl.uniform1f(U.uSpec, 1.4 * SG.spec);
+      gl.uniform1f(U.uReturn, SG.ret); gl.uniform1f(U.uRest, SG.rest && !SH.reduce ? 1 : 0); gl.uniform1f(U.uFlat, SH.reduce ? 1 : 0);
+      gl.uniform1f(U.uLevel, f.ch.on ? f.lvg : 0); gl.uniform1f(U.uInk, SG.ink); gl.uniform1f(U.uDark, theme === 'dark' ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      return cv;
+    },
+  };
+})();
+function drawGlass(cv, k, theme, f) {
+  panelFrame(cv, k, theme, f, (ctx, g) => {
+    if (!GL) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = g.ch.panel;
+    ctx.drawImage(GL.render(k, theme, f), M * k, g.y0 * k);
+  });
+}
+
+// ---------------------------------------------------------------- concepts: words and frames
+const CONCEPTS = {
+  level: {
+    draw: drawLevel,
+    title: 'Level: inside the strokes',
+    lede: 'A level layer, seen only inside the strokes, rises to a quiet floor when the microphone goes live and then follows your voice, one readout per stroke. On release it drains, and the muted strokes hold while River transcribes.',
+    film: [['Press', 'panel fades in', 0.38], ['Muted', 'strokes come in', 0.6], ['Live', 'the floor rises', 0.85], ['Idle', 'the floor, quiet', 1.2], ['Speaking', 'voice', 2.05], ['Pause', 'holds still', 3.6], ['Released', 'the level drains', 6.3], ['Transcribing', 'muted, held', 6.75], ['Typed', 'strokes and panel fade', 7.32]],
+    notes: [['Solid', 'Full ink rising over the muted strokes with a clean top edge. The plainest reading, and the clearest at 30 pt.'],
+      ['Soak', 'The same rise with its top edge feathered over about 2 pt, so the ink seems to wick up the stroke.'],
+      ['Written', 'The level travels along each stroke in brush order, from where the brush lands. The idle floor is the landing itself.'],
+      ['Water', 'One wave runs left to right through all three strokes, with a bright meniscus. It grows with your voice and goes flat in silence.'],
+      ['Measured by ink', 'Every level is a share of the stroke\'s ink, not its height: the strokes are hairline at the foot, so 20 % here always covers a fifth of the ink.'],
+      ['Dropped', 'The glow, its accent, size and strength controls, and the shimmer while transcribing are gone (30 October). The level\'s rise is now the sign that the microphone is live.']],
+    questions: ['<b>The level.</b> Solid, soak, written or water, with or without grain.', '<b>The idle floor.</b> How full the strokes stand while you are quiet.', '<b>Readouts.</b> One per stroke, or one level shared by all three.'],
+  },
+  stream: {
+    draw: drawStream,
+    title: 'Stream: through the strokes',
+    lede: 'The audio level as a band across the panel, centred on the mark with room at each side. Sound enters at the left and flows to the right through the strokes: faint across the panel, bright inside the strokes. Kept as round 1 left it.',
+    film: [['Press', 'panel fades in', 0.38], ['Muted', 'strokes come in', 0.6], ['Live', 'the stream starts', 0.85], ['Idle', 'one quiet line', 1.25], ['Speaking', 'voice flows in', 1.95], ['Through', 'crossing the strokes', 2.9], ['Pause', 'quiet follows', 4.05], ['Released', 'the band collapses', 6.32], ['Typed', 'strokes and panel fade', 7.32]],
+    notes: [['Grid', 'A fixed grid of cells, like a meter\'s segments. Each column lights out from the centre line as far as the level reaches; the last cell lights partway, so the stream moves smoothly though no cell moves.'],
+      ['Halftone', 'The same grid, every cell lit and sized by the level at its place, so the band undulates like a halftone print of a wave.'],
+      ['Bars', 'One slim capsule per column: the familiar scrolling waveform at the panel\'s scale.'],
+      ['Ribbon', 'One smooth band as tall as the level, flowing through the strokes.'],
+      ['Inside and outside', 'Drawn twice: faint across the panel, then at full ink clipped to the strokes, or whole cells lit where their centre falls inside.'],
+      ['Silence', 'The band rests as one still line of cells, so a quiet or dead microphone still looks quiet.']],
+    questions: ['<b>The form.</b> Grid, halftone, bars or ribbon; squares or dots.', '<b>The proportions.</b> Pitch, height and side room at 1×.', '<b>The flow.</b> Its speed, and collapse or flow out on release.'],
+  },
+  glass: {
+    draw: drawGlass,
+    title: 'Glass: over the strokes',
+    lede: 'Once the muted strokes are in and the microphone is live, a pane of frost forms over them, its blur growing, while the ink rises beneath it over the same moment. Your voice ripples it. Louder sound makes stronger ripples, and where a ripple passes the frost clears, so the character sharpens as you speak and softens again in silence. On release it runs back: the ripples settle, the frost lifts and the ink dims together, and the muted strokes hold while River transcribes, then fade as smoothly as they came.',
+    film: [['Press', 'panel fades in', 0.38], ['Muted', 'strokes come in', 0.6], ['Forming', 'the frost grows', 0.88], ['Idle', 'frosted, still', 1.3], ['Speaking', 'drops fall', 1.62], ['Louder', 'stronger ripples', 2.45], ['Pause', 'frost returns', 4.1], ['Released', 'ripples settle', 6.3], ['Lifting', 'frost and ink leave together', 6.45], ['Typed', 'strokes and panel fade', 7.32]],
+    notes: [['Cadence', 'While sound is above the sensitivity threshold, ripples fall at a steady rate you set, however fast or loud the speech: three a second reads as a few broad rings, ten as a busy surface. Each ripple is as strong as the level at the moment it falls, scaled by strength; size sets how wide it spreads.'],
+      ['Three strengths', 'An alternative to strength following the level. Each ripple takes one of three fixed strengths, soft, normal or loud, picked by the loudest level since the previous ripple, so louder speech reads as visibly stronger ripples while cadence, size and spread stay the same. Sensitivity is still the level below which no ripple falls; the two boundaries above it mark where normal and loud begin. Soft, normal, raised steps through all three in turn.'],
+      ['Drops and rings', 'Drops land on the strokes, at random or higher when louder; centre rings leave the middle, calm and symmetric. On voice peaks, the round-1 timing, a ripple falls on each peak instead of on the cadence.'],
+      ['Frost', 'At rest the glass softens the strokes beneath. A passing ripple clears it, and it returns over about a second, so sharpness is a second reading of your voice that holds at 1×.'],
+      ['How it is drawn', 'One height field per frame: the strokes are sampled through its slope, and the highlights come from the same slope. That is what a Metal layer effect does in SwiftUI from macOS 14, so this page ports almost line for line. It bends the panel\'s own contents, not the desktop behind.'],
+      ['Silence', 'The glass is still. A trace of movement is a switch, off by default, so a dead microphone shows as glass that never moves while you talk.'],
+      ['Reduce Motion', 'No ripples: the level only clears and returns the frost, as a fade.']],
+    questions: ['<b>Cadence and size.</b> Few broad ripples or many small ones, at 1× as well as enlarged.', '<b>Drops or centre rings,</b> and where drops land.', '<b>Strength and highlights</b> at 1×, where a ripple bends a 2.5 pt stroke by under a point.', '<b>The frost.</b> How heavy, and how fast it returns.', '<b>Three strengths or the level.</b> Whether the tiers read as soft, normal and loud at 1×, and where their boundaries sit.', '<b>A trace of movement in silence,</b> or none.'],
+  },
+};
+const ORDER = ['level', 'stream', 'glass'];
+
+// ---------------------------------------------------------------- page: tabs, filmstrip, player
+let active = 'level';
+const P = { script: 'dictation', t: 2.4, playing: true, speed: 1, zoom: 4, loop: true, live: null };
+let track = null, filmFrames = [];
+
+function buildFilm() {
+  const host = document.getElementById('film'), C = CONCEPTS[active]; host.innerHTML = ''; filmFrames = [];
+  for (const theme of ['dark', 'light']) {
+    const desk = document.createElement('div'); desk.className = `desk ${theme === 'dark' ? 'd' : 'l'}`;
+    desk.innerHTML = `<span class="tag">${theme === 'dark' ? 'Dark appearance' : 'Light appearance'} · 1.5×</span><div class="strip"></div>`;
+    const strip = desk.querySelector('.strip');
+    for (const [name, sub, t] of C.film) {
+      const fig = document.createElement('figure'), cv = document.createElement('canvas');
+      cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${name}: ${sub}, ${theme}`);
+      fig.append(cv); fig.insertAdjacentHTML('beforeend', `<figcaption><b>${name}</b><span>${sub}</span></figcaption>`);
+      strip.append(fig); filmFrames.push({ cv, theme, t });
+    }
+    host.append(desk);
+  }
+}
+function renderFilm() {
+  const sc = SCRIPTS.dictation, tr = runScript(sc), k = 1.5 * Math.max(1, Math.ceil(devicePixelRatio || 1));
+  for (const f of filmFrames) CONCEPTS[active].draw(f.cv, k, f.theme, frame(tr, f.t, sc));
+}
+
+const views = [];
+for (const [id, theme] of [['stageDark', 'dark'], ['stageLight', 'light']]) {
+  const host = document.getElementById(id), big = document.createElement('canvas'), one = document.createElement('canvas');
+  big.setAttribute('role', 'img'); big.setAttribute('aria-label', `Recording panel, ${theme}, enlarged`);
+  one.setAttribute('role', 'img'); one.setAttribute('aria-label', `Recording panel, ${theme}, actual size`);
+  const oneWrap = document.createElement('div'); oneWrap.className = 'one'; oneWrap.append(one); oneWrap.insertAdjacentHTML('beforeend', '<span>1×</span>');
+  host.append(big, oneWrap); views.push({ big, one, theme });
+}
+function rebuild() {
+  track = runScript(SCRIPTS[P.script]);
+  const sc = SCRIPTS[P.script], pct = (t) => `${(100 * t) / sc.end}%`;
+  document.getElementById('marks').innerHTML = [[sc.mic !== Infinity ? 'press, mic live' : 'press', sc.press], ['release', sc.release], ...(sc.typed > sc.release ? [['typed', sc.typed + 0.06]] : [])]
+    .map(([n, t]) => `<span style="left:${pct(t)}">${n}</span>`).join('');
+  document.getElementById('scrub').max = sc.end;
+}
+function phaseName(t, sc) {
+  if (sc.preparing) return t < sc.press ? '' : t < sc.release ? 'Preparing model: muted strokes' : 'Fading';
+  if (t < sc.press) return '';
+  if (sc.mic === Infinity && t < sc.release) return 'No audio from the microphone';
+  if (t < sc.release) return t < sc.mic + 0.55 ? 'Coming to ready' : (sc.voice(t) > 0.04 ? 'Listening: voice' : 'Listening: quiet');
+  if (t < channels(t, sc).strokesOut) return 'Released: settling, then transcribing';
+  return 'Typed: fading';
+}
+function render(f, label) {
+  const dpr = Math.max(1, Math.ceil(devicePixelRatio || 1)), draw = CONCEPTS[active].draw;
+  for (const v of views) {
+    draw(v.big, P.zoom * dpr, v.theme, f); v.big.style.width = `${SIDE * P.zoom}px`;
+    draw(v.one, dpr, v.theme, f); v.one.style.width = `${SIDE}px`;
+  }
+  document.getElementById('phase').textContent = label;
+}
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000) * P.speed; last = now;
+  if (P.live) {
+    const l = P.live, ev = { press: 0, mic: 0.02, release: l.released ?? Infinity, typed: (l.released ?? Infinity) + 0.6 };
+    const target = l.t + dt;
+    while (l.samples.length / RATE < target) {
+      const t = l.samples.length / RATE, ch = channels(t, ev); ch.t = t;
+      l.samples.push(step(l.state, ch.on ? Number(document.getElementById('voice').value) / 100 : 0, t, 1 / RATE, ch));
+    }
+    l.t = target;
+    const tr = { samples: l.samples, events: l.state.events };
+    const f = frame(tr, l.t, ev);
+    render(f, l.released === null ? 'Listening, live' : 'Released');
+    if (l.released !== null && l.t > l.released + 2.2) { P.live = null; setPlaying(true); }
+  } else {
+    const sc = SCRIPTS[P.script];
+    if (P.playing) { P.t += dt; if (P.t > sc.end) P.t = P.loop ? 0 : sc.end; }
+    document.getElementById('scrub').value = P.t;
+    document.getElementById('clock').textContent = `${P.t.toFixed(2)} s · ${P.speed === 1 ? '1×' : P.speed === 0.25 ? '¼×' : '⅒×'}`;
+    render(frame(track, P.t, sc), phaseName(P.t, sc));
+  }
+  requestAnimationFrame(tick);
+}
+
+function show(id, focus) {
+  active = id; const C = CONCEPTS[id], i = ORDER.indexOf(id);
+  document.querySelectorAll('[role="tab"]').forEach((b) => { const on = b.dataset.c === id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  document.getElementById('concept').setAttribute('aria-labelledby', `tab-${id}`);
+  document.querySelectorAll('[data-for]').forEach((el) => { el.hidden = el.dataset.for !== id; });
+  document.getElementById('cTitle').textContent = C.title;
+  document.getElementById('cLede').textContent = C.lede;
+  document.getElementById('notes').innerHTML = C.notes.map(([h, p]) => `<div><h3>${h}</h3><p>${p}</p></div>`).join('')
+    + (id === 'glass' && !GL ? '<div class="nogl">This browser did not give the page WebGL, so the glass cannot be drawn here.</div>' : '');
+  document.getElementById('questions').innerHTML = C.questions.map((q) => `<li><span>${q}</span></li>`).join('');
+  document.getElementById('count').textContent = `${i + 1} of ${ORDER.length}`;
+  document.getElementById('prev').disabled = i === 0; document.getElementById('next').disabled = i === ORDER.length - 1;
+  try { history.replaceState(null, '', `#${id}`); } catch (e) {}
+  buildFilm(); renderFilm();
+}
+document.querySelectorAll('[role="tab"]').forEach((b) => {
+  b.addEventListener('click', () => show(b.dataset.c));
+  b.addEventListener('keydown', (e) => {
+    const i = ORDER.indexOf(active), n = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (n) { e.preventDefault(); show(ORDER[(i + n + ORDER.length) % ORDER.length], true); }
+  });
+});
+document.getElementById('prev').addEventListener('click', () => show(ORDER[Math.max(0, ORDER.indexOf(active) - 1)]));
+document.getElementById('next').addEventListener('click', () => show(ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(active) + 1)]));
+
+// ---------------------------------------------------------------- controls
+const segs = (id, fn) => {
+  const el = document.getElementById(id);
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    fn(b.dataset.v);
+  });
+};
+const setPlaying = (on) => { P.playing = on; const b = document.getElementById('play'); b.textContent = on ? 'Pause' : 'Play'; b.setAttribute('aria-pressed', String(on)); };
+const changed = () => { rebuild(); renderFilm(); };
+segs('segScript', (v) => { P.script = v; P.t = 0; P.live = null; rebuild(); setPlaying(true); });
+segs('segSpeed', (v) => { P.speed = Number(v); });
+segs('segZoom', (v) => { P.zoom = Number(v); });
+segs('lvForm', (v) => { SL.form = v; renderFilm(); });
+segs('stForm', (v) => { SS.form = v; renderFilm(); });
+segs('stShape', (v) => { SS.shape = v; renderFilm(); });
+segs('stGlow', (v) => { SS.glow = v; renderFilm(); });
+segs('stGlowColour', (v) => { SS.glowColour = v; renderFilm(); });
+segs('stRelease', (v) => { SS.release = v; changed(); });
+segs('glOrigin', (v) => { SG.origin = v; changed(); });
+segs('glPlace', (v) => { SG.place = v; changed(); });
+segs('glTiming', (v) => { SG.timing = v; changed(); });
+segs('glMode', (v) => { SG.mode = v; document.getElementById('glTiers').hidden = v !== 'tiers'; changed(); });
+document.getElementById('play').addEventListener('click', () => setPlaying(!P.playing));
+document.getElementById('loop').addEventListener('change', (e) => { P.loop = e.target.checked; });
+document.getElementById('scrub').addEventListener('input', (e) => { P.live = null; P.t = Number(e.target.value); setPlaying(false); });
+const bindRange = (id, fn, fmt, full) => {
+  const el = document.getElementById(id), o = document.getElementById(`${id}Out`);
+  const apply = () => { fn(Number(el.value)); if (o) o.textContent = fmt(Number(el.value)); };
+  el.addEventListener('input', () => { apply(); full ? changed() : renderFilm(); }); apply();
+};
+const pct = (v) => `${v} %`;
+bindRange('shMutedIn', (v) => { SH.mutedIn = v / 100; }, (v) => `${(v / 100).toFixed(2)} s`, true);
+bindRange('shOverlap', (v) => { SH.overlap = v / 100; }, (v) => `${(v / 100).toFixed(2)} s`, true);
+bindRange('lvFloor', (v) => { SL.floor = v / 100; }, pct);
+bindRange('lvMuted', (v) => { SL.muted = v / 100; }, pct);
+bindRange('stPitch', (v) => { SS.pitch = v / 10; }, (v) => `${(v / 10).toFixed(1)} pt`);
+bindRange('stHeight', (v) => { SS.height = v; }, (v) => `${v} pt`);
+bindRange('stPad', (v) => { SS.pad = v; }, (v) => `${v} pt`);
+bindRange('stFlow', (v) => { SS.flow = v; }, (v) => `${v} pt/s`);
+bindRange('stOutside', (v) => { SS.outside = v / 100; }, pct);
+bindRange('stMuted', (v) => { SS.muted = v / 100; }, pct);
+bindRange('glStrength', (v) => { SG.strength = v / 100; }, pct);
+bindRange('glSpec', (v) => { SG.spec = v / 100; }, pct);
+bindRange('glSens', (v) => { SG.sens = v / 100; }, pct, true);
+bindRange('glCadence', (v) => { SG.cadence = v; }, (v) => `${v} per s`, true);
+bindRange('glSize', (v) => { SG.size = v / 100; }, pct);
+bindRange('glFrost', (v) => { SG.frost = v / 100; }, pct);
+bindRange('glReturn', (v) => { SG.ret = v / 10; }, (v) => `${(v / 10).toFixed(1)} s`);
+bindRange('glInk', (v) => { SG.ink = v / 100; }, pct);
+bindRange('glFormIn', (v) => { SG.formIn = v / 100; }, (v) => `${(v / 100).toFixed(2)} s`);
+bindRange('glSoft', (v) => { SG.tiers[0] = v / 100; }, pct, true);
+bindRange('glNormal', (v) => { SG.tiers[1] = v / 100; }, pct, true);
+bindRange('glLoud', (v) => { SG.tiers[2] = v / 100; }, pct, true);
+bindRange('glNormalFrom', (v) => { SG.normalFrom = v / 100; }, pct, true);
+bindRange('glLoudFrom', (v) => { SG.loudFrom = v / 100; }, pct, true);
+bindRange('glInkIn', (v) => { SG.inkIn = v / 100; }, (v) => `${(v / 100).toFixed(2)} s`);
+const check = (id, fn, full) => document.getElementById(id).addEventListener('change', (e) => { fn(e.target.checked); full ? changed() : renderFilm(); });
+check('lvGrain', (v) => { SL.grain = v; });
+check('lvThree', (v) => { SL.three = v; }, true);
+check('stUndulate', (v) => { SS.undulate = v; });
+check('stWhole', (v) => { SS.whole = v; });
+check('glRest', (v) => { SG.rest = v; });
+const reduceBox = document.getElementById('reduce'); reduceBox.checked = SH.reduce;
+check('reduce', (v) => { SH.reduce = v; }, true);
+
+// Hold to talk: pointer or keyboard, released anywhere.
+const talk = document.getElementById('talk');
+const startTalk = () => { if (P.live && P.live.released === null) return; P.live = { t: 0, released: null, state: newState(), samples: [] }; talk.setAttribute('aria-pressed', 'true'); };
+const stopTalk = () => { if (P.live && P.live.released === null) P.live.released = P.live.t; talk.setAttribute('aria-pressed', 'false'); };
+talk.addEventListener('pointerdown', (e) => { e.preventDefault(); talk.setPointerCapture?.(e.pointerId); startTalk(); });
+talk.addEventListener('pointerup', stopTalk); talk.addEventListener('pointercancel', stopTalk); talk.addEventListener('blur', stopTalk);
+talk.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); startTalk(); } });
+talk.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') stopTalk(); });
+
+const start = (location.hash || '').slice(1);
+rebuild(); show(ORDER.includes(start) ? start : 'level');
+// Paint the first frame now, so the page is complete before the first animation frame.
+render(frame(track, P.t, SCRIPTS[P.script]), phaseName(P.t, SCRIPTS[P.script]));
+requestAnimationFrame((now) => { last = now; tick(now); });
+</script>

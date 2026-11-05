@@ -544,6 +544,29 @@ struct MicrophoneLevelTests {
 
         #expect(received.count == 2)
     }
+
+    // Emitting whichever buffer arrived last caught the gap between syllables as often as the
+    // syllable, so loud speech read lower than it was (maintainer's level trace, 2026-11-02).
+    @MainActor
+    @Test("each emission carries the loudest buffer since the last one")
+    func emitLevelHoldsPeak() {
+        let clock = MutableClock()
+        let mic = MicrophoneCapability(now: { clock.now })
+        var received: [Float] = []
+        let cancellable = mic.inputLevels.sink { received.append($0) }
+        defer { cancellable.cancel() }
+
+        clock.now = 100
+        mic.emitLevel(rms: 0.01)                                         // first: emits
+        clock.now = 100 + Constants.inputLevelPublishInterval / 2
+        mic.emitLevel(rms: 0.1)                                          // throttled, but held
+        clock.now = 100 + Constants.inputLevelPublishInterval * 2
+        mic.emitLevel(rms: 0.01)                                         // emits the held peak
+        clock.now = 100 + Constants.inputLevelPublishInterval * 4
+        mic.emitLevel(rms: 0.01)                                         // the peak was spent
+
+        #expect(received == [0.01, 0.1, 0.01].map { MicrophoneCapability.normalizedLevel(rms: $0) })
+    }
 }
 
 // A mutable monotonic clock for the throttle test; read on the main actor via the

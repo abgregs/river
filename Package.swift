@@ -18,7 +18,10 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/River",
-            exclude: ["Resources/Info.plist", "Resources/River.entitlements", "Resources/MenuBarGlyphs"]
+            // The Glass shader is compiled to a metallib by the Makefile (SwiftPM 5.10 has
+            // no Metal build step for an executable target).
+            exclude: ["Resources/Info.plist", "Resources/River.entitlements", "Resources/MenuBarGlyphs",
+                      "Shaders/KawaGlass.metal"]
         ),
         .testTarget(
             name: "RiverTests",

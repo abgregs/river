@@ -21,8 +21,14 @@ show as raw text. -->
 ### Added
 
 - A switch in Settings, "Only use the microphone while dictating", restores the previous behaviour: the microphone opens on the key press and closes after the recording. Off by default.
+- A new recording indicator, Glass: a pane of frost over 川 that your voice ripples and clears, with stronger ripples when you speak louder.
 
 ### Changed
+
+- A new mark: River is now 川, in the menu bar and in the app icon. While River records, a red dot sits beside 川 in the menu bar; while it transcribes, the dot turns a muted gray.
+- The recording indicator draws 川 and is monochrome. When you press, the panel appears, then 川's strokes, faint, then the frosted glass once the microphone hears you; on release the glass leaves, the strokes stay while River transcribes, then the panel leaves. While River prepares its model, the panel shows the faint strokes, still.
+- The floating panels (the indicator, messages and the live transcript) are now solid, lit from the upper left with a bright edge, so they look the same over any desktop.
+- The recording indicator reads your voice on a scale measured from real speech on the built-in microphone: a quiet room keeps it still, and soft, normal and raised speech look different. Before, normal speech already filled it.
 
 - The microphone stays ready while River can take a dictation (permissions granted, the model loaded, the Mac awake and unlocked), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
 - With AirPods or another Bluetooth headset selected as the input, River records from the Mac's built-in microphone instead, on Macs that have one. The headset is never switched into call mode, so music and calls keep their quality while you dictate, and the recording is at the Mac microphone's full rate. A Mac without a built-in microphone keeps using the headset.

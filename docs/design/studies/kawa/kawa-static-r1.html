@@ -1,0 +1,669 @@
+<title>Kawa at Rest</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one reading column for the argument; full-width bands where the mark sits on the
+   surfaces River draws it on, today's r beside it. River's own tokens, monotone. */
+:root {
+  --paper: #F4F5F7;            /* mist */
+  --well: #FFFFFF;
+  --ink: #23262B;              /* charcoal */
+  --quiet: color-mix(in oklab, var(--ink) 70%, var(--paper));
+  --rule: color-mix(in oklab, var(--ink) 13%, var(--paper));
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --kanji: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "Songti SC", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  /* The surfaces River draws on. Fixed in both page themes: they stand for macOS, not the page. */
+  --icon-body: #23262B; --icon-mark: #ECEEF1;           /* the app icon: ink on charcoal */
+  --hud-dark: #101215; --hud-dark-mark: #ECEEF1;         /* Palette.HUD, opaque as under Reduce Transparency */
+  --hud-light: #F4F5F7; --hud-light-mark: #23262B;
+  --desk-dark: #3A3D42; --desk-dark-text: #C8CCD2;
+  --desk-light: #C9CDD3; --desk-light-text: #3A3D42;
+  --bar-light: #E3E5E9; --bar-light-glyph: #1F2125; --bar-light-pill: rgba(0, 0, 0, .12);   /* menu bar, approximate */
+  --bar-dark: #27292D; --bar-dark-glyph: #F0F1F3; --bar-dark-pill: rgba(255, 255, 255, .2);
+  --wall-light: #B4BDC7; --wall-dark: #252A31;           /* a plain wallpaper */
+  --dock-light: rgba(246, 247, 249, .55); --dock-dark: rgba(52, 55, 60, .7);
+  --win-light: #FFFFFF; --win-light-text: #23262B; --win-dark: #1D1F23; --win-dark-text: #E6E8EB;
+  --other-light: #A9AFB7; --other-dark: #5B6169;          /* stand-ins for other apps' icons */
+  --guide-on-dark: rgba(236, 238, 241, .62); --guide-on-light: rgba(35, 38, 43, .55);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #101215; --well: #181B1F; --ink: #ECEEF1; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --paper: #101215; --well: #181B1F; --ink: #ECEEF1; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--sans); }
+::selection { background: color-mix(in oklab, var(--ink) 22%, var(--paper)); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 96px; display: grid; gap: 80px; }
+section { display: grid; gap: 22px; }
+.sub { display: grid; gap: 16px; }
+.col { max-width: 66ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+h1 { font-size: clamp(30px, 4.4vw, 46px); font-weight: 650; line-height: 1.1; }
+h2 { font-size: 24px; font-weight: 650; line-height: 1.2; }
+h3 { font-size: 16px; font-weight: 650; letter-spacing: 0; }
+p { margin: 0; text-wrap: pretty; }
+.stack { display: grid; gap: 12px; }
+.lede { font-size: 17px; color: var(--quiet); max-width: 62ch; }
+.note { color: var(--quiet); font-size: 14px; }
+.k { font-family: var(--kanji); font-weight: 400; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.meta { color: var(--quiet); font-size: 13px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 8px; padding: 2px; gap: 2px; background: var(--well); }
+.seg button { font: 500 12.5px var(--sans); color: var(--quiet); background: none; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; transition-property: background-color, color; transition-duration: .12s; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13px; color: var(--quiet); }
+.controls label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.controls input { accent-color: var(--ink); }
+.controls .lbl { font-weight: 600; color: var(--ink); }
+
+/* Surface table */
+.tablewrap { overflow-x: auto; border-top: 1px solid var(--rule); }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 13px 16px 13px 0; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--quiet); }
+td { color: var(--quiet); }
+td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; color: var(--ink); border: 1px solid var(--ink); border-radius: 999px; padding: 0 8px; margin-bottom: 4px; }
+
+/* Drawn views */
+.mag { position: relative; max-width: 100%; flex: none; }
+.mag canvas { display: block; width: 100%; height: auto; }
+.mag.px canvas { image-rendering: pixelated; }
+.mag .guides { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.guides line, .guides rect { fill: none; vector-effect: non-scaling-stroke; stroke-width: 1; }
+.guides.on-dark line, .guides.on-dark rect { stroke: var(--guide-on-dark); }
+.guides.on-light line, .guides.on-light rect { stroke: var(--guide-on-light); }
+.guides .box { stroke-dasharray: 4 3; }
+.guides .bound { stroke-dasharray: 1 3; }
+.hide-guides .guides { display: none; }
+/* The HUD's hairlines sit above the drawing, as River's do; the shadow below it. */
+.hudwrap.light { box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 8px 22px -6px rgba(0,0,0,.30); }
+.hudwrap.dark { box-shadow: 0 0 0 .5px rgba(0,0,0,.8), 0 8px 22px -6px rgba(0,0,0,.45); }
+.hudwrap canvas { border-radius: inherit; }
+.hudwrap::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.hudwrap.dark::after { box-shadow: inset 0 0 0 1px rgba(255,255,255,.20), inset 0 1px 0 0 rgba(255,255,255,.35); }
+.hudwrap.light::after { box-shadow: inset 0 0 0 1px rgba(255,255,255,.5), inset 0 1px 0 0 rgba(255,255,255,.9); }
+
+/* App icon */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pair figure { margin: 0; background: var(--well); border-radius: 14px; padding: 22px 16px 16px; display: grid; gap: 12px; justify-items: center; }
+.pair figcaption { display: flex; justify-content: space-between; gap: 12px; width: 100%; font-size: 13px; color: var(--quiet); }
+.pair figcaption b { color: var(--ink); font-weight: 600; }
+.ramp { display: grid; gap: 14px; overflow-x: auto; }
+.ramprow { display: flex; align-items: flex-end; gap: clamp(14px, 3vw, 36px); }
+.ramprow figure { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.ramprow figcaption, .pxrow figcaption { font: 11.5px var(--mono); color: var(--quiet); white-space: nowrap; }
+.ramprow .name { width: 84px; flex: none; font-size: 13px; font-weight: 600; align-self: center; }
+.pxrow { display: flex; flex-wrap: wrap; gap: 16px 22px; align-items: flex-start; }
+.pxrow .name { width: 84px; font-size: 13px; font-weight: 600; align-self: center; }
+.pxrow figure { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.pxrow .mag { border-radius: 4px; overflow: hidden; background: var(--well); }
+
+/* Menu bar rows */
+.mrows { display: grid; border-top: 1px solid var(--rule); }
+.mrow { display: grid; grid-template-columns: 150px auto auto auto; justify-content: start; gap: 18px 32px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+.mrow .name b { display: block; font-weight: 600; }
+.mrow .name > span { display: block; font: 11.5px/1.45 var(--mono); color: var(--quiet); }
+.strips { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.bar { height: 24px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 10px 0 8px; border-radius: 6px; max-width: 100%; overflow: hidden; }
+.bar.light { background: var(--bar-light); color: var(--bar-light-glyph); }
+.bar.dark { background: var(--bar-dark); color: var(--bar-dark-glyph); }
+.bar .nb { flex: none; display: block; }
+.bar .clock { font: 500 13px var(--sans); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.zoom { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.zoom figcaption { font: 11px var(--mono); color: var(--quiet); }
+.zoom .mag { border-radius: 4px; overflow: hidden; }
+
+/* Panel rows */
+.desk { border-radius: 12px; padding: 22px 16px; display: grid; gap: 14px; }
+.desk.d { background: var(--desk-dark); color: var(--desk-dark-text); }
+.desk.l { background: var(--desk-light); color: var(--desk-light-text); }
+.desk .tag { font: 600 11.5px var(--sans); letter-spacing: .04em; text-transform: uppercase; }
+.prow { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; }
+.prow .name { width: 120px; font-weight: 600; font-size: 14px; }
+.prow .name > span { display: block; font-weight: 400; font: 11.5px/1.45 var(--mono); }
+.pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+
+/* Scenes: a desktop at actual size */
+.scenes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.scenewrap { overflow-x: auto; border-radius: 12px; }
+.scene { position: relative; width: 520px; height: 380px; border-radius: 12px; overflow: hidden; font-family: var(--sans); margin-inline: auto; }
+.scene.light { background: var(--wall-light); }
+.scene.dark { background: var(--wall-dark); }
+.scene .menubar { position: absolute; inset: 0 0 auto 0; height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 12px 0 8px; }
+.scene.light .menubar { background: var(--bar-light); color: var(--bar-light-glyph); }
+.scene.dark .menubar { background: var(--bar-dark); color: var(--bar-dark-glyph); }
+.scene .menubar .lead { margin-right: auto; display: flex; gap: 18px; font: 500 13px var(--sans); }
+.scene .menubar .lead b { font-weight: 700; }
+.scene .window { position: absolute; left: 28px; top: 50px; width: 300px; border-radius: 10px; overflow: hidden; }
+.scene.light .window { background: var(--win-light); color: var(--win-light-text); box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 12px 30px -10px rgba(0,0,0,.35); }
+.scene.dark .window { background: var(--win-dark); color: var(--win-dark-text); box-shadow: 0 0 0 .5px rgba(255,255,255,.14), 0 12px 30px -10px rgba(0,0,0,.6); }
+.window .chrome { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; font: 600 13px var(--sans); border-bottom: 1px solid color-mix(in oklab, currentColor 12%, transparent); }
+.window .chrome i { width: 11px; height: 11px; border-radius: 50%; background: color-mix(in oklab, currentColor 22%, transparent); }
+.window .chrome span { margin-left: 8px; }
+.window .icons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 4px; padding: 14px 8px 16px; justify-items: center; }
+.window .app { display: grid; justify-items: center; gap: 4px; font: 12px var(--sans); }
+.scene .hudslot { position: absolute; left: 50%; translate: -50% 0; }
+.scene .dock { position: absolute; left: 50%; translate: -50% 0; bottom: 6px; display: flex; gap: 0; padding: 4px 6px 6px; border-radius: 18px; }
+.scene.light .dock { background: var(--dock-light); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.6), 0 0 0 .5px rgba(0,0,0,.12); }
+.scene.dark .dock { background: var(--dock-dark); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.18), 0 0 0 .5px rgba(0,0,0,.5); }
+.dock .tile { position: relative; }
+.dock .tile .dot { position: absolute; left: 50%; bottom: -3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; }
+.scene.light .dot { background: rgba(0,0,0,.6); }
+.scene.dark .dot { background: rgba(255,255,255,.75); }
+
+.decisions { counter-reset: q; display: grid; gap: 14px; padding: 0; margin: 0; list-style: none; }
+.decisions li { counter-increment: q; display: grid; grid-template-columns: 28px minmax(0, 1fr); color: var(--quiet); }
+.decisions li::before { content: counter(q); font: 600 13px var(--mono); color: var(--ink); padding-top: 2px; }
+.decisions b { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .pair, .pgrid, .scenes { grid-template-columns: minmax(0, 1fr); }
+  .mrow { grid-template-columns: auto auto auto; }
+  .mrow .name { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .mrow { grid-template-columns: minmax(0, 1fr); }
+  .mrow .zoom { justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0s !important; } }
+</style>
+
+<main class="wrap">
+  <header class="stack">
+    <div class="top">
+      <span class="meta">Kawa mark · static views, round 1 · 3C, centred halfway · 29 October 2026</span>
+      <div class="seg" role="group" aria-label="Page appearance">
+        <button type="button" data-theme-set="system" aria-pressed="true">System</button>
+        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <h1><span class="k">川</span> at rest, everywhere River shows it</h1>
+    <p class="lede">The three places River draws its mark, with 3C in place of today's stones r: the app icon, the menu bar and the recording panel. Every view here is the resting mark, before any state. Each one is centred halfway between its box and its ink, the rule settled in the centring study, and drawn in today's monotone colours. Motion and colour for listening and transcribing come once these are settled.</p>
+  </header>
+
+  <section aria-labelledby="h-where">
+    <h2 id="h-where">Where the mark appears</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Surface</th><th>Seen in</th><th>Today</th><th><span class="k">川</span>, this round</th><th>Later</th></tr></thead>
+        <tbody>
+          <tr><td>App icon</td><td>Finder, the Dock, Launchpad, Spotlight, the About and permission dialogs</td><td>The r in ink on the charcoal squircle, 56 % of the squircle's height</td><td><span class="pill">in scope</span><br><span class="k">川</span> in its place, same squircle, same colours; three mark sizes to choose from</td><td>Small sizes may want their own drawing</td></tr>
+          <tr><td>Menu bar</td><td>River's status item, always</td><td>Ready is the r, an 18 pt template image; Listening and Transcribing share the frozen bars; warning, downloading and preparing use SF Symbols</td><td><span class="pill">in scope</span><br>Ready: <span class="k">川</span> 16 pt tall in the 18 pt image</td><td>Listening and Transcribing glyphs; the SF Symbol states stay</td></tr>
+          <tr><td>Recording panel</td><td>Above the Dock, from the key press until the text is typed</td><td>The r, 30 pt tall in the 48 pt panel; the accent while River is on</td><td><span class="pill">in scope</span><br>The resting mark in the panel's text colour</td><td>Muted on appear, filled when audio is heard; motion; size as a signal</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-icon">
+    <div class="stack col">
+      <h2 id="h-icon">App icon</h2>
+      <p class="note">The icon keeps today's squircle and colours: 824 px on Apple's 1024 grid, charcoal, the mark in ink, no shadow. Today's r fills 56 % of the squircle's height. <span class="k">川</span> is narrower than the r and its strokes are finer, so the same height reads lighter; the size control tries it a step smaller and a step larger.</p>
+    </div>
+    <div class="controls">
+      <span class="lbl">Mark height</span>
+      <div class="seg" role="group" aria-label="Mark height in the icon" id="segIcon">
+        <button type="button" data-v="0.52" aria-pressed="false">52 %</button>
+        <button type="button" data-v="0.56" aria-pressed="true">56 %, as today</button>
+        <button type="button" data-v="0.6" aria-pressed="false">60 %</button>
+      </div>
+      <label><input type="checkbox" id="guidesIcon" checked> Guides</label>
+      <span>Guides: the squircle's bounds (dotted), its centre lines, the mark's box (dashed).</span>
+    </div>
+    <div class="pair" id="iconPair"></div>
+    <div class="sub">
+      <h3>Sizes</h3>
+      <p class="note col">macOS picks the icon size nearest the one it shows. Each size here is drawn on its own at your screen's resolution, the way each size in the icon file is.</p>
+      <div class="ramp" id="iconRamp"></div>
+    </div>
+    <div class="sub">
+      <h3>The smallest sizes, pixel by pixel</h3>
+      <p class="note col">List views, the menu of open apps and Spotlight's results use 16 and 32 pt icons. These are enlarged without smoothing, so each square is a pixel. At 16 pt on a standard display <span class="k">川</span>'s strokes are under a pixel wide.</p>
+      <div class="stack" id="iconPixels"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-menu">
+    <div class="stack col">
+      <h2 id="h-menu">Menu bar</h2>
+      <p class="note">River's Ready glyph: an 18 pt square template image, which macOS paints black or white like the icons beside it. <span class="k">川</span> is 16 pt tall in it, today's r's height, drawn from the panel outlines. The bar's tint, the item's padding and the highlight while River's menu is open are approximations, there to judge position and weight. The circle and the square stand in for neighbouring icons.</p>
+    </div>
+    <div class="controls">
+      <label><input type="checkbox" id="guidesMenu" checked> Guides</label>
+      <span>The 4× views show River's item with its menu open, at 2 pixels per point.</span>
+    </div>
+    <div class="mrows" id="menuRows"></div>
+  </section>
+
+  <section aria-labelledby="h-panel">
+    <div class="stack col">
+      <h2 id="h-panel">Recording panel</h2>
+      <p class="note">The panel as River draws it: 48 pt square, 11 pt corners, opaque as under Reduce Transparency. The mark is 30 pt tall in the panel's text colour, as it rests while the model is preparing; the accent and motion for listening and transcribing are the next study. The 4× views enlarge a Retina rendering without smoothing.</p>
+    </div>
+    <div class="controls">
+      <label><input type="checkbox" id="guidesPanel" checked> Guides</label>
+    </div>
+    <div class="pgrid" id="panelRows"></div>
+  </section>
+
+  <section aria-labelledby="h-scene">
+    <div class="stack col">
+      <h2 id="h-scene">Together, at actual size</h2>
+      <p class="note">A desktop with all three in place: River's item in the menu bar, its icon in an Applications window and in the Dock, and the panel 8 pt above the Dock, where River puts it. Grey squircles stand in for other apps. Everything is at its real size in points.</p>
+    </div>
+    <div class="controls">
+      <span class="lbl">Mark</span>
+      <div class="seg" role="group" aria-label="Mark shown in the scenes" id="segScene">
+        <button type="button" data-v="kawa" aria-pressed="true">川, 3C</button>
+        <button type="button" data-v="stone" aria-pressed="false">Today's r</button>
+      </div>
+    </div>
+    <div class="scenes" id="scenes"></div>
+  </section>
+
+  <section aria-labelledby="h-decide">
+    <h2 id="h-decide">What this round settles</h2>
+    <ol class="decisions col">
+      <li><span><b>The icon's mark height.</b> 52, 56 or 60 % of the squircle. 56 % keeps today's proportion; <span class="k">川</span>'s lighter strokes may want 60 % to hold the same presence.</span></li>
+      <li><span><b>The icon at 16 and 32 pt.</b> Accept the panel drawing scaled down, or give the smallest sizes heavier strokes of their own.</span></li>
+      <li><span><b>The menu bar weight.</b> At 16 pt the strokes are about 1.3 pt wide, finer than the neighbouring icons. Accept it, or draw a heavier menu bar version, which would get its own halfway measurement.</span></li>
+      <li><span><b>The resting panel.</b> <span class="k">川</span> 30 pt tall in the 48 pt panel, as the r is today.</span></li>
+    </ol>
+    <p class="note col">Once these hold, the next study is states: how <span class="k">川</span> appears, listens and transcribes in the panel, the menu bar's Listening and Transcribing glyphs, and where colour comes in.</p>
+  </section>
+</main>
+
+<script>
+const C = {
+ "name": "3C, wider middle, slender needle",
+ "paths": [
+  "M667 913C666.4 912.5 665.8 912.3 665.7 911.5C664.8 907.7 667 887.9 667.3 882.5C669 851.1 671 819.8 673.3 788.5C679.5 701.8 685.4 614.9 687.9 528C689.1 487.2 689.6 446.3 690.1 405.5C690.8 354.7 690.5 303.8 690.9 253C691.1 224.7 692.8 196.3 691.7 168C691.3 157.3 690.4 146.8 687.4 136.5C683.7 123.5 674.1 111 675.3 97C676.7 80.3 694.8 83.8 705.5 88.7C718.1 94.5 729.2 103.8 738 114.4C746.2 124.1 753.2 135 757.5 147C769.6 180.2 765.2 225.9 764.1 261C759.2 410.1 764.4 577.4 734 723C723.4 773.8 708.9 824 686.7 871C684.3 876.2 669.5 911.5 668 912.9C667.7 913.2 667.3 913 667 913Z",
+  "M221.5 831.8C220.9 831.2 220.6 831 220.7 830C221.3 824.9 226.8 813.4 228.9 808C237.9 784.3 245.4 760 251.8 735.5C262.1 696.3 266.6 656.2 271.4 616C273.7 596.8 276.6 577.7 278.6 558.5C282.9 517.9 286.1 477.1 290.1 436.5C295.3 384.3 298.7 331.9 301.2 279.5C302.2 259.3 303.8 239.2 303.9 219C304 208.9 303.5 198.9 301.9 189C300.3 179.6 291.6 161.9 301.8 155C305.8 152.3 311.2 153 315.5 154.2C325.8 157 335 163.7 342.7 171C379.1 205.6 370.5 257.2 367.8 302.5C361.1 412.2 356.1 541.9 319.7 646C312.4 667 303.1 687.2 293.1 707C277 739 260.1 770.8 241.5 801.5C239.1 805.5 223.7 831.2 221.5 831.8Z",
+  "M472.4 308.5C495.6 303.9 524.2 336.1 533 354.9C537.6 364.9 540 376.1 541.1 387C542.5 401.3 541.4 415.7 541.3 430C540.9 467.7 539.7 505.4 538 543C537.4 556.1 536.3 607.5 528.5 615.8C525.3 619.2 520.3 619.6 516 618.6C493.5 613.5 490.9 588.9 489.1 570C484.1 515.7 484.2 460.9 480.7 406.5C480 394.3 479.9 382.1 478.5 370C477.8 364.3 476.7 358.8 474.5 353.5C470.4 343 450.4 312.8 472.4 308.5Z"
+ ],
+ "box": [
+  220.7,
+  84.7,
+  765.8,
+  913.1
+ ],
+ "strokes": [
+  {
+   "area": 36380,
+   "centroid": [
+    316.4,
+    444.6
+   ],
+   "box": [
+    220.7,
+    153.1,
+    370.6,
+    831.8
+   ]
+  },
+  {
+   "area": 16237,
+   "centroid": [
+    509.1,
+    456.8
+   ],
+   "box": [
+    462.3,
+    308.1,
+    541.8,
+    619.1
+   ]
+  },
+  {
+   "area": 49742,
+   "centroid": [
+    718.3,
+    453.3
+   ],
+   "box": [
+    665.5,
+    84.7,
+    765.8,
+    913.1
+   ]
+  }
+ ],
+ "axis": 512.1,
+ "centre": [
+  493.2,
+  498.9
+ ],
+ "ink": [
+  542.3,
+  450.8
+ ],
+ "methods": {
+  "box": {
+   "name": "Bounding box",
+   "point": [
+    493.2,
+    498.9
+   ]
+  },
+  "middle": {
+   "name": "Middle stroke",
+   "point": [
+    512.1,
+    474.8
+   ]
+  },
+  "half": {
+   "name": "Halfway",
+   "point": [
+    517.8,
+    474.8
+   ]
+  },
+  "ink": {
+   "name": "Ink centroid",
+   "point": [
+    542.3,
+    450.8
+   ]
+  }
+ }
+};
+const STONES = {"parts":["M310.0,495.8L310.0,338.6L310.0,338.2L310.0,337.2L309.9,336.4L309.8,335.5L309.7,334.7L309.6,333.9L309.4,333.1L309.2,332.3L309.0,331.5L308.8,330.7L308.5,329.9L308.2,329.1L307.9,328.4L307.5,327.6L307.2,326.9L306.8,326.2L306.4,325.4L305.9,324.8L305.5,324.1L305.0,323.4L304.5,322.7L303.9,322.1L303.4,321.5L302.8,320.9L302.2,320.3L301.6,319.8L301.0,319.2L300.4,318.7L299.7,318.2L299.0,317.7L298.3,317.3L297.6,316.8L296.9,316.4L296.2,316.1L295.4,315.7L294.7,315.4L293.9,315.1L293.1,314.8L292.3,314.5L291.5,314.3L290.7,314.1L289.9,313.9L289.1,313.8L288.3,313.6L287.5,313.5L286.7,313.5L285.8,313.4L285.0,313.4L284.2,313.4L283.4,313.5L282.5,313.5L281.7,313.6L280.9,313.8L280.1,313.9L279.3,314.1L278.5,314.3L277.7,314.5L276.9,314.8L276.1,315.1L275.4,315.4L274.6,315.7L273.9,316.0L273.1,316.4L272.4,316.8L271.7,317.3L270.8,317.8L270.5,318.1L194.8,371.0L194.5,371.3L193.7,371.9L193.1,372.4L192.5,372.9L191.9,373.4L191.3,374.0L190.7,374.6L190.2,375.2L189.7,375.8L189.2,376.4L188.7,377.0L188.3,377.7L187.8,378.4L187.4,379.0L187.0,379.7L186.7,380.4L186.3,381.2L186.0,381.9L185.7,382.6L185.4,383.4L185.2,384.1L184.9,384.9L184.7,385.7L184.5,386.5L184.4,387.3L184.3,388.0L184.2,388.8L184.1,389.6L184.0,390.4L184.0,391.4L184.0,391.8L184.0,495.8L184.0,496.2L184.0,497.2L184.1,498.0L184.2,498.9L184.3,499.7L184.4,500.5L184.6,501.3L184.8,502.1L185.0,502.9L185.2,503.6L185.5,504.4L185.8,505.2L186.1,505.9L186.4,506.7L186.8,507.4L187.2,508.1L187.6,508.8L188.0,509.5L188.5,510.2L188.9,510.9L189.4,511.5L189.9,512.2L190.5,512.8L191.0,513.4L191.6,514.0L192.2,514.5L192.8,515.1L193.5,515.6L194.1,516.1L194.8,516.5L195.5,517.0L196.2,517.4L196.9,517.8L197.6,518.2L198.3,518.6L199.1,518.9L199.8,519.2L200.6,519.5L201.4,519.8L202.1,520.0L202.9,520.2L203.7,520.4L204.5,520.6L205.3,520.7L206.1,520.8L207.0,520.9L207.8,521.0L208.8,521.0L209.2,521.0L284.8,521.0L285.2,521.0L286.2,521.0L287.0,520.9L287.9,520.8L288.7,520.7L289.5,520.6L290.3,520.4L291.1,520.2L291.9,520.0L292.6,519.8L293.4,519.5L294.2,519.2L294.9,518.9L295.7,518.6L296.4,518.2L297.1,517.8L297.8,517.4L298.5,517.0L299.2,516.5L299.9,516.1L300.5,515.6L301.2,515.1L301.8,514.5L302.4,514.0L303.0,513.4L303.5,512.8L304.1,512.2L304.6,511.5L305.1,510.9L305.5,510.2L306.0,509.5L306.4,508.8L306.8,508.1L307.2,507.4L307.6,506.7L307.9,505.9L308.2,505.2L308.5,504.4L308.8,503.6L309.0,502.9L309.2,502.1L309.4,501.3L309.6,500.5L309.7,499.7L309.8,498.9L309.9,498.0L310.0,497.2L310.0,496.2Z","M302.7,29.3L302.7,29.1L302.4,28.3L302.1,27.5L301.8,26.8L301.4,26.0L301.0,25.3L300.6,24.5L300.2,23.8L299.7,23.1L299.3,22.4L298.8,21.8L298.3,21.1L297.7,20.5L297.2,19.9L296.6,19.3L296.0,18.7L295.4,18.1L294.7,17.6L294.1,17.1L293.4,16.6L292.7,16.1L292.0,15.7L291.3,15.3L290.6,14.9L289.8,14.5L289.1,14.1L288.3,13.8L287.5,13.5L286.7,13.3L285.9,13.0L285.1,12.8L284.3,12.6L283.5,12.4L282.7,12.3L281.9,12.2L281.0,12.1L280.2,12.0L279.2,12.0L278.7,12.0L209.2,12.0L208.8,12.0L207.8,12.0L207.0,12.1L206.1,12.2L205.3,12.3L204.5,12.4L203.7,12.6L202.9,12.8L202.1,13.0L201.4,13.2L200.6,13.5L199.8,13.8L199.1,14.1L198.3,14.4L197.6,14.8L196.9,15.2L196.2,15.6L195.5,16.0L194.8,16.5L194.1,16.9L193.5,17.4L192.8,17.9L192.2,18.5L191.6,19.0L191.0,19.6L190.5,20.2L189.9,20.8L189.4,21.5L188.9,22.1L188.5,22.8L188.0,23.5L187.6,24.2L187.2,24.9L186.8,25.6L186.4,26.3L186.1,27.1L185.8,27.8L185.5,28.6L185.2,29.4L185.0,30.1L184.8,30.9L184.6,31.7L184.4,32.5L184.3,33.3L184.2,34.1L184.1,35.0L184.0,35.8L184.0,36.8L184.0,37.2L184.0,284.0L184.0,284.4L184.0,285.4L184.1,286.3L184.2,287.1L184.3,287.9L184.4,288.7L184.6,289.5L184.8,290.3L185.0,291.1L185.2,291.9L185.5,292.7L185.8,293.5L186.1,294.2L186.5,295.0L186.8,295.7L187.2,296.5L187.6,297.2L188.1,297.9L188.5,298.5L189.0,299.2L189.5,299.9L190.1,300.5L190.6,301.1L191.2,301.7L191.8,302.3L192.4,302.9L193.0,303.4L193.6,303.9L194.3,304.4L195.0,304.9L195.7,305.3L196.4,305.8L197.1,306.2L197.8,306.6L198.6,306.9L199.3,307.2L200.1,307.6L200.9,307.8L201.7,308.1L202.5,308.3L203.3,308.5L204.1,308.7L204.9,308.8L205.7,309.0L206.5,309.1L207.3,309.1L208.2,309.2L209.0,309.2L209.8,309.2L210.6,309.1L211.5,309.1L212.3,309.0L213.1,308.9L213.9,308.7L214.7,308.5L215.5,308.3L216.3,308.1L217.1,307.8L217.9,307.6L218.6,307.3L219.4,306.9L220.1,306.6L220.9,306.2L221.6,305.8L222.3,305.4L223.2,304.8L223.5,304.6L299.7,251.2L300.1,251.0L300.9,250.3L301.6,249.8L302.2,249.2L302.8,248.7L303.4,248.1L304.0,247.5L304.5,246.8L305.1,246.2L305.6,245.5L306.1,244.8L306.6,244.1L307.0,243.4L307.4,242.7L307.8,241.9L308.2,241.2L308.5,240.4L308.8,239.6L309.1,238.8L309.4,238.0L309.6,237.2L309.8,236.4L310.0,235.6L310.2,234.8L310.3,233.9L310.4,232.9L310.5,232.5L310.5,231.6L310.6,231.2L310.7,229.6L310.8,229.2L311.0,227.6L311.0,227.2L311.2,225.6L311.3,225.2L311.5,223.6L311.6,223.2L311.8,221.6L311.9,221.2L312.2,219.7L312.3,219.3L312.6,217.8L312.7,217.3L313.0,215.8L313.1,215.4L313.4,213.9L313.5,213.5L313.9,212.0L314.0,211.6L314.4,210.2L314.5,209.8L315.0,208.3L315.1,207.9L315.5,206.5L315.7,206.1L316.1,204.6L316.3,204.2L316.8,202.8L316.9,202.4L317.4,201.0L317.6,200.6L318.1,199.2L318.3,198.8L318.8,197.5L319.0,197.1L319.6,195.7L319.8,195.3L320.4,194.0L320.6,193.6L321.2,192.3L321.4,191.9L322.0,190.6L322.2,190.2L322.9,188.9L323.1,188.5L323.8,187.2L324.0,186.8L324.8,185.5L325.0,185.1L325.7,183.9L326.0,183.5L326.7,182.2L327.0,181.9L327.8,180.6L328.0,180.3L328.8,179.0L329.1,178.7L329.9,177.4L330.2,177.1L331.0,175.9L331.3,175.5L332.2,174.3L332.4,174.0L333.4,172.8L333.6,172.4L334.6,171.2L334.9,170.9L335.8,169.7L336.1,169.4L337.1,168.2L337.4,167.9L338.4,166.7L338.7,166.4L339.8,165.3L340.0,165.0L341.1,163.8L341.4,163.5L342.5,162.4L342.8,162.1L344.0,161.0L344.3,160.7L345.4,159.6L345.7,159.3L346.9,158.2L347.2,157.9L348.4,156.8L348.7,156.6L349.9,155.5L350.3,155.2L351.5,154.2L351.8,153.9L353.1,153.0L353.4,152.7L354.7,151.7L355.0,151.5L356.3,150.5L356.6,150.2L357.9,149.3L358.3,149.1L359.5,148.2L359.9,147.9L361.2,147.1L361.6,146.8L362.9,146.0L363.3,145.7L364.6,144.9L365.0,144.7L366.4,143.9L366.7,143.6L368.1,142.9L368.5,142.7L369.9,141.9L370.3,141.7L371.7,140.9L372.1,140.7L373.5,140.0L373.9,139.8L375.3,139.1L375.7,139.0L377.2,138.3L377.6,138.1L379.1,137.4L379.5,137.3L381.0,136.6L381.4,136.5L382.9,135.9L383.3,135.7L384.8,135.1L385.2,135.0L386.8,134.4L387.2,134.3L388.8,133.7L389.1,133.6L389.3,133.5L389.7,133.4L390.7,133.1L391.4,132.8L392.2,132.4L392.9,132.1L393.6,131.7L394.3,131.3L395.0,130.9L395.7,130.5L396.3,130.0L397.0,129.5L397.6,129.0L398.2,128.5L398.8,127.9L399.4,127.4L400.0,126.8L400.5,126.2L401.0,125.6L401.5,125.0L402.0,124.3L402.5,123.6L402.9,123.0L403.3,122.3L403.7,121.6L404.1,120.9L404.5,120.1L404.8,119.4L405.2,118.5L405.3,118.1L434.2,38.8L434.3,38.4L434.6,37.4L434.8,36.7L435.0,35.9L435.2,35.1L435.4,34.3L435.5,33.5L435.6,32.7L435.7,31.9L435.7,31.1L435.7,30.3L435.7,29.5L435.7,28.7L435.6,27.9L435.6,27.1L435.4,26.3L435.3,25.5L435.2,24.7L435.0,23.9L434.8,23.1L434.5,22.3L434.3,21.6L434.0,20.8L433.7,20.1L433.3,19.3L433.0,18.6L432.6,17.9L432.2,17.2L431.8,16.5L431.3,15.9L430.8,15.2L430.4,14.6L429.8,13.9L429.3,13.3L428.8,12.7L428.2,12.2L427.6,11.6L427.0,11.1L426.4,10.5L425.7,10.1L425.1,9.6L424.4,9.1L423.7,8.7L423.0,8.3L422.3,7.9L421.6,7.5L420.9,7.2L420.1,6.9L419.4,6.6L418.6,6.3L417.9,6.1L417.1,5.9L416.3,5.7L415.5,5.5L414.7,5.4L413.9,5.3L413.1,5.2L412.3,5.1L411.5,5.1L410.7,5.0L409.9,5.1L409.1,5.1L408.3,5.2L407.5,5.3L406.7,5.4L405.9,5.5L405.1,5.7L404.1,5.9L403.7,6.0L403.1,6.2L402.8,6.3L401.3,6.8L401.0,6.8L399.5,7.3L399.2,7.4L397.8,7.9L397.5,8.0L396.0,8.5L395.7,8.6L394.3,9.1L394.0,9.2L392.5,9.7L392.2,9.8L390.8,10.4L390.5,10.5L389.1,11.1L388.8,11.2L387.4,11.8L387.1,11.9L385.7,12.5L385.4,12.6L384.0,13.3L383.7,13.4L382.3,14.0L382.0,14.2L380.7,14.8L380.4,15.0L379.0,15.6L378.7,15.8L377.4,16.5L377.1,16.6L375.8,17.3L375.5,17.5L374.1,18.2L373.8,18.4L372.5,19.1L372.2,19.3L370.9,20.0L370.6,20.2L369.3,21.0L369.1,21.1L367.8,21.9L367.5,22.1L366.2,22.9L365.9,23.1L364.6,23.9L364.4,24.1L363.1,25.0L362.8,25.1L361.5,26.0L361.3,26.1L360.0,27.1L359.8,27.2L358.5,28.1L358.3,28.3L357.0,29.2L356.8,29.4L355.5,30.3L355.3,30.5L354.1,31.4L353.9,31.6L352.6,32.5L352.4,32.7L351.2,33.7L351.0,33.8L349.8,34.8L349.6,35.0L348.4,36.0L348.2,36.1L347.0,37.1L346.8,37.3L345.6,38.3L345.4,38.5L344.3,39.5L344.1,39.7L343.3,40.4L342.0,41.4L340.8,42.4L339.4,43.3L338.0,44.0L336.5,44.7L335.0,45.3L333.5,45.8L331.9,46.2L330.4,46.5L328.8,46.7L327.2,46.8L325.5,46.8L323.9,46.7L322.3,46.4L320.8,46.1L319.2,45.7L317.7,45.2L316.2,44.5L314.8,43.8L313.4,43.0L312.0,42.1L310.7,41.2L309.5,40.1L308.4,39.0L307.3,37.8L306.3,36.5L305.4,35.1L304.6,33.8L303.9,32.3L303.3,30.8Z","M476.6,127.3L476.7,127.3L476.8,127.3L478.0,127.4L478.0,127.4L479.2,127.5L479.3,127.5L480.4,127.6L480.5,127.6L481.7,127.7L481.7,127.7L482.9,127.8L483.0,127.8L484.1,127.9L484.2,127.9L485.4,128.0L485.4,128.0L486.6,128.1L486.7,128.1L487.8,128.2L487.9,128.2L489.1,128.3L489.1,128.3L490.3,128.4L490.3,128.4L491.5,128.6L491.6,128.6L492.7,128.7L492.8,128.7L493.9,128.8L494.0,128.8L495.2,128.9L495.2,128.9L496.4,129.1L496.4,129.1L497.6,129.2L497.6,129.2L498.8,129.4L498.9,129.4L500.0,129.5L500.1,129.5L501.2,129.6L501.2,129.7L502.4,129.8L502.4,129.8L503.6,129.9L503.6,129.9L504.7,130.1L504.8,130.1L505.9,130.2L505.9,130.2L507.0,130.4L507.1,130.4L508.2,130.5L508.2,130.5L509.3,130.7L509.3,130.7L510.4,130.8L510.5,130.8L511.5,131.0L511.6,131.0L512.6,131.1L512.7,131.1L513.7,131.3L513.7,131.3L514.8,131.4L514.8,131.4L515.8,131.6L515.9,131.6L516.2,131.6L516.6,131.7L517.6,131.8L518.4,131.9L519.3,131.9L520.1,131.9L520.9,131.9L521.7,131.9L522.6,131.8L523.4,131.7L524.2,131.6L525.0,131.4L525.8,131.2L526.6,131.0L527.4,130.8L528.2,130.5L529.0,130.3L529.7,130.0L530.5,129.6L531.2,129.3L532.0,128.9L532.7,128.5L533.4,128.0L534.1,127.6L534.7,127.1L535.4,126.6L536.0,126.1L536.7,125.6L537.3,125.0L537.8,124.4L538.4,123.8L539.0,123.2L539.5,122.6L540.0,121.9L540.5,121.3L540.9,120.6L541.4,119.9L541.8,119.2L542.2,118.4L542.6,117.7L542.9,116.9L543.2,116.2L543.5,115.4L543.8,114.6L544.0,113.8L544.2,113.1L544.4,112.2L544.6,111.4L544.7,110.6L544.8,109.8L544.9,109.0L545.0,108.2L545.0,107.1L545.0,106.7L545.0,32.0L545.0,31.6L545.0,30.6L544.9,29.7L544.8,28.9L544.7,28.1L544.6,27.3L544.4,26.5L544.2,25.7L544.0,24.9L543.8,24.1L543.5,23.3L543.2,22.5L542.9,21.8L542.6,21.0L542.2,20.3L541.8,19.6L541.4,18.9L541.0,18.2L540.5,17.5L540.0,16.8L539.5,16.2L539.0,15.5L538.4,14.9L537.9,14.3L537.3,13.7L536.7,13.2L536.1,12.6L535.4,12.1L534.8,11.6L534.1,11.2L533.4,10.7L532.7,10.3L532.0,9.9L531.3,9.5L530.5,9.1L529.8,8.8L529.0,8.5L528.2,8.2L527.5,7.9L526.7,7.7L525.9,7.5L524.9,7.3L524.5,7.2L524.3,7.2L523.4,7.0L522.5,6.8L521.6,6.7L520.7,6.5L519.8,6.3L518.8,6.2L517.9,6.0L516.9,5.8L515.9,5.7L514.9,5.5L513.9,5.3L512.9,5.2L511.9,5.0L510.8,4.8L509.8,4.7L508.8,4.5L508.7,4.5L508.3,4.4L507.3,4.3L506.5,4.2L505.7,4.2L504.9,4.2L504.1,4.2L503.2,4.2L502.4,4.3L501.6,4.4L500.8,4.5L500.0,4.6L499.2,4.8L498.4,5.0L497.6,5.2L496.8,5.5L496.1,5.7L495.3,6.0L494.5,6.3L493.8,6.7L493.1,7.1L492.3,7.5L491.6,7.9L490.9,8.3L490.3,8.8L489.6,9.3L489.0,9.8L488.3,10.3L487.7,10.8L487.1,11.4L486.6,12.0L486.0,12.6L485.5,13.2L485.0,13.8L484.5,14.5L484.0,15.2L483.6,15.9L483.1,16.6L482.7,17.3L482.4,18.0L482.0,18.7L481.7,19.5L481.3,20.4L481.1,20.8L454.7,93.6L454.5,94.0L454.2,94.9L454.0,95.7L453.8,96.5L453.6,97.3L453.4,98.1L453.3,99.0L453.2,99.8L453.2,100.6L453.1,101.4L453.1,102.3L453.1,103.1L453.1,103.9L453.2,104.7L453.3,105.6L453.4,106.4L453.6,107.2L453.8,108.0L454.0,108.8L454.2,109.6L454.4,110.4L454.7,111.1L455.0,111.9L455.3,112.7L455.7,113.4L456.1,114.1L456.5,114.9L456.9,115.6L457.4,116.3L457.8,116.9L458.3,117.6L458.8,118.2L459.4,118.9L459.9,119.5L460.5,120.1L461.1,120.6L461.7,121.2L462.4,121.7L463.0,122.2L463.7,122.7L464.4,123.2L465.1,123.6L465.8,124.1L466.5,124.4L467.2,124.8L468.0,125.2L468.7,125.5L469.5,125.8L470.3,126.1L471.1,126.3L471.9,126.5L472.7,126.7L473.5,126.9L474.3,127.0L475.1,127.1L476.1,127.2Z"]};
+const SQ = {"note": "Top-left quarter of the app icon squircle, traced from River.icns (1024 artwork): x of the left edge per row, by alpha coverage.", "quarter": [[318.2, 100.5], [276.6, 102.5], [259.0, 104.5], [246.8, 106.5], [237.1, 108.5], [228.9, 110.5], [221.7, 112.5], [215.5, 114.5], [210.4, 116.5], [205.7, 118.5], [201.4, 120.5], [197.4, 122.5], [193.6, 124.5], [190.0, 126.5], [186.6, 128.5], [183.4, 130.5], [180.3, 132.5], [177.4, 134.5], [174.6, 136.5], [171.9, 138.5], [169.3, 140.5], [166.9, 142.5], [164.5, 144.5], [162.1, 146.5], [159.9, 148.5], [157.8, 150.5], [155.7, 152.5], [153.6, 154.5], [151.7, 156.5], [149.8, 158.5], [147.9, 160.5], [146.2, 162.5], [144.5, 164.5], [142.8, 166.5], [141.1, 168.5], [139.6, 170.5], [138.1, 172.5], [136.6, 174.5], [135.1, 176.5], [133.7, 178.5], [132.4, 180.5], [131.1, 182.5], [129.8, 184.5], [128.6, 186.5], [127.4, 188.5], [126.2, 190.5], [125.1, 192.5], [124.0, 194.5], [122.9, 196.5], [121.9, 198.5], [120.9, 200.5], [120.0, 202.5], [119.0, 204.5], [118.2, 206.5], [117.3, 208.5], [116.5, 210.5], [115.6, 212.5], [114.9, 214.5], [114.1, 216.5], [113.5, 218.5], [112.9, 220.5], [112.3, 222.5], [111.7, 224.5], [111.1, 226.5], [110.6, 228.5], [110.1, 230.5], [109.6, 232.5], [109.1, 234.5], [108.6, 236.5], [108.2, 238.5], [107.7, 240.5], [107.3, 242.5], [106.9, 244.5], [106.5, 246.5], [106.2, 248.5], [105.8, 250.5], [105.5, 252.5], [105.2, 254.5], [104.9, 256.5], [104.5, 258.5], [104.3, 260.5], [104.0, 262.5], [103.8, 264.5], [103.5, 266.5], [103.3, 268.5], [103.1, 270.5], [102.9, 272.5], [102.7, 274.5], [102.5, 276.5], [102.3, 278.5], [102.1, 280.5], [102.0, 282.5], [101.9, 284.5], [101.7, 286.5], [101.6, 288.5], [101.5, 290.5], [101.3, 292.5], [101.2, 294.5], [101.1, 296.5], [101.1, 298.5], [101.0, 300.5], [100.9, 302.5], [100.8, 304.5], [100.7, 306.5], [100.7, 308.5], [100.6, 310.5], [100.5, 312.5], [100.5, 314.5], [100.4, 316.5], [100.4, 318.5], [100.4, 320.5], [100.3, 322.5], [100.3, 324.5], [100.3, 326.5], [100.2, 328.5], [100.2, 330.5], [100.2, 332.5], [100.2, 334.5], [100.1, 336.5], [100.1, 338.5], [100.1, 340.5], [100.1, 342.5], [100.1, 344.5], [100.1, 346.5], [100.0, 348.5], [100.0, 350.5], [100.0, 352.5], [100.0, 354.5], [100.0, 356.5], [100.0, 358.5], [100.0, 360.5], [100.0, 362.5], [100.0, 364.5], [100.0, 366.5], [100.0, 368.5], [100.0, 370.5], [100.0, 372.5], [100.0, 374.5], [100.0, 376.5], [100.0, 378.5], [100.0, 380.5], [100.0, 382.5], [100.0, 384.5], [100.0, 386.5], [100.0, 388.5], [100.0, 390.5], [100.0, 392.5], [100.0, 394.5], [100.0, 396.5], [100.0, 398.5], [100.0, 400.5], [100.0, 402.5], [100.0, 404.5], [100.0, 406.5], [100.0, 408.5], [100.0, 410.5], [100.0, 412.5], [100.0, 414.5], [100.0, 416.5], [100.0, 418.5], [100.0, 420.5], [100.0, 422.5], [100.0, 424.5], [100.0, 426.5], [100.0, 428.5], [100.0, 430.5], [100.0, 432.5], [100.0, 434.5], [100.0, 436.5], [100.0, 438.5], [100.0, 440.5], [100.0, 442.5], [100.0, 444.5], [100.0, 446.5], [100.0, 448.5], [100.0, 450.5], [100.0, 452.5], [100.0, 454.5], [100.0, 456.5], [100.0, 458.5], [100.0, 460.5], [100.0, 462.5], [100.0, 464.5], [100.0, 466.5], [100.0, 468.5], [100.0, 470.5], [100.0, 472.5], [100.0, 474.5], [100.0, 476.5], [100.0, 478.5], [100.0, 480.5], [100.0, 482.5], [100.0, 484.5], [100.0, 486.5], [100.0, 488.5], [100.0, 490.5], [100.0, 492.5], [100.0, 494.5], [100.0, 496.5], [100.0, 498.5], [100.0, 500.5], [100.0, 502.5], [100.0, 504.5], [100.0, 506.5], [100.0, 508.5], [100.0, 510.5], [100.0, 512]]};
+
+// Theme switch: an explicit choice sets data-theme; System clears it.
+(function () {
+  const root = document.documentElement, buttons = document.querySelectorAll('[data-theme-set]');
+  const apply = (mode) => {
+    if (mode === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+    buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === mode)));
+  };
+  let saved = 'system';
+  try { saved = localStorage.getItem('kawa-rest-theme') || 'system'; } catch (e) {}
+  apply(saved);
+  buttons.forEach((b) => b.addEventListener('click', () => {
+    apply(b.dataset.themeSet);
+    try { localStorage.setItem('kawa-rest-theme', b.dataset.themeSet); } catch (e) {}
+  }));
+})();
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const centreOf = (b) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+// Each mark carries the design-space point that goes on its frame's centre: 3C's halfway point
+// (the centring study's decision), and the r's own box centre, as River centres it today.
+const KAWA = { name: '川', paths: C.paths.map((d) => new Path2D(d)), box: C.box, point: C.methods.half.point };
+const RBOX = [184, 4.2, 545, 521];
+const STONE = { name: 'Today', today: true, paths: STONES.parts.map((d) => new Path2D(d)), box: RBOX, point: centreOf(RBOX) };
+const DPR = () => Math.max(1, Math.ceil(window.devicePixelRatio || 1));
+
+// Today's squircle, on the 1024 grid: the traced top-left quarter, mirrored.
+const SQUIRCLE = (() => {
+  const q = SQ.quarter, pts = [
+    ...q, ...[...q].reverse().map(([x, y]) => [x, 1024 - y]),
+    ...q.map(([x, y]) => [1024 - x, 1024 - y]), ...[...q].reverse().map(([x, y]) => [1024 - x, y]),
+  ];
+  const p = new Path2D();
+  pts.forEach(([x, y], i) => (i ? p.lineTo(x, y) : p.moveTo(x, y)));
+  p.closePath();
+  return p;
+})();
+
+// Fills a mark `h` pt tall with its point at (cx, cy) pt, at k pixels per point.
+function fillMark(ctx, k, mark, cx, cy, h, color) {
+  const s = (h * k) / (mark.box[3] - mark.box[1]);
+  ctx.setTransform(s, 0, 0, s, cx * k - mark.point[0] * s, cy * k - mark.point[1] * s);
+  ctx.fillStyle = color;
+  mark.paths.forEach((p) => ctx.fill(p));
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+// The mark's box in points when placed like fillMark, for guides.
+function markBox(mark, cx, cy, h) {
+  const s = h / (mark.box[3] - mark.box[1]), b = mark.box;
+  return [cx + (b[0] - mark.point[0]) * s, cy + (b[1] - mark.point[1]) * s, (b[2] - b[0]) * s, (b[3] - b[1]) * s];
+}
+
+// Surfaces. Each draws itself `w` x `h` pt at k pixels per point.
+let iconFrac = 0.56;
+const SURF = {
+  // The app icon at `size` pt: the squircle, and the mark at a share of the squircle's height.
+  icon: (o) => ({
+    w: o.size, h: o.size, tone: 'on-dark',
+    draw(ctx, k) {
+      const u = (o.size * k) / 1024;
+      ctx.setTransform(u, 0, 0, u, 0, 0);
+      ctx.fillStyle = css(o.other ? `--other-${o.other}` : '--icon-body');
+      ctx.fill(SQUIRCLE);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (!o.other) fillMark(ctx, k, o.mark, o.size / 2, o.size / 2, this.markH(), css('--icon-mark'));
+    },
+    markH() { return (o.mark.today ? 0.56 : iconFrac) * 824 * (o.size / 1024); },
+    guides() {
+      const f = (100 / 1024) * o.size, side = (824 / 1024) * o.size, c = o.size / 2;
+      return { bound: [f, f, side, side], centre: [c, c, f, side], box: markBox(o.mark, c, c, this.markH()) };
+    },
+  }),
+  panel: (o) => ({
+    w: 48, h: 48, tone: o.tone === 'dark' ? 'on-dark' : 'on-light',
+    draw(ctx, k) {
+      ctx.fillStyle = css(`--hud-${o.tone}`); ctx.fillRect(0, 0, 48 * k, 48 * k);
+      fillMark(ctx, k, o.mark, 24, 24, 30, css(`--hud-${o.tone}-mark`));
+    },
+    guides() { return { centre: [24, 24, 0, 48], box: markBox(o.mark, 24, 24, 30) }; },
+  }),
+  // A status item about 30 pt wide on a 24 pt bar, the 18 pt image centred in it.
+  menu: (o) => ({
+    w: 30, h: 24, tone: o.tone === 'dark' ? 'on-dark' : 'on-light',
+    draw(ctx, k) {
+      ctx.fillStyle = css(`--bar-${o.tone}`); ctx.fillRect(0, 0, 30 * k, 24 * k);
+      if (o.open) { ctx.fillStyle = css(`--bar-${o.tone}-pill`); ctx.beginPath(); ctx.roundRect(0, k, 30 * k, 22 * k, 5 * k); ctx.fill(); }
+      fillMark(ctx, k, o.mark, 15, 12, 16, css(`--bar-${o.tone}-glyph`));
+    },
+    guides() { return { bound: [6, 3, 18, 18], centre: [15, 12, 3, 18], box: markBox(o.mark, 15, 12, 16) }; },
+  }),
+};
+
+// Every drawn view registers here, so controls redraw them together.
+const VIEWS = [];
+// zoom: CSS px per point. px: pixels per point to draw at (null = the screen's).
+function view(kind, o, { zoom = 1, px = null, cls = '', guides = false, transparent = false } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = `mag ${px ? 'px' : ''} ${cls}`;
+  const cv = document.createElement('canvas');
+  cv.setAttribute('role', 'img');
+  cv.setAttribute('aria-label', o.label || `${o.mark.name}, ${kind}`);
+  wrap.append(cv);
+  VIEWS.push({ kind, o, zoom, px, wrap, cv, guides });
+  return wrap;
+}
+function redraw() {
+  for (const v of VIEWS) {
+    const s = SURF[v.kind](v.o), k = v.px || DPR() * v.zoom;
+    v.wrap.style.width = `${s.w * v.zoom}px`;
+    v.cv.width = Math.round(s.w * k); v.cv.height = Math.round(s.h * k);
+    const ctx = v.cv.getContext('2d');
+    ctx.clearRect(0, 0, v.cv.width, v.cv.height);
+    s.draw(ctx, k);
+    v.wrap.querySelector('.guides')?.remove();
+    if (v.guides) {
+      const g = s.guides(), [cx, cy, c0, cl] = g.centre;
+      v.wrap.insertAdjacentHTML('beforeend', `<svg class="guides ${s.tone}" viewBox="0 0 ${s.w} ${s.h}" aria-hidden="true">
+        ${g.bound ? `<rect class="bound" x="${g.bound[0]}" y="${g.bound[1]}" width="${g.bound[2]}" height="${g.bound[3]}"/>` : ''}
+        <line x1="${cx}" y1="${c0}" x2="${cx}" y2="${c0 + cl}"/><line x1="${g.bound ? g.bound[0] : 0}" y1="${cy}" x2="${g.bound ? g.bound[0] + g.bound[2] : s.w}" y2="${cy}"/>
+        <rect class="box" x="${g.box[0]}" y="${g.box[1]}" width="${g.box[2]}" height="${g.box[3]}"/></svg>`);
+    }
+  }
+}
+
+// App icon: the pair, the ramp, the pixels.
+(function icon() {
+  const pair = document.getElementById('iconPair');
+  for (const mark of [STONE, KAWA]) {
+    const fig = document.createElement('figure');
+    const big = view('icon', { mark, size: 320, label: `${mark === KAWA ? '川' : 'Today\'s r'}, app icon artwork` }, { guides: true });
+    fig.append(big);
+    fig.insertAdjacentHTML('beforeend', `<figcaption><b>${mark === KAWA ? '<span class="k">川</span>, 3C' : 'Today, the stones r'}</b><span>1024 artwork, shown at 320 pt</span></figcaption>`);
+    pair.append(fig);
+  }
+  const ramp = document.getElementById('iconRamp');
+  for (const mark of [STONE, KAWA]) {
+    const row = document.createElement('div');
+    row.className = 'ramprow';
+    row.innerHTML = `<span class="name">${mark === KAWA ? '<span class="k">川</span>' : 'Today'}</span>`;
+    for (const size of [256, 128, 64, 32, 16]) {
+      const fig = document.createElement('figure');
+      fig.append(view('icon', { mark, size }));
+      fig.insertAdjacentHTML('beforeend', `<figcaption>${size} pt</figcaption>`);
+      row.append(fig);
+    }
+    ramp.append(row);
+  }
+  const pix = document.getElementById('iconPixels');
+  for (const mark of [STONE, KAWA]) {
+    const row = document.createElement('div');
+    row.className = 'pxrow';
+    row.innerHTML = `<span class="name">${mark === KAWA ? '<span class="k">川</span>' : 'Today'}</span>`;
+    for (const [size, k, label] of [[16, 1, '16 pt, standard: 16 px'], [16, 2, '16 pt, Retina: 32 px'], [32, 1, '32 pt, standard: 32 px'], [32, 2, '32 pt, Retina: 64 px']]) {
+      const fig = document.createElement('figure');
+      fig.append(view('icon', { mark, size }, { zoom: 128 / size, px: k }));
+      fig.insertAdjacentHTML('beforeend', `<figcaption>${label}</figcaption>`);
+      row.append(fig);
+    }
+    pix.append(row);
+  }
+})();
+
+// Menu bar rows.
+const NB = {
+  circle: '<svg class="nb" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
+  square: '<svg class="nb" width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect x=".5" y=".5" width="12" height="12" rx="3" fill="currentColor"/></svg>',
+};
+function strip(o) {
+  const bar = document.createElement('div');
+  bar.className = `bar ${o.tone}`;
+  bar.setAttribute('aria-label', `${o.mark.name}, ${o.tone} menu bar`);
+  bar.innerHTML = NB.square;
+  bar.append(view('menu', o));
+  bar.insertAdjacentHTML('beforeend', `${NB.circle}<span class="clock">Thu 29 Oct  9:41</span>`);
+  return bar;
+}
+(function menus() {
+  const host = document.getElementById('menuRows');
+  for (const mark of [STONE, KAWA]) {
+    const row = document.createElement('div');
+    row.className = 'mrow';
+    row.innerHTML = `<div class="name"><b>${mark === KAWA ? '<span class="k">川</span>, 3C' : 'Today'}</b><span>${mark === KAWA ? 'centred halfway' : 'the stones r, by its box'}</span></div><div class="strips"></div>`;
+    row.querySelector('.strips').append(strip({ mark, tone: 'light' }), strip({ mark, tone: 'dark' }));
+    for (const tone of ['light', 'dark']) {
+      const fig = document.createElement('figure');
+      fig.className = 'zoom';
+      fig.append(view('menu', { mark, tone, open: true }, { zoom: 4, px: 2, guides: true }));
+      fig.insertAdjacentHTML('beforeend', `<figcaption>${tone}, menu open · 4×</figcaption>`);
+      row.append(fig);
+    }
+    host.append(row);
+  }
+})();
+
+// Panel rows, one desk per appearance.
+(function panels() {
+  const host = document.getElementById('panelRows');
+  for (const tone of ['dark', 'light']) {
+    const desk = document.createElement('div');
+    desk.className = `desk ${tone === 'dark' ? 'd' : 'l'}`;
+    desk.innerHTML = `<span class="tag">${tone === 'dark' ? 'Dark appearance' : 'Light appearance'}</span>`;
+    for (const mark of [STONE, KAWA]) {
+      const row = document.createElement('div');
+      row.className = 'prow';
+      row.innerHTML = `<div class="name">${mark === KAWA ? '<span class="k">川</span>, 3C' : 'Today'}<span>${mark === KAWA ? 'centred halfway' : 'the stones r'}</span></div>`;
+      const one = view('panel', { mark, tone }, { cls: `hudwrap ${tone}` }); one.style.borderRadius = '11px';
+      const four = view('panel', { mark, tone }, { zoom: 4, px: 2, cls: `hudwrap ${tone}`, guides: true }); four.style.borderRadius = '44px';
+      row.append(one, four);
+      desk.append(row);
+    }
+    host.append(desk);
+  }
+})();
+
+// Scenes: a desktop per appearance, at actual size. The mark in them follows the switch.
+const sceneMark = { current: KAWA };
+const proxy = new Proxy({}, { get: (_, key) => sceneMark.current[key] });
+(function scenes() {
+  const host = document.getElementById('scenes');
+  for (const tone of ['light', 'dark']) {
+    const wrap = document.createElement('div');
+    wrap.className = 'scenewrap';
+    const scene = document.createElement('div');
+    scene.className = `scene ${tone}`;
+    scene.setAttribute('role', 'img');
+    scene.setAttribute('aria-label', `A ${tone} desktop with River's menu bar item, its icon in an Applications window and the Dock, and the recording panel above the Dock`);
+    // Menu bar.
+    const bar = document.createElement('div');
+    bar.className = 'menubar';
+    bar.innerHTML = `<span class="lead"><b>Finder</b><span>File</span><span>Edit</span><span>View</span></span>${NB.square}`;
+    bar.append(view('menu', { mark: proxy, tone }));
+    bar.insertAdjacentHTML('beforeend', `${NB.circle}<span class="clock" style="font: 500 13px var(--sans)">Thu 9:41</span>`);
+    // Applications window.
+    const win = document.createElement('div');
+    win.className = 'window';
+    win.innerHTML = '<div class="chrome"><i></i><i></i><i></i><span>Applications</span></div><div class="icons"></div>';
+    const icons = win.querySelector('.icons');
+    for (const [name, other] of [['Another app', tone], ['River', null], ['Another app', tone]]) {
+      const app = document.createElement('div');
+      app.className = 'app';
+      app.append(view('icon', { mark: proxy, size: 64, other }));
+      app.insertAdjacentHTML('beforeend', `<span>${name}</span>`);
+      icons.append(app);
+    }
+    // Dock: 64 pt tiles, River running.
+    const dock = document.createElement('div');
+    dock.className = 'dock';
+    for (const other of [tone, tone, null, tone]) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.append(view('icon', { mark: proxy, size: 64, other }));
+      if (!other) tile.insertAdjacentHTML('beforeend', '<i class="dot"></i>');
+      dock.append(tile);
+    }
+    // The panel, 8 pt above the Dock's top edge (Constants.hudBottomMargin).
+    const slot = document.createElement('div');
+    slot.className = 'hudslot';
+    slot.style.bottom = `${6 + 4 + 64 + 6 + 8}px`;
+    const hud = view('panel', { mark: proxy, tone }, { cls: `hudwrap ${tone}` });
+    hud.style.borderRadius = '11px';
+    slot.append(hud);
+    scene.append(bar, win, slot, dock);
+    wrap.append(scene);
+    host.append(wrap);
+  }
+})();
+
+// Controls.
+document.getElementById('segIcon').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  iconFrac = Number(b.dataset.v);
+  e.currentTarget.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  redraw();
+});
+document.getElementById('segScene').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  sceneMark.current = b.dataset.v === 'kawa' ? KAWA : STONE;
+  e.currentTarget.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  redraw();
+});
+for (const [box, sec] of [['guidesIcon', 'h-icon'], ['guidesMenu', 'h-menu'], ['guidesPanel', 'h-panel']]) {
+  const cb = document.getElementById(box), section = document.getElementById(sec).closest('section');
+  cb.addEventListener('change', () => section.classList.toggle('hide-guides', !cb.checked));
+}
+
+redraw();
+matchMedia('(resolution: 2dppx)').addEventListener?.('change', redraw);
+</script>

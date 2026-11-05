@@ -184,6 +184,25 @@ struct AppStateTests {
     }
 
     @MainActor
+    @Test("audio counts as flowing from the first level reading of a recording until it ends")
+    func audioFlowingFollowsFirstLevel() {
+        // The indicator starts its voice layer on this. If it turned true on `.recording`
+        // alone, a dead microphone would look live; if it outlived the recording, the next
+        // recording's layer would start before its microphone delivered anything.
+        let appState = AppState()
+        appState.apply(inputLevel: 0.5)
+        #expect(!appState.isAudioFlowing)          // a late buffer while idle is not audio
+        appState.apply(.recording)
+        #expect(!appState.isAudioFlowing)          // recording, but nothing heard yet
+        appState.apply(inputLevel: 0)
+        #expect(appState.isAudioFlowing)           // silence is still audio arriving
+        appState.apply(.processing)
+        #expect(!appState.isAudioFlowing)
+        appState.apply(.recording)
+        #expect(!appState.isAudioFlowing)          // each recording waits for its own first reading
+    }
+
+    @MainActor
     @Test("bind(microphone:) forwards the mic's level publisher into the observable")
     func bindMicrophoneWiresLevel() {
         // Nothing else asserts `bind(microphone:)` actually connects the publisher;
