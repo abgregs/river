@@ -74,7 +74,7 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
 - **Copy last** does what the menu item does.
 - **Show or hide** toggles `showLiveText`, during a recording or between recordings (0034).
 - **One owner (rule 3).** A new type in `Architecture/` owns `RegisterEventHotKey`, `UnregisterEventHotKey` and their `InstallEventHandler`, and emits a typed event stream with a test seam, as `InputMonitoringCapability` emits `TapEvent`. It is not a `Capability`, since it guards no permission. `HotkeyManager` interprets both streams. PR 8 builds it and adds it to rule 3 in `AGENTS.md` and to [../architecture/capabilities.md](../architecture/capabilities.md).
-- **Accepted limits:** a combination does not tell left from right modifiers (a lone modifier still does); Caps Lock is a lone key only; macOS 15.0 and 15.1 refuse combinations whose only modifiers are ⌥ or ⌥⇧; while a recording runs, Esc goes to River and not to the app in front; and a lone modifier in Hold mode still can't tell a hold from typing with it, as today.
+- **Accepted limits:** a combination does not tell left from right modifiers (a lone modifier still does); Caps Lock is not a dictation key (see Mode warnings); macOS 15.0 and 15.1 refuse combinations whose only modifiers are ⌥ or ⌥⇧; while a recording runs, Esc goes to River and not to the app in front; and a lone modifier in Hold mode still can't tell a hold from typing with it, as today.
 
 ## The recorder
 
@@ -90,7 +90,7 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
   - A saved shortcut that fails at launch shows "Not working: another app uses this shortcut." on its row.
 - **Fn as the dictation shortcut** turns the fn cancel off, as today, and the cancel line says so; Esc and the menu item still cancel.
 - **A River combination pressed during a lone-modifier hold** (Right ⌥ as the Hold key, then ⌃⌥V) discards the recording that hold started, with no cue, and the combination's action runs.
-- **Mode warnings.** The Caps Lock + Hold warning becomes one rule for any recorded key that is unreliable in the chosen mode. PR 8 first checks what River's tap sees for one Caps Lock press: the recorder probe saw one event per press, which would make a tap mode need two presses.
+- **Mode warnings.** PR 8 checked what River's tap sees for Caps Lock: one event per press and none on release, so Hold never stops and a tap mode needs two presses. Caps Lock is no longer a dictation key, and a saved one migrates to the default. No other recorded key is unreliable in a mode, so the Caps Lock + Hold warning goes and no mode warning remains.
 - **Changes apply** as today for the dictation shortcut and mode ([../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md), "Live apply"). The other shortcuts apply at once.
 - **Migration.** On first launch of `v0.3.0`, a saved `activationKeyCode` becomes the same lone modifier in `dictationShortcut`, once, and the old key is dropped. A shortcut is stored as one string value, so `@AppStorage` can bind it; an empty value means cleared.
 

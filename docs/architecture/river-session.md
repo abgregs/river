@@ -62,10 +62,10 @@ That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a
 
 ## Reconfiguration without leaks
 
-When the user changes the activation key or mode in Settings:
+When the user changes the dictation shortcut or mode in Settings:
 
 1. SwiftUI writes through to `UserDefaults` via `@AppStorage`.
-2. `SettingsStore.publisher(for: .activationKeyCode)` (or `.activationMode`) emits the new typed value.
+2. `SettingsStore.publisher(for: .dictationShortcut)` (or `.activationMode`) emits the new typed value.
 3. The session's subscription receives it and branches on `currentState` + `activeMode`:
    - **`.idle`** → `HotkeyManager` reconfigures the hotkey **in place** (swap the watched key/mode; the one event tap keeps running — no rebuild, see [threading-invariant.md](threading-invariant.md)).
    - **`.recording` in a tap mode** → applied **live, in place**; the recording keeps running and the session emits a `notices` message so the user knows the new key/mode now stops it. The surviving tap is why no audio is dropped — this is *not* the mid-cycle teardown anti-pattern #7 forbids; the session owns the change and there is no `tapCreate`.

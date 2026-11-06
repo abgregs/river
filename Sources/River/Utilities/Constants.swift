@@ -17,9 +17,12 @@ enum Constants {
     // `Int`; cast at use sites.
     static let defaultActivationKeyCode: Int = 61
 
+    // The dictation shortcut's default: the same Right Option as a lone modifier.
+    static let defaultDictationShortcut: Shortcut = .modifier(keyCode: defaultActivationKeyCode)
+
     // Default activation mode. Hold is the safe default — it fires on a held key
-    // and works on every supported key (the tap modes add ~50–100 ms latency and
-    // are the only ones reliable on Caps Lock). See requirements/activation-key-and-mode.md.
+    // and works on every supported key (the tap modes add ~50–100 ms latency).
+    // See requirements/activation-key-and-mode.md.
     static let defaultActivationMode: ActivationMode = .hold
 
     // Cancel gesture (planning 0017). Tapping this modifier key while recording

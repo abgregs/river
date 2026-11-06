@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Combine
 import CoreGraphics
 import Foundation
@@ -15,7 +16,9 @@ struct HotkeyManagerHoldTests {
     @Test("watched key: alternating flagsChanged events fire activate then deactivate")
     func watchedKeyTogglesAndFires() {
         let cap = InputMonitoringCapability()
-        let manager = HotkeyManager(inputMonitoring: cap, initialKeyCode: 62)
+        let manager = HotkeyManager(
+            inputMonitoring: cap, hotKeys: HotKeyRegistry(calls: .inert), initialShortcut: .modifier(keyCode: 62)
+        )
         var activates = 0
         var deactivates = 0
         manager.onActivate = { activates += 1 }
@@ -40,7 +43,9 @@ struct HotkeyManagerHoldTests {
         // keycode. A Left Control event must NOT trigger when Right Control is
         // the watched key.
         let cap = InputMonitoringCapability()
-        let manager = HotkeyManager(inputMonitoring: cap, initialKeyCode: 62)
+        let manager = HotkeyManager(
+            inputMonitoring: cap, hotKeys: HotKeyRegistry(calls: .inert), initialShortcut: .modifier(keyCode: 62)
+        )
         var activates = 0
         var deactivates = 0
         manager.onActivate = { activates += 1 }
@@ -56,7 +61,9 @@ struct HotkeyManagerHoldTests {
     @Test(".tapDisabled is a no-op for the manager (capability self-heals)")
     func tapDisabledIsNoOp() {
         let cap = InputMonitoringCapability()
-        let manager = HotkeyManager(inputMonitoring: cap, initialKeyCode: 62)
+        let manager = HotkeyManager(
+            inputMonitoring: cap, hotKeys: HotKeyRegistry(calls: .inert), initialShortcut: .modifier(keyCode: 62)
+        )
         var activates = 0
         var deactivates = 0
         manager.onActivate = { activates += 1 }
@@ -68,14 +75,16 @@ struct HotkeyManagerHoldTests {
     }
 
     @MainActor
-    @Test("setActivationKeyCode resets the press latch")
-    func setActivationKeyCodeResetsLatch() {
+    @Test("setShortcut resets the press latch")
+    func setShortcutResetsLatch() {
         // If the user reconfigures mid-press, the stale "key still down" state
         // must not survive — otherwise the next event for the new key fires a
         // phantom deactivate (anti-pattern #7 in spirit: don't leak cycle state
         // across reconfiguration).
         let cap = InputMonitoringCapability()
-        let manager = HotkeyManager(inputMonitoring: cap, initialKeyCode: 62)
+        let manager = HotkeyManager(
+            inputMonitoring: cap, hotKeys: HotKeyRegistry(calls: .inert), initialShortcut: .modifier(keyCode: 62)
+        )
         var activates = 0
         var deactivates = 0
         manager.onActivate = { activates += 1 }
@@ -84,7 +93,7 @@ struct HotkeyManagerHoldTests {
         manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))  // press old key
         #expect(activates == 1)
 
-        manager.setActivationKeyCode(59)  // switch to Left Control mid-press
+        manager.setShortcut(.modifier(keyCode: 59))  // switch to Left Control mid-press
 
         manager.handle(.flagsChanged(keyCode: 59, flags: .maskControl))  // new press
         #expect(activates == 2)
@@ -101,7 +110,9 @@ struct HotkeyManagerHoldTests {
         // capability's `publishForTest` sends synchronously on the main actor,
         // the manager's sink receives synchronously, and the activate fires.
         let cap = InputMonitoringCapability()
-        let manager = HotkeyManager(inputMonitoring: cap, initialKeyCode: 62)
+        let manager = HotkeyManager(
+            inputMonitoring: cap, hotKeys: HotKeyRegistry(calls: .inert), initialShortcut: .modifier(keyCode: 62)
+        )
         manager.bindEventStream()
         var activates = 0
         manager.onActivate = { activates += 1 }
@@ -214,7 +225,8 @@ struct HotkeyManagerCancelTests {
     private func makeManager(mode: ActivationMode, cancelKeyCode: Int) -> HotkeyManager {
         HotkeyManager(
             inputMonitoring: InputMonitoringCapability(),
-            initialKeyCode: 62,
+            hotKeys: HotKeyRegistry(calls: .inert),
+            initialShortcut: .modifier(keyCode: 62),
             initialMode: mode,
             cancelKeyCode: cancelKeyCode
         )
@@ -290,7 +302,7 @@ struct HotkeyManagerTapTests {
         wireSession(manager, onActivate: {}, onDeactivate: { deactivates += 1 })
 
         tap(manager)                          // start recording on key 62
-        manager.setActivationKeyCode(59)      // live key change to Left Control
+        manager.setShortcut(.modifier(keyCode: 59))      // live key change to Left Control
 
         manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))  // old key…
         manager.handle(.flagsChanged(keyCode: 62, flags: []))            // …now ignored
@@ -373,12 +385,274 @@ struct HotkeyManagerTapTests {
 
     @MainActor
     private func makeManager(mode: ActivationMode) -> HotkeyManager {
-        HotkeyManager(inputMonitoring: InputMonitoringCapability(), initialKeyCode: 62, initialMode: mode)
+        HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(),
+            hotKeys: HotKeyRegistry(calls: .inert),
+            initialShortcut: .modifier(keyCode: 62),
+            initialMode: mode
+        )
     }
 
     @MainActor
     private func tap(_ manager: HotkeyManager, keyCode: Int64 = 62) {
         manager.handle(.flagsChanged(keyCode: keyCode, flags: .maskControl))
         manager.handle(.flagsChanged(keyCode: keyCode, flags: []))
+    }
+}
+
+@Suite("HotkeyManager combination")
+struct HotkeyManagerCombinationTests {
+    // A combination arrives as hot key presses and releases from `HotKeyRegistry`,
+    // driven here through `publishForTest`; the inert calls register nothing real.
+    // ⌃⌥Space: keycode 49 with Control and Option.
+    private let combination = Shortcut.combination(keyCode: 49, modifiers: [.control, .option])
+    private let heldFlags: CGEventFlags = [.maskControl, .maskAlternate]
+
+    @MainActor
+    @Test("Hold: the key's release stops, and a modifier lifting afterwards does nothing")
+    func holdStopsOnKeyReleaseFirst() {
+        // Releasing the key before the modifiers is the usual order. The stop must
+        // fire once: a second deactivate would end the next recording early.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var activates = 0
+        var deactivates = 0
+        manager.onActivate = { activates += 1 }
+        manager.onDeactivate = { deactivates += 1 }
+
+        hotKeys.publishForTest(.pressed(.dictation))
+        #expect(activates == 1)
+        hotKeys.publishForTest(.released(.dictation))
+        #expect(deactivates == 1)
+        manager.handle(.flagsChanged(keyCode: 58, flags: .maskControl))   // ⌥ lifts
+        manager.handle(.flagsChanged(keyCode: 59, flags: []))             // ⌃ lifts
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    @Test("Hold: a modifier lifting stops at once, and the key's later release does nothing")
+    func holdStopsOnModifierLiftFirst() {
+        // Letting go of ⌥ while still holding Space means the shortcut is no longer
+        // held, so dictation stops then, not when Space comes up.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var deactivates = 0
+        manager.onDeactivate = { deactivates += 1 }
+
+        hotKeys.publishForTest(.pressed(.dictation))
+        manager.handle(.flagsChanged(keyCode: 58, flags: .maskControl))   // ⌥ lifts, ⌃ held
+        #expect(deactivates == 1)
+        hotKeys.publishForTest(.released(.dictation))
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    @Test("Hold: pressing another modifier during the hold does not stop it")
+    func holdIgnoresAddedModifier() {
+        // Only a modifier of the combination lifting ends the hold; adding Shift
+        // still leaves ⌃⌥ held.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var deactivates = 0
+        manager.onDeactivate = { deactivates += 1 }
+
+        hotKeys.publishForTest(.pressed(.dictation))
+        manager.handle(.flagsChanged(keyCode: 56, flags: heldFlags.union(.maskShift)))
+        #expect(deactivates == 0)
+    }
+
+    @MainActor
+    @Test("single tap: the press does nothing; each release is a tap")
+    func singleTapActsOnRelease() {
+        // Acting on the release keeps a held combination one tap, as a held lone
+        // modifier is, and keeps the press from racing its own release.
+        let (manager, hotKeys) = makeManager(mode: .singleTap)
+        var activates = 0
+        var deactivates = 0
+        var recording = false
+        manager.isRecording = { recording }
+        manager.onActivate = { activates += 1; recording = true }
+        manager.onDeactivate = { deactivates += 1; recording = false }
+
+        hotKeys.publishForTest(.pressed(.dictation))
+        #expect(activates == 0)
+        hotKeys.publishForTest(.released(.dictation))
+        #expect(activates == 1)
+        hotKeys.publishForTest(.pressed(.dictation))
+        hotKeys.publishForTest(.released(.dictation))
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    @Test("double tap: two quick releases start")
+    func doubleTapActsOnTwoReleases() {
+        let (manager, hotKeys) = makeManager(mode: .doubleTap)
+        var activates = 0
+        manager.onActivate = { activates += 1 }
+
+        hotKeys.publishForTest(.pressed(.dictation))
+        hotKeys.publishForTest(.released(.dictation))
+        #expect(activates == 0)
+        hotKeys.publishForTest(.pressed(.dictation))
+        hotKeys.publishForTest(.released(.dictation))
+        #expect(activates == 1)
+    }
+
+    @MainActor
+    @Test("with a combination set, the old lone modifier no longer activates")
+    func loneModifierIgnoredForCombination() {
+        // The tap still delivers every modifier edge; only the combination may start
+        // dictation, or Right Option would keep working after the user changed it.
+        let (manager, _) = makeManager(mode: .hold)
+        var activates = 0
+        manager.onActivate = { activates += 1 }
+
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activates == 0)
+    }
+
+    @MainActor
+    @Test("the shortcut's hot key follows the setting: registered for a combination, gone for a lone modifier")
+    func registrationFollowsShortcut() {
+        // An exclusive hot key left registered would keep swallowing that keystroke
+        // in every app after the user moved dictation off it.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        #expect(hotKeys.registeredIDs == [.dictation])
+        #expect(manager.dictationRegistration == .registered)
+
+        manager.setShortcut(.modifier(keyCode: 61))
+        #expect(hotKeys.registeredIDs.isEmpty)
+        #expect(manager.dictationRegistration == nil)
+    }
+
+    @MainActor
+    @Test("a combination another app holds is reported, not silently dead")
+    func takenCombinationIsReported() {
+        // The recorder shows this result to the user; without it the shortcut
+        // would simply never fire.
+        var calls = HotKeyRegistry.Calls.inert
+        calls.register = { _, _, _ in (OSStatus(eventHotKeyExistsErr), nil) }
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: HotKeyRegistry(calls: calls),
+            initialShortcut: combination, initialMode: .hold
+        )
+        manager.bindEventStream()
+        manager.setShortcut(.combination(keyCode: 9, modifiers: [.control, .option]))
+        #expect(manager.dictationRegistration == .takenByAnotherApp)
+    }
+
+    @MainActor
+    @Test("fn cancel stays on for a combination and is off only when fn is the dictation key")
+    func fnCancelFollowsDictationKey() {
+        // fn is the cancel key; it only stands down when it is also the dictation key,
+        // where its press already means start or stop.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var cancels = 0
+        manager.onCancel = { cancels += 1 }
+        hotKeys.publishForTest(.pressed(.dictation))
+        manager.handle(.flagsChanged(keyCode: 63, flags: heldFlags.union(.maskSecondaryFn)))
+        #expect(cancels == 1)
+
+        manager.setShortcut(.modifier(keyCode: 63))
+        manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))
+        #expect(cancels == 1)
+    }
+
+    // Started through `bindEventStream`, which a test can call, and `setShortcut`,
+    // which registers once the streams are bound.
+    @MainActor
+    private func makeManager(mode: ActivationMode) -> (HotkeyManager, HotKeyRegistry) {
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+            initialShortcut: .modifier(keyCode: 61), initialMode: mode
+        )
+        manager.bindEventStream()
+        manager.setShortcut(combination)
+        return (manager, hotKeys)
+    }
+}
+
+@Suite("HotkeyManager discard")
+struct HotkeyManagerDiscardTests {
+    // A River hot key pressed while the lone-modifier dictation key is down: the
+    // modifier is part of that shortcut (spec 0036). Unreachable until PR 9 adds the
+    // other shortcuts, so a synthetic ID stands in for one.
+    private let otherShortcut = HotKeyID(rawValue: 99)
+
+    @MainActor
+    @Test("Hold: the recording is discarded and the modifier's release is not a stop")
+    func holdDiscardsAndSkipsRelease() {
+        // A stop would transcribe and type the few words caught before the shortcut.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var activates = 0
+        var deactivates = 0
+        var discards = 0
+        manager.onActivate = { activates += 1 }
+        manager.onDeactivate = { deactivates += 1 }
+        manager.onDiscard = { discards += 1 }
+
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        hotKeys.publishForTest(.pressed(otherShortcut))
+        hotKeys.publishForTest(.released(otherShortcut))
+        hotKeys.publishForTest(.pressed(otherShortcut))   // pressed again, same hold
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activates == 1)
+        #expect(discards == 1)
+        #expect(deactivates == 0)
+
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))   // the next hold works
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activates == 2)
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    @Test("tap modes: that press is not a tap, and nothing is discarded")
+    func tapModeSkipsTheTap() {
+        // In a tap mode the modifier's release is what counts, so skipping it is
+        // enough: no recording starts, and one already running keeps going.
+        let (manager, hotKeys) = makeManager(mode: .singleTap)
+        var activates = 0
+        var discards = 0
+        manager.onActivate = { activates += 1 }
+        manager.onDiscard = { discards += 1 }
+
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        hotKeys.publishForTest(.pressed(otherShortcut))
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activates == 0)
+        #expect(discards == 0)
+
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))   // the next tap works
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activates == 1)
+    }
+
+    @MainActor
+    @Test("a hot key pressed while the modifier is up changes nothing")
+    func hotKeyWithModifierUpIsIgnored() {
+        // Only a shortcut that uses the held modifier is in conflict; any other leaves
+        // the next dictation alone.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var activates = 0
+        var deactivates = 0
+        manager.onActivate = { activates += 1 }
+        manager.onDeactivate = { deactivates += 1 }
+
+        hotKeys.publishForTest(.pressed(otherShortcut))
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activates == 1)
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    private func makeManager(mode: ActivationMode) -> (HotkeyManager, HotKeyRegistry) {
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+            initialShortcut: .modifier(keyCode: 61), initialMode: mode
+        )
+        manager.bindEventStream()
+        return (manager, hotKeys)
     }
 }

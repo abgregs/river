@@ -56,7 +56,7 @@ struct RiverSessionTests {
         let env = makeSession()
         try await env.session.start()
         let baseline = env.session.configurationApplyCount
-        env.store.setValue(59, for: Settings.activationKeyCode)
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)
         #expect(env.session.configurationApplyCount == baseline + 1)
         #expect(env.session.configurationDeferCount == 0)
     }
@@ -90,7 +90,7 @@ struct RiverSessionTests {
         #expect(env.session.currentState == .recording)
         let baseline = env.session.configurationApplyCount
 
-        env.store.setValue(59, for: Settings.activationKeyCode)  // change key mid-recording
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)  // change key mid-recording
 
         #expect(env.session.currentState == .recording)              // not deferred, not stopped
         #expect(env.session.configurationApplyCount == baseline + 1)  // applied live
@@ -154,7 +154,7 @@ struct RiverSessionTests {
         try await env.session.start()
         let afterStart = env.session.configurationApplyCount
         await env.session.stop()
-        env.store.setValue(54, for: Settings.activationKeyCode)
+        env.store.setValue(.modifier(keyCode: 54), for: Settings.dictationShortcut)
         #expect(env.session.configurationApplyCount == afterStart)
     }
 
@@ -325,7 +325,7 @@ struct RiverSessionTests {
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
 
-        env.store.setValue(59, for: Settings.activationKeyCode)  // change while .recording
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)  // change while .recording
         #expect(env.session.configurationApplyCount == baseline)  // unchanged — deferred
         #expect(env.session.configurationDeferCount == 1)
 
@@ -348,7 +348,7 @@ struct RiverSessionTests {
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
 
-        env.store.setValue(59, for: Settings.activationKeyCode)                     // deferred
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)                     // deferred
         env.store.setValue(ActivationMode.singleTap, for: Settings.activationMode)  // deferred
         #expect(env.session.configurationApplyCount == baseline)   // both parked, none lost
         #expect(env.session.configurationDeferCount == 2)
@@ -450,7 +450,7 @@ struct RiverSessionTests {
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
 
-        env.store.setValue(59, for: Settings.activationKeyCode)  // deferred (Hold recording)
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)  // deferred (Hold recording)
         #expect(env.session.configurationApplyCount == baseline)  // parked, not applied
         #expect(env.session.configurationDeferCount == 1)
 
@@ -546,6 +546,64 @@ struct RiverSessionTests {
         #expect(env.transcription.currentModelName == Constants.defaultModel)
 
         env.session.handleCancel()
+
+        #expect(env.session.currentState == .idle)
+        #expect(env.transcription.currentModelName == "openai_whisper-base.en")
+    }
+
+    @MainActor
+    @Test("a River hot key during a Hold recording discards it silently and keeps the deferral loop")
+    func hotKeyDuringHoldDiscardsSilently() async throws {
+        // Spec 0036: a lone-modifier dictation key held as part of another River
+        // shortcut means the user is running that shortcut. The recording goes with no
+        // transcription, no error, no notice, and the modifier's release must not start
+        // a `.processing` cycle. A setting parked during it still applies, as on cancel.
+        let env = makeSession()
+        try await env.session.start()
+        let baseline = env.session.configurationApplyCount
+        var errors: [RiverError] = []
+        var notices: [String] = []
+        var discards = 0
+        let tokens = [
+            env.session.errors.sink { errors.append($0) },
+            env.session.notices.sink { notices.append($0) },
+            env.session.discards.sink { discards += 1 },
+        ]
+        defer { tokens.forEach { $0.cancel() } }
+
+        // 61: the session applies the store's dictation shortcut, Right Option, at start.
+        env.inputMonitoring.publishForTest(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        try await Task.sleep(nanoseconds: 20_000_000)
+        #expect(env.session.currentState == .recording)
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)  // deferred
+
+        env.hotKeys.publishForTest(.pressed(HotKeyID(rawValue: 99)))
+        #expect(env.session.currentState == .idle)
+        env.inputMonitoring.publishForTest(.flagsChanged(keyCode: 61, flags: []))
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        #expect(env.session.currentState == .idle)                       // no processing cycle
+        #expect(errors.isEmpty)
+        #expect(notices.isEmpty)                                         // silent, unlike cancel
+        #expect(discards == 1)
+        #expect(env.session.configurationApplyCount == baseline + 1)     // pending applied
+    }
+
+    // A recording discarded because the dictation key was part of another River shortcut
+    // returns to .idle like a cancel, so a model that became ready meanwhile takes over too.
+    @MainActor
+    @Test("a model ready during a discarded recording takes over when the discard ends the cycle")
+    func readyModelCommitsOnDiscard() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        env.session.selectModel("openai_whisper-base.en")
+        await waitUntil { env.transcription.currentModelSwitch?.phase == .ready }
+        #expect(env.transcription.currentModelName == Constants.defaultModel)
+
+        env.session.handleDiscard()
 
         #expect(env.session.currentState == .idle)
         #expect(env.transcription.currentModelName == "openai_whisper-base.en")
@@ -838,6 +896,7 @@ struct RiverSessionTests {
         let session: RiverSession
         let store: SettingsStore
         let hotkey: HotkeyManager
+        let hotKeys: HotKeyRegistry
         let inputMonitoring: InputMonitoringCapability
         let microphone: MicrophoneCapability
         let transcription: TranscriptionManager
@@ -866,7 +925,10 @@ struct RiverSessionTests {
         // Granted like the other two, so onboarding reads complete and the ready
         // microphone does not follow the host's Input Monitoring state.
         inputMonitoring.setStatusForTesting(.granted)
-        let hotkey = HotkeyManager(inputMonitoring: inputMonitoring, initialKeyCode: 62)
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let hotkey = HotkeyManager(
+            inputMonitoring: inputMonitoring, hotKeys: hotKeys, initialShortcut: .modifier(keyCode: 62)
+        )
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
         let transcription = TranscriptionManager()
         // Unit tests never load the real model, so mark the model as ready to
@@ -895,6 +957,7 @@ struct RiverSessionTests {
             session: session,
             store: store,
             hotkey: hotkey,
+            hotKeys: hotKeys,
             inputMonitoring: inputMonitoring,
             microphone: microphone,
             transcription: transcription,

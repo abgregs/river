@@ -46,6 +46,12 @@ final class AppState {
     /// since an all-silence recording leaves it in the same turn (planning 0023), so it
     /// reads this instead of inferring a cancel from `.recording → .idle`.
     private(set) var lastRecordingWasCanceled = false
+    /// Whether the most recent recording was discarded silently because its key was
+    /// part of another River shortcut (spec 0036). Not a cancel: no cue plays.
+    private(set) var lastRecordingWasDiscarded = false
+    // Set by the session's `discards` signal, which arrives just before that
+    // recording's `.idle`; consumed as the state leaves `.recording`.
+    @ObservationIgnored private var isDiscardPending = false
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private let scheduleToastDismiss: ToastScheduler
@@ -67,6 +73,9 @@ final class AppState {
             .store(in: &cancellables)
         session.notices
             .sink { [weak self] notice in self?.apply(notice: notice) }
+            .store(in: &cancellables)
+        session.discards
+            .sink { [weak self] in self?.applyDiscard() }
             .store(in: &cancellables)
         session.lastTranscriptAvailable
             .sink { [weak self] available in self?.apply(hasLastTranscript: available) }
@@ -103,7 +112,9 @@ final class AppState {
     // the live recording, so it clears the moment that recording ends.
     func apply(_ newState: RiverState) {
         if state == .recording && newState != .recording {
-            lastRecordingWasCanceled = newState == .idle
+            lastRecordingWasDiscarded = isDiscardPending
+            lastRecordingWasCanceled = newState == .idle && !isDiscardPending
+            isDiscardPending = false
         }
         state = newState
         if newState == .recording {
@@ -124,6 +135,11 @@ final class AppState {
             inputLevel = 0
             isAudioFlowing = false
         }
+    }
+
+    // internal for testability — the next recording end is a silent discard.
+    func applyDiscard() {
+        isDiscardPending = true
     }
 
     // internal for testability — a recording-context notice (e.g. a live
