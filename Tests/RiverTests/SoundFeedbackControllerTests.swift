@@ -44,6 +44,16 @@ struct SoundFeedbackControllerTests {
         #expect(SoundFeedbackController.cue(from: .recording, to: .idle, recordingWasCanceled: false) == .end)
     }
 
+    @Test("recording→idle after a silent discard produces no cue")
+    func recordingToIdleAfterDiscardIsNil() {
+        // Spec 0036: the dictation modifier was part of another River shortcut, so the
+        // user never meant to dictate. A cancel cue would announce a recording they did
+        // not start, on every use of that shortcut.
+        #expect(SoundFeedbackController.cue(
+            from: .recording, to: .idle, recordingWasCanceled: false, recordingWasDiscarded: true
+        ) == nil)
+    }
+
     @Test("the cancel cue is distinct from the begin and end cues")
     func cancelCueIsDistinct() {
         // The point of a third cue is that it is tellable apart. If a future

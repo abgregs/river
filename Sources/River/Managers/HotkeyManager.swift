@@ -3,13 +3,15 @@ import CoreGraphics
 import Foundation
 import os
 
-/// Consumes the typed `TapEvent` stream from `InputMonitoringCapability` and
-/// interprets it against the configured activation key and mode. Hold mode is
-/// inline (key-down activates, key-up deactivates); the two tap modes route each
+/// Interprets the dictation shortcut against the activation mode. A lone modifier
+/// is read from the typed `TapEvent` stream of `InputMonitoringCapability`; a
+/// combination is an exclusive hot key read from `HotKeyRegistry`. Hold mode is
+/// inline (press activates, release deactivates); the two tap modes route each
 /// completed tap through `TapStateMachine`.
 @MainActor
 final class HotkeyManager {
     private let inputMonitoring: InputMonitoringCapability
+    private let hotKeys: HotKeyRegistry
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "hotkey")
 
     var onActivate: (() -> Void)?
@@ -17,28 +19,44 @@ final class HotkeyManager {
     /// The cancel gesture fired (planning 0017). `RiverSession` guards it to
     /// `.recording`, so firing outside a recording is a harmless no-op.
     var onCancel: (() -> Void)?
+    /// A River hot key was pressed while a lone-modifier dictation key was held in
+    /// Hold mode: the user is running a shortcut, not dictating, so the recording
+    /// is thrown away with no cue (spec 0036). Guarded to `.recording` like cancel.
+    var onDiscard: (() -> Void)?
     /// Whether a recording is live, read on each completed tap in the tap modes.
     /// `RiverSession` answers from its own state, the only "recording" there is.
     var isRecording: () -> Bool = { false }
 
-    private var watchedKeyCode: Int
+    private var shortcut: Shortcut
     private var mode: ActivationMode
     private let cancelKeyCode: Int
     private let tapMachine: TapStateMachine
+    // Press latch for a lone-modifier shortcut.
     private var isKeyDown = false
+    // A River hot key went down during this lone-modifier press, so its release is
+    // not a stop (Hold) or a tap (tap modes).
+    private var isKeyPressSpent = false
+    // A combination press started a Hold recording that has not stopped yet. The
+    // key's release and a modifier lifting both stop it, and only the first counts.
+    private var isCombinationHeld = false
     // Press latch for the cancel modifier, tracked separately from the activation
     // key so a cancel-key edge never disturbs the activation latch (and vice versa).
     private var isCancelKeyDown = false
     private var cancellables = Set<AnyCancellable>()
 
+    /// What macOS said to the combination's registration; nil for a lone modifier.
+    private(set) var dictationRegistration: HotKeyRegistration?
+
     init(
         inputMonitoring: InputMonitoringCapability,
-        initialKeyCode: Int = Constants.defaultActivationKeyCode,
+        hotKeys: HotKeyRegistry,
+        initialShortcut: Shortcut = Constants.defaultDictationShortcut,
         initialMode: ActivationMode = Constants.defaultActivationMode,
         cancelKeyCode: Int = Constants.cancelKeyCode
     ) {
         self.inputMonitoring = inputMonitoring
-        self.watchedKeyCode = initialKeyCode
+        self.hotKeys = hotKeys
+        self.shortcut = initialShortcut
         self.mode = initialMode
         self.cancelKeyCode = cancelKeyCode
         self.tapMachine = TapStateMachine(mode: initialMode, windowMs: Constants.doubleTapWindowMs)
@@ -46,26 +64,33 @@ final class HotkeyManager {
 
     func start() async {
         bindEventStream()
+        registerCombination()
         await inputMonitoring.startTap()
     }
 
     func stop() async {
         cancellables.removeAll()
+        hotKeys.unregister(.dictation)
         await inputMonitoring.stopTap()
-        isKeyDown = false
+        resetLatches()
         isCancelKeyDown = false
     }
 
-    /// Live-apply for the watched key. Resets the press latch so a half-press
-    /// of the old key can't fire a phantom deactivate against the new one. Does
-    /// NOT touch the tap machine: switching the key is a keycode refilter, and the
-    /// new key stops an active recording because the session still reports it (a
-    /// stale double-tap `awaiting` state self-clears via the time window).
-    func setActivationKeyCode(_ code: Int) {
-        guard watchedKeyCode != code else { return }
-        logger.info("Activation key changed: \(self.watchedKeyCode, privacy: .public) -> \(code, privacy: .public)")
-        watchedKeyCode = code
-        isKeyDown = false
+    /// Live-apply for the dictation shortcut. Moves the hot key registration and
+    /// resets the press latches so a half-press of the old shortcut can't fire a
+    /// phantom deactivate against the new one. Does NOT touch the tap machine: the
+    /// new shortcut stops an active recording because the session still reports it
+    /// (a stale double-tap `awaiting` state self-clears via the time window).
+    func setShortcut(_ newShortcut: Shortcut) {
+        guard shortcut != newShortcut else { return }
+        logger.info("Dictation shortcut changed: \(self.shortcut.rawValue, privacy: .public) -> \(newShortcut.rawValue, privacy: .public)")
+        hotKeys.unregister(.dictation)
+        dictationRegistration = nil
+        shortcut = newShortcut
+        resetLatches()
+        // Registered at once only while running; before `start` there is nothing to
+        // deliver its events to, and `start` registers it.
+        if !cancellables.isEmpty { registerCombination() }
     }
 
     /// Live-apply for the activation mode. Resets the press latch and hands the
@@ -74,53 +99,121 @@ final class HotkeyManager {
         guard mode != newMode else { return }
         logger.info("Activation mode changed: \(self.mode.rawValue, privacy: .public) -> \(newMode.rawValue, privacy: .public)")
         mode = newMode
-        isKeyDown = false
+        resetLatches()
         tapMachine.setMode(newMode)
     }
 
-    // internal for testability — subscribes to the capability's event stream
-    // without creating a real tap, so tests can drive synthetic events through.
+    // internal for testability — subscribes to both event streams without creating
+    // a real tap or hot key, so tests can drive synthetic events through.
     func bindEventStream() {
         guard cancellables.isEmpty else { return }
         inputMonitoring.events
             .sink { [weak self] event in self?.handle(event) }
             .store(in: &cancellables)
+        hotKeys.events
+            .sink { [weak self] event in self?.handle(event) }
+            .store(in: &cancellables)
     }
 
-    // internal for testability — pure interpretation. `.flagsChanged` for the
-    // watched keycode toggles the press latch; left/right variants are
+    private func registerCombination() {
+        guard case .combination(let keyCode, let modifiers) = shortcut else { return }
+        dictationRegistration = hotKeys.register(
+            .dictation, keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags
+        )
+    }
+
+    private func resetLatches() {
+        isKeyDown = false
+        isKeyPressSpent = false
+        isCombinationHeld = false
+    }
+
+    // internal for testability — pure interpretation of the tap. `.flagsChanged`
+    // for a lone-modifier shortcut toggles the press latch; left/right variants are
     // disambiguated by keycode, not flag bit (see activation-key-and-mode.md).
     // Hold mode fires on each edge; tap modes act only on the completing (key-up)
     // edge of a tap and delegate start/stop to the tap machine — so holding the
-    // key in a tap mode is just one tap.
+    // key in a tap mode is just one tap. For a combination held in Hold mode, the
+    // tap reports its modifiers lifting.
     func handle(_ event: TapEvent) {
         switch event {
-        case .flagsChanged(let keyCode, _):
+        case .flagsChanged(let keyCode, let flags):
             // The cancel modifier (planning 0017) is interpreted off the same
             // already-watched `.flagsChanged` stream — no second tap, no mask change,
             // so the 0006 least-privilege posture is untouched. It's disabled when it
-            // would collide with the activation key (that key already means stop);
-            // the menu item remains the fallback.
-            if Int(keyCode) == cancelKeyCode, cancelKeyCode != watchedKeyCode {
+            // is the dictation key (that key already means stop); the menu item
+            // remains the fallback.
+            if Int(keyCode) == cancelKeyCode, shortcut != .modifier(keyCode: cancelKeyCode) {
                 handleCancelKey()
                 return
             }
-            guard Int(keyCode) == watchedKeyCode else { return }
-            isKeyDown.toggle()
-            switch mode {
-            case .hold:
-                if isKeyDown { fireActivate() } else { fireDeactivate() }
-            case .singleTap, .doubleTap:
-                guard !isKeyDown else { return }
-                switch tapMachine.handleTap(isRecording: isRecording()) {
-                case .start: fireActivate()
-                case .stop: fireDeactivate()
-                case .none: break
-                }
+            switch shortcut {
+            case .modifier(let watchedKeyCode):
+                guard Int(keyCode) == watchedKeyCode else { return }
+                handleModifierEdge()
+            case .combination(_, let modifiers):
+                // Lifting any of the combination's modifiers ends a Hold recording,
+                // even while the key is still down: the shortcut is no longer held.
+                guard isCombinationHeld, !flags.contains(modifiers.eventFlags) else { return }
+                isCombinationHeld = false
+                fireDeactivate()
             }
         case .tapDisabled:
             // Capability self-heals; nothing for the manager to do.
             break
+        }
+    }
+
+    // internal for testability — pure interpretation of a River hot key.
+    func handle(_ event: HotKeyEvent) {
+        switch (shortcut, event) {
+        case (.combination, .pressed(.dictation)):
+            // Hold starts on the press. The tap modes wait for the release, so
+            // holding the combination is one tap, as with a lone modifier.
+            guard mode == .hold, !isCombinationHeld else { return }
+            isCombinationHeld = true
+            fireActivate()
+        case (.combination, .released(.dictation)):
+            switch mode {
+            case .hold:
+                guard isCombinationHeld else { return }
+                isCombinationHeld = false
+                fireDeactivate()
+            case .singleTap, .doubleTap:
+                completeTap()
+            }
+        case (.modifier, .pressed(let id)):
+            // Another River shortcut went down while the dictation modifier is held:
+            // the modifier is part of that shortcut, not a dictation.
+            guard isKeyDown, !isKeyPressSpent else { return }
+            isKeyPressSpent = true
+            logger.info("Hot key \(id.rawValue, privacy: .public) pressed during the dictation key; that press is not a dictation")
+            if mode == .hold { onDiscard?() }
+        default:
+            break
+        }
+    }
+
+    private func handleModifierEdge() {
+        isKeyDown.toggle()
+        if !isKeyDown, isKeyPressSpent {
+            isKeyPressSpent = false
+            return
+        }
+        switch mode {
+        case .hold:
+            if isKeyDown { fireActivate() } else { fireDeactivate() }
+        case .singleTap, .doubleTap:
+            guard !isKeyDown else { return }
+            completeTap()
+        }
+    }
+
+    private func completeTap() {
+        switch tapMachine.handleTap(isRecording: isRecording()) {
+        case .start: fireActivate()
+        case .stop: fireDeactivate()
+        case .none: break
         }
     }
 
@@ -135,12 +228,12 @@ final class HotkeyManager {
     }
 
     private func fireActivate() {
-        logger.info("Activate (keycode \(self.watchedKeyCode, privacy: .public), mode \(self.mode.rawValue, privacy: .public))")
+        logger.info("Activate (shortcut \(self.shortcut.rawValue, privacy: .public), mode \(self.mode.rawValue, privacy: .public))")
         onActivate?()
     }
 
     private func fireDeactivate() {
-        logger.info("Deactivate (keycode \(self.watchedKeyCode, privacy: .public), mode \(self.mode.rawValue, privacy: .public))")
+        logger.info("Deactivate (shortcut \(self.shortcut.rawValue, privacy: .public), mode \(self.mode.rawValue, privacy: .public))")
         onDeactivate?()
     }
 }

@@ -30,6 +30,7 @@ final class RiverSession {
     private let stateSubject = CurrentValueSubject<RiverState, Never>(.idle)
     private let errorSubject = PassthroughSubject<RiverError, Never>()
     private let noticeSubject = PassthroughSubject<String, Never>()
+    private let discardSubject = PassthroughSubject<Void, Never>()
 
     private let accessibility: AccessibilityCapability
     private let microphone: MicrophoneCapability
@@ -88,6 +89,9 @@ final class RiverSession {
     // Recording-context notices (e.g. "activation key changed — press it to stop").
     // Same observers as `errors`; shown in the menu bar now, the HUD later.
     var notices: AnyPublisher<String, Never> { noticeSubject.eraseToAnyPublisher() }
+    // Fires just before a silent discard's `.idle`, so `AppState` can tell it from a
+    // cancel, which looks the same as a state change.
+    var discards: AnyPublisher<Void, Never> { discardSubject.eraseToAnyPublisher() }
     // Availability signal for the "Copy Last Transcription" menu item (planning 0019).
     // Emits `true` after the first successful transcription; `AppState` bridges it.
     var lastTranscriptAvailable: AnyPublisher<Bool, Never> { lastTranscriptAvailableSubject.eraseToAnyPublisher() }
@@ -164,6 +168,7 @@ final class RiverSession {
             Task { @MainActor in await self?.handleDeactivate() }
         }
         hotkey.onCancel = { [weak self] in self?.handleCancel() }
+        hotkey.onDiscard = { [weak self] in self?.handleDiscard() }
         hotkey.isRecording = { [weak self] in self?.currentState == .recording }
         // The capture watchdog ends a recording whose audio stopped arriving, through the
         // same path as a key release; `stopRecording` reports the shortfall from there.
@@ -374,6 +379,29 @@ final class RiverSession {
         applyPendingModelSwitch()
     }
 
+    // internal for testability — a recording thrown away because the held dictation
+    // modifier turned out to be part of another River shortcut (spec 0036). The same
+    // `.recording → .idle` discard as `handleCancel`, but silent: the user never meant
+    // to dictate, so there is no notice, and the `discarded` signal sent before
+    // `.idle` tells `AppState` to play no cue.
+    func handleDiscard() {
+        guard currentState == .recording else {
+            logger.info("Ignoring discard in state \(String(describing: self.currentState), privacy: .public)")
+            return
+        }
+        logger.info("Discard: another shortcut used the dictation key (no transcription, no paste, no cue)")
+        stream?.cancel()
+        stream = nil
+        liveTranscriptSubject.send("")
+        let audio = self.audio
+        Task { @MainActor in await audio.discardRecording() }
+        discardSubject.send()
+        stateSubject.send(.idle)
+        logger.info("State -> idle (discarded)")
+        applyPendingReconfigurations()
+        applyPendingModelSwitch()
+    }
+
     // Pending reconfigurations parked during a non-idle cycle fire on the
     // return to `.idle` — closes the deferral loop documented in
     // `architecture/river-session.md` "Reconfiguration without leaks".
@@ -391,10 +419,10 @@ final class RiverSession {
     // `reconfigureHotkey`, which applies live, defers, or notifies depending on
     // the cycle state and active mode.
     private func subscribeToConfiguration() {
-        settings.publisher(for: Settings.activationKeyCode)
-            .sink { [weak self] newCode in
-                self?.reconfigureHotkey(notice: ActivationNotice.keyChanged(toKeyCode: newCode)) { [weak self] in
-                    self?.hotkey.setActivationKeyCode(newCode)
+        settings.publisher(for: Settings.dictationShortcut)
+            .sink { [weak self] newShortcut in
+                self?.reconfigureHotkey(notice: ActivationNotice.keyChanged(to: newShortcut)) { [weak self] in
+                    self?.hotkey.setShortcut(newShortcut)
                 }
             }
             .store(in: &cancellables)

@@ -61,7 +61,7 @@ Several backlog items compose (surfaced by the 2026-07-06 UX review):
 
 These are tracked here until they're picked up into an active milestone or moved to `requirements/`:
 
-- **Settings UI for Fn key warning**: parallel to the existing Caps Lock + Hold warning.
+- **Settings UI for Fn key warning**: the only planned mode warning (the Caps Lock + Hold one went with Caps Lock in v0.3.0).
 - **Prominent live-reconfiguration notice**: M9 surfaces the "new key now stops the recording" message in the menu dropdown; an always-visible version rides the recording HUD ([0002_recording-indicator-hud.md](0002_recording-indicator-hud.md)).
 - **Model picker in Settings**: promoted to [0021_model-picker.md](0021_model-picker.md) (2026-07-06).
 - **From the 2026-09-28 performance and size review** (the five fixes it produced are in [current-focus.md](current-focus.md)):
