@@ -3,8 +3,8 @@ import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage(Settings.activationKeyCode.name)
-    private var activationKeyCode: Int = Settings.activationKeyCode.defaultValue
+    @AppStorage(Settings.dictationShortcut.name)
+    private var dictationShortcut: Shortcut = Settings.dictationShortcut.defaultValue
     @AppStorage(Settings.activationMode.name)
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
     @AppStorage(Settings.launchAtLogin.name)
@@ -33,9 +33,10 @@ struct SettingsView: View {
 
     private var activationSection: some View {
         Section("Activation") {
-            Picker("Activation Key", selection: $activationKeyCode) {
+            // Lone modifiers only until the recorder replaces this picker (spec 0036).
+            Picker("Activation Key", selection: $dictationShortcut) {
                 ForEach(ActivationKeyOption.all) { option in
-                    Text(option.label).tag(option.keyCode)
+                    Text(option.label).tag(Shortcut.modifier(keyCode: option.keyCode))
                 }
             }
             Picker("Activation Mode", selection: $activationMode) {
@@ -46,11 +47,6 @@ struct SettingsView: View {
             Text(activationMode.description)
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            if let warning = ActivationKeyOption.capsLockHoldWarning(keyCode: activationKeyCode, mode: activationMode) {
-                Label(warning, systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 

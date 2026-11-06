@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 struct SettingKey<Value> {
     let name: String
@@ -7,9 +8,17 @@ struct SettingKey<Value> {
 }
 
 enum Settings {
+    // Before v0.3.0 the dictation key was a keycode picked from a list. Read only by
+    // `migrateActivationKeyCode`, which moves it into `dictationShortcut` and drops it.
     static let activationKeyCode = SettingKey<Int>(
         name: "activationKeyCode",
         defaultValue: Constants.defaultActivationKeyCode
+    )
+    // The key that starts and stops dictation (spec 0036): a lone modifier or a
+    // combination, stored as one string. It cannot be cleared.
+    static let dictationShortcut = SettingKey<Shortcut>(
+        name: "dictationShortcut",
+        defaultValue: Constants.defaultDictationShortcut
     )
     static let activationMode = SettingKey<ActivationMode>(
         name: "activationMode",
@@ -54,6 +63,7 @@ enum Settings {
 @MainActor
 final class SettingsStore {
     private let defaults: UserDefaults
+    private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "app")
     private var subjects: [String: any SubjectErasing] = [:]
     private var reReaders: [String: () -> Void] = [:]
     private var defaultsObserver: NSObjectProtocol?
@@ -78,6 +88,34 @@ final class SettingsStore {
         if current != newValue {
             (subjects[key.name] as? CurrentValueSubject<V, Never>)?.send(newValue)
         }
+    }
+
+    func removeValue<V>(for key: SettingKey<V>) {
+        defaults.removeObject(forKey: key.name)
+    }
+
+    // internal for the migration — whether the user ever saved `key`, as opposed to
+    // reading its default.
+    func hasStoredValue<V>(for key: SettingKey<V>) -> Bool {
+        defaults.object(forKey: key.name) != nil
+    }
+
+    /// Moves a saved `activationKeyCode` into `dictationShortcut`, once, then drops
+    /// the old key (spec 0036). A keycode that is no longer a dictation key (Caps
+    /// Lock, or anything unreadable) is dropped and the default applies. Runs at
+    /// launch, before anything reads the shortcut.
+    func migrateActivationKeyCode() {
+        guard hasStoredValue(for: Settings.activationKeyCode) else { return }
+        // Read raw, not through `value(for:)`: an unreadable value must be dropped,
+        // not read as the default and migrated.
+        let code = defaults.object(forKey: Settings.activationKeyCode.name) as? Int
+        if let code, !hasStoredValue(for: Settings.dictationShortcut), Shortcut.loneModifierKeyCodes.contains(code) {
+            setValue(.modifier(keyCode: code), for: Settings.dictationShortcut)
+            logger.info("Migrated activation key \(code, privacy: .public) to the dictation shortcut")
+        } else {
+            logger.info("Dropped activation key \(code.map(String.init) ?? "unreadable", privacy: .public) without migrating it")
+        }
+        removeValue(for: Settings.activationKeyCode)
     }
 
     func publisher<V: Equatable>(for key: SettingKey<V>) -> AnyPublisher<V, Never> {
@@ -157,3 +195,4 @@ extension DefaultsConvertible where Self: RawRepresentable {
 }
 
 extension ActivationMode: DefaultsConvertible {}
+extension Shortcut: DefaultsConvertible {}

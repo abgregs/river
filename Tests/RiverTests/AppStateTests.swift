@@ -89,6 +89,25 @@ struct AppStateTests {
     }
 
     @MainActor
+    @Test("a discarded recording is recorded as discarded, not canceled, for that recording only")
+    func lastRecordingWasDiscardedTracksOneRecording() {
+        // The cues read this to stay silent for a discard (spec 0036). A discard that
+        // read as a cancel would play the cancel cue; one that leaked into the next
+        // recording would silence a real cancel.
+        let appState = AppState()
+        appState.apply(.recording)
+        appState.applyDiscard()
+        appState.apply(.idle)
+        #expect(appState.lastRecordingWasDiscarded)
+        #expect(!appState.lastRecordingWasCanceled)
+
+        appState.apply(.recording)
+        appState.apply(.idle)                     // a real cancel
+        #expect(!appState.lastRecordingWasDiscarded)
+        #expect(appState.lastRecordingWasCanceled)
+    }
+
+    @MainActor
     @Test("bind(to:) wires state, notices, and errors from a real session end to end")
     func bindWiresAllThreeChannels() async throws {
         // `apply(_:)` is unit-tested above, but nothing asserts `bind` actually
@@ -103,7 +122,7 @@ struct AppStateTests {
         env.session.handleActivate()                       // → .recording (state channel)
         #expect(env.appState.state == .recording)
 
-        env.store.setValue(59, for: Settings.activationKeyCode)  // live tap-mode change → notice channel
+        env.store.setValue(.modifier(keyCode: 59), for: Settings.dictationShortcut)  // live tap-mode change → notice channel
         #expect(env.appState.notice != nil)
 
         await env.session.handleDeactivate()               // no buffer → .audioCapture (error channel)
@@ -258,7 +277,10 @@ struct AppStateTests {
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let inputMonitoring = InputMonitoringCapability()
-        let hotkey = HotkeyManager(inputMonitoring: inputMonitoring, initialKeyCode: 62)
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let hotkey = HotkeyManager(
+            inputMonitoring: inputMonitoring, hotKeys: hotKeys, initialShortcut: .modifier(keyCode: 62)
+        )
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
         let transcription = TranscriptionManager()
         // Unit tests never load the real model — mark ready so handleActivate

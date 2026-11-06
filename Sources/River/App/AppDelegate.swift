@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let inputMonitoring = InputMonitoringCapability()
     let settings = SettingsStore()
     let system = SystemAvailabilityMonitor()
+    let hotKeys = HotKeyRegistry()
     // Lazy so the manager loads the persisted `selectedModel` (planning 0021) at
     // launch, not the compile-time default — otherwise a user who picked a different
     // model would load `small.en` first and immediately reload on the startup
@@ -29,7 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             inputMonitoring: inputMonitoring,
             hotkey: HotkeyManager(
                 inputMonitoring: inputMonitoring,
-                initialKeyCode: settings.value(for: Settings.activationKeyCode),
+                hotKeys: hotKeys,
+                initialShortcut: settings.value(for: Settings.dictationShortcut),
                 initialMode: settings.value(for: Settings.activationMode)
             ),
             audio: AudioCaptureManager(microphone: microphone),
@@ -58,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("Application did finish launching")
+        // Before anything reads the dictation shortcut: `session` is built on first use.
+        settings.migrateActivationKeyCode()
         appState.bind(to: session)
         appState.bind(transcription: transcription)
         appState.bind(microphone: microphone)

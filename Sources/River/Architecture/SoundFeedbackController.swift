@@ -76,7 +76,9 @@ final class SoundFeedbackController {
         let newState = appState.state
         defer { previousState = newState }
         guard let cue = SoundFeedbackController.cue(
-            from: previousState, to: newState, recordingWasCanceled: appState.lastRecordingWasCanceled
+            from: previousState, to: newState,
+            recordingWasCanceled: appState.lastRecordingWasCanceled,
+            recordingWasDiscarded: appState.lastRecordingWasDiscarded
         ) else { return }
         guard settings.value(for: Settings.playFeedbackSounds) else { return }
         player.play(cue)
@@ -85,8 +87,11 @@ final class SoundFeedbackController {
     // internal for testability — pure transition → cue mapping. Returns nil for
     // transitions that carry no sound (e.g. `.processing → .idle`).
     // `recordingWasCanceled` is `AppState.lastRecordingWasCanceled`; it matters only
-    // for `.recording → .idle`, the one transition a snapshot cannot tell apart.
-    static func cue(from: RiverState, to: RiverState, recordingWasCanceled: Bool) -> SoundCue? {
+    // for `.recording → .idle`, the one transition a snapshot cannot tell apart, as
+    // does `recordingWasDiscarded` (`AppState.lastRecordingWasDiscarded`).
+    static func cue(
+        from: RiverState, to: RiverState, recordingWasCanceled: Bool, recordingWasDiscarded: Bool = false
+    ) -> SoundCue? {
         switch (from, to) {
         case (.idle, .recording):       return .begin
         case (.recording, .processing): return .end
@@ -102,6 +107,10 @@ final class SoundFeedbackController {
         // HUD, which is exactly when a discard needs confirming. The menu/HUD
         // "Recording canceled." notice remains; this is additive, not a
         // replacement.
+        //
+        // A discarded recording (spec 0036) gets no cue: its key was part of
+        // another River shortcut, so the user never meant to dictate.
+        case (.recording, .idle) where recordingWasDiscarded: return nil
         case (.recording, .idle):       return recordingWasCanceled ? .cancel : .end
         default:                        return nil
         }
