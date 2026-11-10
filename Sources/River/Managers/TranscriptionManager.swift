@@ -17,8 +17,25 @@ enum ModelLoadState: Equatable {
     case loading
     /// Model is warm and ready for inference.
     case ready
-    /// Load failed permanently; re-launch required.
+    /// Load failed. Choosing the same model again retries.
     case failed
+}
+
+/// A model loading beside the one in use (planning 0036, Model: a new model takes over only
+/// once it is ready). The model in use keeps transcribing, and its `ModelLoadState` stays
+/// `.ready`, until the session commits the switch at `.idle`.
+struct ModelSwitch: Equatable {
+    enum Phase: Equatable {
+        case downloading
+        case preparing
+        /// Loaded and waiting for the session to commit it at `.idle`.
+        case ready
+        /// The model in use is unaffected; choosing the target again retries.
+        case failed
+    }
+
+    let target: String
+    var phase: Phase
 }
 
 enum TranscriptionError: Error, LocalizedError {
@@ -74,6 +91,20 @@ final class TranscriptionManager {
     // in-flight load (e.g. the launch load) can't clobber the newer model's state.
     private var loadGeneration = 0
 
+    // The next model, loading beside the one in use. Its own generation, so a newer
+    // choice drops an older staged load's result.
+    private var staged: WhisperKit?
+    private var stagedTask: Task<WhisperKit, Error>?
+    private var stageGeneration = 0
+    private let switchSubject = CurrentValueSubject<ModelSwitch?, Never>(nil)
+    private let activeModelSubject: CurrentValueSubject<String, Never>
+
+    /// The model loading beside the one in use, if any.
+    var modelSwitch: AnyPublisher<ModelSwitch?, Never> { switchSubject.eraseToAnyPublisher() }
+    var currentModelSwitch: ModelSwitch? { switchSubject.value }
+    /// The model in use: the one `transcribe` runs and `modelLoadState` describes.
+    var activeModel: AnyPublisher<String, Never> { activeModelSubject.eraseToAnyPublisher() }
+
     // Published model load state — the menu bar observes this to show an honest
     // "Downloading…" / "Preparing…" / "Ready" status during the launch window.
     // Initialized from a synchronous disk check so the first emitted value is
@@ -96,6 +127,7 @@ final class TranscriptionManager {
 
     init(modelName: String = Constants.defaultModel) {
         self.modelName = modelName
+        activeModelSubject = CurrentValueSubject(modelName)
         // Synchronous disk check: if the model files are already on disk the user
         // will see "Preparing model…" (warm launch); otherwise "Downloading model…" (cold).
         let downloadBase = Self.modelDownloadBase()
@@ -192,50 +224,16 @@ final class TranscriptionManager {
         let downloadBase = Self.modelDownloadBase()
         let modelName = self.modelName
 
-        let task = Task<WhisperKit, Error> { [weak self] in
-            // Download under Application Support (planning 0010).
-            try FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
-            // An unusable tokenizer folder fails the load here rather than crash it.
-            // Outside the cached branch's catch: a fresh download does not repair it.
-            try Self.checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
-            // A cached model loads straight from its folder with downloading off: no
-            // network, so a warm launch is quick and works offline. WhisperKit's
-            // download path asks Hugging Face for the file list first, even when every
-            // file is on disk (planning 0004 follow-up). The cache check trusts one
-            // file, so a partial download can pass it (planning 0026); if the folder
-            // won't load, fall through and let the download path complete it.
-            if Self.isModelCached(downloadBase: downloadBase, modelName: modelName) {
-                do {
-                    let folder = Self.modelFolder(downloadBase: downloadBase, modelName: modelName)
-                    let wk = try await WhisperKit(
-                        model: modelName, downloadBase: downloadBase, modelFolder: folder.path,
-                        load: false, download: false
-                    )
-                    try await wk.loadModels()
-                    return wk
-                } catch {
-                    try Task.checkCancellation()
-                    self?.logger.warning("Cached model failed to load, downloading it again: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-                    if let self, self.loadGeneration == generation {
-                        self.emitLoadState(.downloading)
-                    }
+        let task = Task<WhisperKit, Error> { [weak self, logger] in
+            try await Self.makeWhisperKit(modelName: modelName, downloadBase: downloadBase, logger: logger) { state in
+                // Generation-guarded like the completion paths: a superseded load finishing
+                // its download must not mislabel the *newer* switch's published state (e.g.
+                // flip "Downloading model…" to "Preparing model…" while another model's
+                // download is what the user is actually waiting on).
+                if let self, self.loadGeneration == generation {
+                    self.emitLoadState(state)
                 }
             }
-            // Phase 1: download or find cached model files. `load: false` skips the
-            // in-memory load so we can emit the `.loading` transition before it.
-            let wk = try await WhisperKit(model: modelName, downloadBase: downloadBase, load: false)
-            // Phase 2: files confirmed on disk — now loading CoreML models into
-            // memory. Generation-guarded like the completion paths: a superseded
-            // load finishing its download must not mislabel the *newer* switch's
-            // published state (e.g. flip "Downloading model…" to "Preparing model…" while
-            // another model's download is what the user is actually waiting on).
-            if let self, self.loadGeneration == generation {
-                self.emitLoadState(.loading)
-            }
-            // Again after the download, which can add files to the model folder.
-            try Self.checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
-            try await wk.loadModels()
-            return wk
         }
         loadTask = task
         do {
@@ -254,6 +252,49 @@ final class TranscriptionManager {
             logger.error("WhisperKit load failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             throw error
         }
+    }
+
+    // Downloads the model if it is not cached, then loads it. `phase` hears `.downloading` when
+    // a cached folder won't load and the download path takes over, and `.loading` once the
+    // files are on disk. Shared by the model in use and a staged switch.
+    private static func makeWhisperKit(
+        modelName: String, downloadBase: URL, logger: Logger, phase: @escaping @MainActor (ModelLoadState) -> Void
+    ) async throws -> WhisperKit {
+        // Download under Application Support (planning 0010).
+        try FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+        // An unusable tokenizer folder fails the load here rather than crash it.
+        // Outside the cached branch's catch: a fresh download does not repair it.
+        try checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
+        // A cached model loads straight from its folder with downloading off: no
+        // network, so a warm launch is quick and works offline. WhisperKit's
+        // download path asks Hugging Face for the file list first, even when every
+        // file is on disk (planning 0004 follow-up). The cache check trusts one
+        // file, so a partial download can pass it (planning 0026); if the folder
+        // won't load, fall through and let the download path complete it.
+        if isModelCached(downloadBase: downloadBase, modelName: modelName) {
+            do {
+                let folder = modelFolder(downloadBase: downloadBase, modelName: modelName)
+                let wk = try await WhisperKit(
+                    model: modelName, downloadBase: downloadBase, modelFolder: folder.path,
+                    load: false, download: false
+                )
+                try await wk.loadModels()
+                return wk
+            } catch {
+                try Task.checkCancellation()
+                logger.warning("Cached model failed to load, downloading it again: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+                await phase(.downloading)
+            }
+        }
+        // Phase 1: download or find cached model files. `load: false` skips the
+        // in-memory load so we can emit the `.loading` transition before it.
+        let wk = try await WhisperKit(model: modelName, downloadBase: downloadBase, load: false)
+        // Phase 2: files confirmed on disk — now loading CoreML models into memory.
+        await phase(.loading)
+        // Again after the download, which can add files to the model folder.
+        try checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
+        try await wk.loadModels()
+        return wk
     }
 
     // Every runtime load-state transition goes through here so on-device incidents
@@ -280,9 +321,11 @@ final class TranscriptionManager {
         guard newModelName != modelName else { return false }
         loadGeneration += 1
         modelName = newModelName
+        activeModelSubject.send(newModelName)
         whisperKit = nil
         loadTask?.cancel()
         loadTask = nil
+        dropStagedModel()
         let isCached = Self.isModelCached(downloadBase: Self.modelDownloadBase(), modelName: newModelName)
         emitLoadState(isCached ? .loading : .downloading)
         return true
@@ -300,13 +343,102 @@ final class TranscriptionManager {
     // transcript retention, insertion) without a live model.
     var transcribeResultForTesting: String?
 
-    /// Switches to a different curated model and reloads it off-cycle. No-op when the
-    /// model is already active. Reuses `loadModel()`'s coalescing after
-    /// `prepareModelSwitch` clears the early-return guards. Called from
-    /// `RiverSession` only at `.idle` (or on the deferred return to `.idle`), so a
-    /// switch can never reload the model out from under an in-flight cycle.
+    // internal for testability — with `skipLoadForTesting`, how a staged load ends: success
+    // marks the switch `.ready` with no real model behind it, so the session's commit path
+    // runs without a WhisperKit download.
+    var stageFailsForTesting = false
+
+    /// Chooses a model (planning 0036, Model). Called from `RiverSession` only at `.idle` (or
+    /// on the deferred return to `.idle`).
+    /// - While the model in use is ready, the new one loads beside it and the session commits
+    ///   the switch once it is ready (`commitModelSwitch`); dictation keeps the current model
+    ///   until then.
+    /// - With no ready model (the first download, a load still running, or a failed one),
+    ///   there is nothing to keep, so the new model replaces the current one at once.
+    /// - Choosing the model in use drops a staged switch, or retries the model if it failed.
     func switchModel(to newModelName: String) async {
-        guard prepareModelSwitch(to: newModelName) else { return }
+        if newModelName == modelName {
+            if switchSubject.value != nil {
+                dropStagedModel()
+            } else if loadStateSubject.value == .failed {
+                await retryActiveModel()
+            }
+            return
+        }
+        guard loadStateSubject.value == .ready else {
+            guard prepareModelSwitch(to: newModelName) else { return }
+            if skipLoadForTesting { return }
+            try? await loadModel()
+            return
+        }
+        if let current = switchSubject.value, current.target == newModelName, current.phase != .failed { return }
+        await stage(newModelName)
+    }
+
+    /// Makes the staged model the one in use. Returns `false` unless a switch is `.ready`.
+    /// The session calls this only at `.idle`, so no recording ever changes model halfway.
+    @discardableResult
+    func commitModelSwitch() -> Bool {
+        guard let pending = switchSubject.value, pending.phase == .ready else { return false }
+        loadGeneration += 1
+        whisperKit = staged
+        staged = nil
+        stagedTask = nil
+        loadTask = nil
+        modelName = pending.target
+        activeModelSubject.send(pending.target)
+        switchSubject.send(nil)
+        logger.info("Switched to model \(pending.target, privacy: .public)")
+        return true
+    }
+
+    private func stage(_ target: String) async {
+        dropStagedModel()
+        let generation = stageGeneration
+        let downloadBase = Self.modelDownloadBase()
+        let isCached = Self.isModelCached(downloadBase: downloadBase, modelName: target)
+        switchSubject.send(ModelSwitch(target: target, phase: isCached ? .preparing : .downloading))
+        logger.info("Loading model \(target, privacy: .public) beside the one in use")
+        if skipLoadForTesting {
+            switchSubject.send(ModelSwitch(target: target, phase: stageFailsForTesting ? .failed : .ready))
+            return
+        }
+        let task = Task<WhisperKit, Error> { [weak self, logger] in
+            try await Self.makeWhisperKit(modelName: target, downloadBase: downloadBase, logger: logger) { state in
+                guard let self, self.stageGeneration == generation else { return }
+                self.switchSubject.send(ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing))
+            }
+        }
+        stagedTask = task
+        do {
+            let wk = try await task.value
+            guard generation == stageGeneration else { return }
+            staged = wk
+            switchSubject.send(ModelSwitch(target: target, phase: .ready))
+        } catch {
+            guard generation == stageGeneration else { return }
+            stagedTask = nil
+            switchSubject.send(ModelSwitch(target: target, phase: .failed))
+            logger.error("Staged model load failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+        }
+    }
+
+    // Cancels any staged load and forgets its result; the model in use is untouched.
+    private func dropStagedModel() {
+        stageGeneration += 1
+        stagedTask?.cancel()
+        stagedTask = nil
+        staged = nil
+        if switchSubject.value != nil { switchSubject.send(nil) }
+    }
+
+    // A failed model chosen again loads from the start: the failed load left no task to join.
+    private func retryActiveModel() async {
+        loadGeneration += 1
+        whisperKit = nil
+        loadTask = nil
+        let isCached = Self.isModelCached(downloadBase: Self.modelDownloadBase(), modelName: modelName)
+        emitLoadState(isCached ? .loading : .downloading)
         if skipLoadForTesting { return }
         try? await loadModel()
     }

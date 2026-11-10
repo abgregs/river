@@ -465,6 +465,55 @@ struct RiverSessionTests {
         #expect(env.session.configurationApplyCount == baseline + 1)  // pending applied on cancel
     }
 
+    // planning 0036, Model: a model that finishes loading while the user dictates must not
+    // take over that recording's decode halfway; it waits for the cycle to end.
+    @MainActor
+    @Test("a new model that becomes ready mid-recording takes over only on the return to .idle")
+    func readyModelCommitsAtIdle() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+
+        await env.transcription.switchModel(to: "openai_whisper-base.en")
+        #expect(env.transcription.currentModelSwitch?.phase == .ready)
+        #expect(env.transcription.currentModelName == Constants.defaultModel)
+
+        env.microphone.publishForTest(makeBuffer())
+        await env.session.handleDeactivate()
+        #expect(env.session.currentState == .idle)
+        #expect(env.transcription.currentModelName == "openai_whisper-base.en")
+        #expect(env.store.value(for: Settings.selectedModel) == "openai_whisper-base.en")
+    }
+
+    // A relaunch loads `selectedModel` with nothing to fall back on, so it must only ever
+    // name a model that took over, never a choice that failed.
+    @MainActor
+    @Test("a model that fails to load is not saved as the selected model")
+    func failedChoiceIsNotSaved() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        env.transcription.stageFailsForTesting = true
+        env.session.selectModel("openai_whisper-base.en")
+        await waitUntil { env.transcription.currentModelSwitch?.phase == .failed }
+        #expect(env.transcription.currentModelSwitch?.phase == .failed)
+        #expect(env.store.value(for: Settings.selectedModel) == Constants.defaultModel)
+        #expect(env.transcription.currentModelName == Constants.defaultModel)
+    }
+
+    // Try Again on a failed model chooses the saved model again, which a setting write
+    // would swallow as no change.
+    @MainActor
+    @Test("choosing the saved model again retries it after a failure")
+    func selectingSavedModelRetries() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        env.transcription.setModelLoadStateForTesting(.failed)
+        env.session.selectModel(Constants.defaultModel)
+        await waitUntil { env.transcription.currentModelLoadState != .failed }
+        #expect(env.transcription.currentModelLoadState != .failed)
+    }
+
     @MainActor
     @Test("a model switch deferred during a canceled recording still applies on return to .idle")
     func pendingModelSwitchAppliesOnCancel() async throws {
