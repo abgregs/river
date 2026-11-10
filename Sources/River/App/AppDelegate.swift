@@ -56,6 +56,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let updater = UpdaterManager()
 
+    private(set) lazy var settingsWindow: SettingsWindowController = {
+        SettingsWindowController(appState: appState, capabilities: capabilities, updater: updater) { [weak self] model in
+            self?.session.selectModel(model)
+        }
+    }()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("Application did finish launching")
         appState.bind(to: session)
@@ -65,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordingIndicator.start()
         soundFeedback.start()
         updater.start()
+        settingsWindow.start()
         Task { @MainActor in
             do { try await session.start() }
             catch { logger.error("Failed to start session: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)") }

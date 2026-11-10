@@ -323,6 +323,14 @@ enum Constants {
     // Enter rises and exit drops by this much over `hudFadeSeconds`; Reduce Motion drops the rise.
     static let hudFadeRise: Double = 6
 
+    // The Settings window (planning 0036; settings panel study, rounds 11 to 14): a fixed size
+    // that grows for the Model section's table only, a rail of sections on the left. The
+    // content starts below the window's 28 pt title-bar band.
+    static let settingsWindowSize = CGSize(width: 600, height: 380)
+    static let settingsModelWindowSize = CGSize(width: 820, height: 540)
+    static let settingsRailWidth: Double = 176
+    static let settingsTitleBarHeight: Double = 28
+
     // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
     static let hudMessageCornerRadius: Double = 16
     static let hudMessagePadding: Double = 12

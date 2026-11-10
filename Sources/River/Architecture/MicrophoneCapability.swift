@@ -9,6 +9,7 @@ import os
 @MainActor
 final class MicrophoneCapability: Capability {
     let displayName = "Microphone"
+    let usageSummary = "Hears you while you dictate."
 
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "permissions")
     private let audioLogger = Logger(subsystem: Constants.loggingSubsystem, category: "audio")

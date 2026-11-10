@@ -18,7 +18,7 @@ struct ActivationModeTests {
         // If the copy stops naming the new key/mode, the user can't tell what now
         // stops the recording — the whole point of the live-apply notice.
         #expect(ActivationNotice.keyChanged(toKeyCode: 61).contains("Right Option"))
-        #expect(ActivationNotice.modeChanged(to: .doubleTap).contains("Double Tap"))
+        #expect(ActivationNotice.modeChanged(to: .doubleTap).contains("Double-tap"))
     }
 
     @Test("keyChanged falls back to generic phrasing for an unknown keycode")

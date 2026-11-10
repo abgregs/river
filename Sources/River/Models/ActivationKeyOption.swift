@@ -24,6 +24,15 @@ struct ActivationKeyOption: Identifiable, Equatable {
         .init(keyCode: 63, label: "Function (Fn)"),
     ]
 
+    /// The sentence after the Start by description: how to cancel a recording with this
+    /// activation key (planning 0036, Cancel line). fn as the activation key turns the fn
+    /// cancel gesture off. Esc joins the line with PR 9.
+    static func cancelLine(keyCode: Int) -> String {
+        keyCode == Constants.cancelKeyCode
+            ? "Cancel a recording from River’s menu in the menu bar."
+            : "Cancel a recording with fn."
+    }
+
     /// Caps Lock keycode (`.maskAlphaShift`); Hold mode is unreliable on it.
     static let capsLockKeyCode = 57
 
@@ -33,7 +42,7 @@ struct ActivationKeyOption: Identifiable, Equatable {
     /// requirements/activation-key-and-mode.md.
     static func capsLockHoldWarning(keyCode: Int, mode: ActivationMode) -> String? {
         keyCode == capsLockKeyCode && mode == .hold
-            ? "Caps Lock toggles on press and is unreliable in Hold mode. Switch to Single Tap or Double Tap."
+            ? "Caps Lock toggles on press and is unreliable in Hold mode. Choose Tap or Double-tap."
             : nil
     }
 }

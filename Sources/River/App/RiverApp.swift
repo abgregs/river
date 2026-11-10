@@ -12,16 +12,11 @@ struct RiverApp: App {
                 appState: appDelegate.appState,
                 cancel: { appDelegate.session.handleCancel() },
                 copyLastTranscript: { appDelegate.session.copyLastTranscript() },
-                openPermissions: { appDelegate.onboarding.forcePresent() },
-                checkForUpdates: { appDelegate.updater.checkForUpdates() }
+                checkForUpdates: { appDelegate.updater.checkForUpdates() },
+                openSettings: { appDelegate.settingsWindow.show() }
             )
         } label: {
             MenuBarLabel(appState: appDelegate.appState)
-        }
-
-        SwiftUI.Settings {
-            SettingsView()
-                .tint(Color(nsColor: Palette.accent))
         }
     }
 }
@@ -111,15 +106,13 @@ private struct MenuBarContent: View {
     /// Writes the last retained transcript to the clipboard (planning 0019).
     /// User-initiated write — the automated cycle never touches the clipboard.
     let copyLastTranscript: () -> Void
-    /// Re-opens the permissions window on demand (planning 0012). Wired to
-    /// `OnboardingCoordinator.forcePresent()` so users can inspect or refresh
-    /// their grants at any time without relaunching.
-    let openPermissions: () -> Void
     /// Triggers a user-initiated Sparkle update check (planning 0009). Wired to
     /// `UpdaterManager.checkForUpdates()`; automatic background checks run on
     /// Sparkle's own schedule after the first-launch consent prompt.
     let checkForUpdates: () -> Void
-    @Environment(\.openSettings) private var openSettings
+    /// Opens the Settings window (planning 0036), which holds the Permissions section that
+    /// replaced the "Permissions…" item.
+    let openSettings: () -> Void
 
     var body: some View {
         Text(MenuBarPresentation.visual(
@@ -152,12 +145,8 @@ private struct MenuBarContent: View {
         if UpdaterManager.isEnabled {
             Button("Check for Updates…", action: checkForUpdates)
         }
-        Button("Permissions…", action: openPermissions)
-        Button("Settings…") {
-            NSApp.activate(ignoringOtherApps: true)
-            openSettings()
-        }
-        .keyboardShortcut(",")
+        Button("Settings…", action: openSettings)
+            .keyboardShortcut(",")
         Divider()
         Button("Quit River") { NSApp.terminate(nil) }
             .keyboardShortcut("q")

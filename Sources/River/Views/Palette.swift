@@ -49,6 +49,12 @@ enum Palette {
     /// The floating UI's colors for one appearance (docs/design/color.md, The HUD surface). The
     /// floating UI follows Light and Dark mode: dark is charcoal with ink and the bright accent,
     /// light is the same build with the two swapped and the deep accent.
+    /// The Settings window's background: River's tint in a native window (planning 0036, The
+    /// panel), the HUD's tint for the window's appearance.
+    static let windowTint = NSColor(name: "RiverWindowTint") { appearance in
+        isDark(appearance) ? HUD.dark.tint : HUD.light.tint
+    }
+
     struct HUD {
         let tint: NSColor
         // Text, and the mark.
