@@ -22,7 +22,7 @@ swift test               # run all tests (uses swift-testing, not XCTest)
 make install             # release build → bundle → sign → install to /Applications
 ```
 
-Only the Xcode Command Line Tools are required — no full Xcode. The `make install` step requires a one-time self-signed code-signing certificate named "River Dev" in the login keychain. See [docs/architecture/distribution.md](docs/architecture/distribution.md).
+`swift build` and `swift test` need only the Xcode Command Line Tools. Every `make` target (`make install` included) also needs Xcode installed and selected (`xcode-select -p` shows `Xcode.app`), because the Glass shader is compiled with Xcode's Metal compiler, which the Command Line Tools don't include; you never open Xcode itself. The `make install` step requires a one-time self-signed code-signing certificate named "River Dev" in the login keychain. See [docs/architecture/distribution.md](docs/architecture/distribution.md).
 
 ## Architectural shape
 
