@@ -33,7 +33,7 @@ struct TranscriptPanelView: View {
         .frame(width: Constants.transcriptPanelWidth, height: Constants.transcriptPanelHeight)
         .clipShape(shape)
         .foregroundStyle(Color(nsColor: Palette.HUD.for(colorScheme).text))
-        .modifier(HUDSurface(cornerRadius: Constants.transcriptPanelCornerRadius))
+        .modifier(HUDSurface(cornerRadius: Constants.transcriptPanelCornerRadius, edge: .window))
         .accessibilityLabel("Transcript")
     }
 

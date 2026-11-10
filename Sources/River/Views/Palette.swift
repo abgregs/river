@@ -53,14 +53,24 @@ enum Palette {
         let tint: NSColor
         // Text, and the mark.
         let text: NSColor
-        // The lit edge (Constants, the lit edge): the rim's white at its three stops, the
-        // shade at its far end, the sheen, the inner shade and the outer line, all black but
-        // the rim and the sheen.
-        let rimOpacities: [Double]
-        let farEdgeShadeOpacity: Double
+        // The indicator's lit edge (Constants, the lit edge): the rim, the sheen and the inner
+        // shade. The outer line every surface wears, and the window edge's inner line and
+        // shadows (Constants, one edge with the Settings window). All black but the rim, the
+        // sheen and the inner line.
+        let rim: Rim
         let sheenOpacity: Double
         let innerShadeOpacity: Double
         let outerLineOpacity: Double
+        let innerLineOpacity: Double
+        let windowShadowOpacities: [Double]
+
+        /// The rim along the light: white at each stop's location, then, when there is one, a
+        /// black shade at the far corner.
+        struct Rim {
+            let width: Double
+            let stops: [(opacity: Double, location: Double)]
+            let farShadeOpacity: Double?
+        }
         // Glass (docs/design/kawa-identity.md): the frost's veil, the light a ripple catches and
         // the shade on its far side, with how strongly each of the last two shows.
         let glassVeil: NSColor
@@ -79,18 +89,24 @@ enum Palette {
 
         static let dark = HUD(
             tint: deepCharcoal, text: ink,
-            rimOpacities: Constants.hudDarkRimOpacities, farEdgeShadeOpacity: Constants.hudDarkFarEdgeShadeOpacity,
+            rim: Rim(width: Constants.hudInnerLineWidth,
+                     stops: zip(Constants.hudDarkRimOpacities, [0, 1]).map { ($0, $1) }, farShadeOpacity: nil),
             sheenOpacity: Constants.hudDarkSheenOpacity, innerShadeOpacity: Constants.hudDarkInnerShadeOpacity,
-            outerLineOpacity: Constants.hudDarkOuterLineOpacity,
+            outerLineOpacity: Constants.hudDarkOuterLineOpacity, innerLineOpacity: Constants.hudDarkInnerLineOpacity,
+            windowShadowOpacities: Constants.hudDarkWindowShadowOpacities,
             glassVeil: mix(ink, veilFraction, over: deepCharcoal),
             glassHighlight: ink, glassHighlightAmount: Constants.kawaGlassDarkHighlightAmount,
             glassShade: deepCharcoal.blended(withFraction: 0.4, of: .black) ?? deepCharcoal,
             glassShadeAmount: Constants.kawaGlassDarkShadeAmount)
         static let light = HUD(
             tint: mist, text: charcoal,
-            rimOpacities: Constants.hudLightRimOpacities, farEdgeShadeOpacity: Constants.hudLightFarEdgeShadeOpacity,
+            // An opacity the multiplier lifts past 1 holds at 1, as CSS clamps it.
+            rim: Rim(width: Constants.hudRimWidth,
+                     stops: zip(Constants.hudLightRimOpacities, Constants.hudRimStops).map { (min(1, $0 * Constants.hudEdgeLight), $1) },
+                     farShadeOpacity: min(1, Constants.hudLightFarEdgeShadeOpacity * Constants.hudFarEdgeShade)),
             sheenOpacity: Constants.hudLightSheenOpacity, innerShadeOpacity: Constants.hudLightInnerShadeOpacity,
-            outerLineOpacity: Constants.hudLightOuterLineOpacity,
+            outerLineOpacity: Constants.hudLightOuterLineOpacity, innerLineOpacity: 0,
+            windowShadowOpacities: Constants.hudLightWindowShadowOpacities,
             glassVeil: mix(charcoal, veilFraction, over: mist),
             glassHighlight: mix(charcoal, Constants.kawaGlassLightHighlightInk, over: mist),
             glassHighlightAmount: Constants.kawaGlassLightHighlightAmount,

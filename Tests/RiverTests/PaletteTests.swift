@@ -85,6 +85,17 @@ struct PaletteTests {
         return [srgb.redComponent, srgb.greenComponent, srgb.blueComponent]
     }
 
+    // One edge with the Settings window (color.md, round 12): the dark indicator's 1 pt rim
+    // reached 93 % white and outshone the window beside it. Its rim is now the window's inner
+    // line, and may fade below it but never rise above it.
+    @Test("the dark indicator's rim is never brighter or wider than the window's edge")
+    func darkRimNeverOutshinesTheWindow() {
+        let dark = Palette.HUD.dark
+        #expect(dark.rim.width == Constants.hudInnerLineWidth)
+        #expect(dark.rim.stops.allSatisfy { $0.opacity <= dark.innerLineOpacity })
+        #expect(dark.rim.farShadeOpacity == nil)
+    }
+
     private func contrast(_ a: [Double], _ b: [Double]) -> Double {
         func luminance(_ c: [Double]) -> Double {
             let linear = c.map { $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }

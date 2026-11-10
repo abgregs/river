@@ -56,7 +56,7 @@ The accent marks something that is **on right now**: a control you turned on. It
 
 ## The HUD surface
 
-Every floating surface (the mark's panel, the message rectangle, the transcript panel) is one `HUDSurface`: an opaque sheet in the system's appearance, lit as a solid pane of glass from the upper left. Its colors are `Palette.HUD`, one set per appearance; its values are the lit-edge block in `Constants`, chosen on the Glass study (maintainer, 2026-11-03; the page stays local).
+Every floating surface (the mark's panel, the message rectangle, the transcript panel) is one `HUDSurface`: an opaque sheet in the system's appearance. The mark's panel is lit as a solid pane of glass from the upper left (`edge: .lit`); the message and the transcript wear the Settings window's edge (`edge: .window`). Its colors are `Palette.HUD`, one set per appearance; its values are the lit-edge block in `Constants`, chosen on the Glass study (maintainer, 2026-11-03; the page stays local).
 **Why:** revised 2026-11-04 (maintainer). The surface was a translucent tint over a blur (72% `deepCharcoal`, 88% `mist`), so its ground, and every contrast on it, varied with the desktop behind it; the maintainer asked for a crisper, more solid glass look (2026-11-03). Opaque, it is crisp and high-contrast and looks the same over any desktop, so nothing behind it changes how the mark or the text reads. It follows Light and Dark mode, as it has since 2026-10-15.
 
 - **Tint:** `deepCharcoal` in Dark mode, `mist` in Light, opaque. Reduce Transparency changes nothing.
@@ -65,9 +65,12 @@ Every floating surface (the mark's panel, the message rectangle, the transcript 
 - **One edge with the Settings window (maintainer, 2026-11-09).** Settings is a native window with River's tint, so macOS draws its edge, and the floating surfaces match it rather than the reverse:
   - **The message and the live text** wear the window's edge: the tint with no sheen, rim or inner shade; in Dark a 0.5 pt inner line of 22 % white; a 0.5 pt outer line of 85 % black in Dark and 22 % in Light; and the window's shadow. Each keeps its own corner.
   - **The recording indicator** keeps the lit glass below (sheen, inner shade, its own two shadows), with the window's lines: in Dark the rim is a 0.5 pt line of 22 % white at the lit corner, fading to 8 % at the far one, so it is never brighter than a window's edge; the outer line is 85 % black in Dark and 22 % in Light.
-  **Why:** a 1 pt rim that reached 93 % white, set as shares of the surface, grew into a heavy line down half a large panel, and the indicator's edge outshone the window beside it. Chosen on the settings panel study, rounds 9 to 12 (the page stays local). The bullets below describe the edge before this change; the build replaces their rim and outer-line values.
+  **Why:** a 1 pt rim that reached 93 % white, set as shares of the surface, grew into a heavy line down half a large panel, and the indicator's edge outshone the window beside it. Chosen on the settings panel study, rounds 9 to 12 (the page stays local). The window's shadows are a close one and a wide one (`hudWindowShadow…`); `hudShadowMargin` leaves room for the wide one.
+
+The indicator's lit glass, in detail:
+
 - **Under the content:** a white sheen from the lit corner (8.5% dark, 50% light), gone halfway across; two shadows falling straight down, as every window's do: a wide soft one and a tight one where the panel meets the desktop.
-- **Over the content,** so neither text nor the frost covers the edge: a soft shade inside the far edges, a 1 pt rim of white brightest at the lit corner that dies away along the edges into a black shade at the far one, and a 0.5 pt dark outer line that holds the edge over light desktops (60% black dark, 14% light). Light mode runs the rim and sheen brighter and the shades lighter, since white only shows on a light tint near full strength.
+- **Over the content,** so neither the frost nor anything else covers the edge: a soft shade inside the far edges, the rim, and the window's outer line. In Light the rim is 1 pt of white brightest at the lit corner that dies away along the edges into a black shade at the far one; Light runs the rim and sheen brighter and the shades lighter, since white only shows on a light tint near full strength. In Dark the rim is the window's 0.5 pt inner line, above.
 
 ## The mark's colors
 
