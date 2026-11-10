@@ -88,20 +88,39 @@ private struct SettingsRail: View {
                 .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
             }
             Spacer(minLength: 0)
-            HStack(spacing: 7) {
-                KawaMarkShape()
-                    .fill(ink.secondary)
-                    .frame(width: 14, height: 14)
-                    .accessibilityHidden(true)
-                Text(Self.versionLine)
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(ink.secondary)
+            // The version line opens the standard About window, whose Credits name the models
+            // and software River ships (planning 0036). The menu bar menu gains no item.
+            Button(action: Self.showAbout) {
+                HStack(spacing: 7) {
+                    KawaMarkShape()
+                        .fill(ink.secondary)
+                        .frame(width: 14, height: 14)
+                        .accessibilityHidden(true)
+                    Text(Self.versionLine)
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundStyle(ink.secondary)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows the About window, with credits")
             .padding(.horizontal, 8)
         }
         .padding(.top, Constants.settingsTitleBarHeight + 8)
         .padding(.horizontal, 10)
         .padding(.bottom, 14)
+    }
+
+    static func showAbout() {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.paragraphSpacing = 2
+        let credits = NSAttributedString(
+            string: Credits.aboutText(models: Constants.curatedModels),
+            attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor,
+                         .paragraphStyle: paragraph])
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     static var versionLine: String {

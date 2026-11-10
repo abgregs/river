@@ -31,6 +31,9 @@ MENU_BAR_GLYPH_NAMES := MenuBarReady MenuBarWithDot
 GLASS_SHADER := Sources/River/Shaders/KawaGlass.metal
 GLASS_AIR := $(BUILD_DIR)/KawaGlass.air
 GLASS_METALLIB := $(BUILD_DIR)/KawaGlass.metallib
+# The licence notices for the models and packages River ships (planning 0036): MIT and
+# Apache-2.0 both require their notice to travel with every copy.
+NOTICES := Sources/River/Resources/ThirdPartyNotices.txt
 # Hardened runtime enforces library validation: embedded non-Apple code must be
 # signed with the app's own Team ID. The self-signed dev identity has no Team ID,
 # so macOS refuses to load the embedded Sparkle.framework and the app dies at
@@ -73,6 +76,7 @@ bundle: build
 	cp $(MENU_BAR_GLYPHS)/*.png $(APP_BUNDLE)/Contents/Resources/
 	cp $(APP_ICON) $(APP_BUNDLE)/Contents/Resources/
 	cp $(GLASS_METALLIB) $(APP_BUNDLE)/Contents/Resources/
+	cp $(NOTICES) $(APP_BUNDLE)/Contents/Resources/
 	# Embed Sparkle.framework and point the binary's rpath at Contents/Frameworks
 	# so @rpath/Sparkle.framework resolves at launch. `ditto` preserves the
 	# framework's version symlinks; without the embed the app fails to launch.
@@ -132,6 +136,9 @@ verify: sign
 	@test -f $(APP_BUNDLE)/Contents/Resources/KawaGlass.metallib || \
 		(echo "FAIL: KawaGlass.metallib missing from the bundle"; exit 1)
 	@echo "OK: Glass shader present"
+	@test -s $(APP_BUNDLE)/Contents/Resources/ThirdPartyNotices.txt || \
+		(echo "FAIL: ThirdPartyNotices.txt missing from the bundle"; exit 1)
+	@echo "OK: licence notices present"
 	@test "$$(nm -U $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME) | wc -l)" -le 1 || \
 		(echo "FAIL: the app binary still carries its symbol table"; exit 1)
 	@echo "OK: app binary stripped"
