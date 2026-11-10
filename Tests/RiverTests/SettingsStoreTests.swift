@@ -50,15 +50,15 @@ struct SettingsStoreTests {
     }
 
     // The ready microphone is the default (planning 0033, decision 3): the switch exists
-    // to turn it off, so a true default would silently reintroduce the clipped first word.
+    // to turn it off, so an off default would silently reintroduce the clipped first word.
     @MainActor
     @Test("the microphone stays ready unless the user opts out, and the switch round-trips")
-    func micOnlyWhileDictatingDefaultsOffAndRoundTrips() {
+    func keepMicrophoneReadyDefaultsOnAndRoundTrips() {
         let store = makeStore()
-        #expect(Settings.micOnlyWhileDictating.defaultValue == false)
-        #expect(store.value(for: Settings.micOnlyWhileDictating) == false)
-        store.setValue(true, for: Settings.micOnlyWhileDictating)
-        #expect(store.value(for: Settings.micOnlyWhileDictating) == true)
+        #expect(Settings.keepMicrophoneReady.defaultValue == true)
+        #expect(store.value(for: Settings.keepMicrophoneReady) == true)
+        store.setValue(false, for: Settings.keepMicrophoneReady)
+        #expect(store.value(for: Settings.keepMicrophoneReady) == false)
     }
 
     @MainActor

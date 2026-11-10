@@ -14,7 +14,7 @@ struct SystemAvailability: Equatable {
 /// decision 5). Pure, so the rule is tested without a unit or a session.
 enum MicrophoneReadiness {
     static func shouldListen(
-        micOnlyWhileDictating: Bool,
+        keepMicrophoneReady: Bool,
         onboardingComplete: Bool,
         model: ModelLoadState,
         system: SystemAvailability
@@ -24,7 +24,7 @@ enum MicrophoneReadiness {
         // indicator never lights before River can dictate. Microphone is one of those
         // permissions, so a mic still `.unknown` stays closed too, and the system prompt
         // comes from a press, not from idle.
-        !micOnlyWhileDictating
+        keepMicrophoneReady
             && onboardingComplete
             && model == .ready
             && system == .available

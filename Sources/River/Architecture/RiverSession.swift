@@ -421,11 +421,11 @@ final class RiverSession {
         let onboardingComplete = accessibility.status
             .combineLatest(microphone.status, inputMonitoring.status)
             .map { !OnboardingGate.shouldPresent(statuses: [$0, $1, $2]) }
-        settings.publisher(for: Settings.micOnlyWhileDictating)
+        settings.publisher(for: Settings.keepMicrophoneReady)
             .combineLatest(onboardingComplete, transcription.modelLoadState, system.availability)
-            .map { micOnly, onboardingComplete, model, system in
+            .map { keepReady, onboardingComplete, model, system in
                 MicrophoneReadiness.shouldListen(
-                    micOnlyWhileDictating: micOnly, onboardingComplete: onboardingComplete, model: model, system: system
+                    keepMicrophoneReady: keepReady, onboardingComplete: onboardingComplete, model: model, system: system
                 )
             }
             .removeDuplicates()

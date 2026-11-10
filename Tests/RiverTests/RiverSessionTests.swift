@@ -675,10 +675,10 @@ struct RiverSessionTests {
         try await env.session.start()
         await waitUntil { env.microphone.isListening }
 
-        env.store.setValue(true, for: Settings.micOnlyWhileDictating)
+        env.store.setValue(false, for: Settings.keepMicrophoneReady)
         await waitUntil { !env.microphone.isListening }
         #expect(!env.microphone.isListening)
-        env.store.setValue(false, for: Settings.micOnlyWhileDictating)
+        env.store.setValue(true, for: Settings.keepMicrophoneReady)
         await waitUntil { env.microphone.isListening }
         #expect(env.microphone.isListening)
 
@@ -754,7 +754,7 @@ struct RiverSessionTests {
     }
 
     @MainActor
-    @Test("the switch flipped on mid-recording closes the microphone once the recording ends")
+    @Test("the switch turned off mid-recording closes the microphone once the recording ends")
     func switchMidRecordingAppliesWhenTheRecordingEnds() async throws {
         let env = makeSession()
         try await env.session.start()
@@ -762,7 +762,7 @@ struct RiverSessionTests {
 
         env.session.handleActivate()
         #expect(env.session.currentState == .recording)
-        env.store.setValue(true, for: Settings.micOnlyWhileDictating)
+        env.store.setValue(false, for: Settings.keepMicrophoneReady)
         env.microphone.publishForTest(makeBuffer())
         await env.session.handleDeactivate()
         #expect(env.session.currentState == .idle)
