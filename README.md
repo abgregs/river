@@ -25,7 +25,7 @@ Or download the signed, notarized [`.dmg`](https://github.com/abgregs/river/rele
 
 ## Build from source
 
-Only the Xcode Command Line Tools are needed (`xcode-select --install`).
+`swift build` and `swift test` need only the Xcode Command Line Tools (`xcode-select --install`). `make install` also needs Xcode, selected with `sudo xcode-select -s /Applications/Xcode.app`, because it compiles the recording indicator's shader with Xcode's Metal compiler. You never open Xcode itself.
 
 1. One-time: create a self-signed certificate named "River Dev" (Keychain Access → Certificate Assistant → Create a Certificate → Self Signed Root → Code Signing). Details in [docs/architecture/distribution.md](docs/architecture/distribution.md).
 2. Build and install:
