@@ -62,7 +62,7 @@ struct SettingsWindowView: View {
             switch model.section {
             case .shortcuts: ShortcutsPane()
             case .dictation: DictationPane()
-            case .model: ModelPane(appState: model.appState, selectModel: model.selectModel)
+            case .model: ModelSectionView(appState: model.appState, selectModel: model.selectModel)
             case .general: GeneralPane(updater: model.updater)
             case .permissions: PermissionsPane(capabilities: model.capabilities)
             }
@@ -208,30 +208,6 @@ private struct DictationPane: View {
             }
         }
         .toggleStyle(RiverSwitchStyle())
-    }
-}
-
-/// Interim: the model in use, its status, and a pop-up to choose another. The catalogue
-/// replaces it in the next change.
-private struct ModelPane: View {
-    let appState: AppState
-    let selectModel: (String) -> Void
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        let ink = SettingsInk(colorScheme)
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsRow(label: "Model", divider: false) {
-                RiverPopUp(title: "Model",
-                           options: Constants.curatedModels.map { ($0.name, $0.label) },
-                           selection: Binding(get: { appState.modelSwitch?.target ?? appState.activeModel },
-                                              set: { selectModel($0) }))
-            }
-            SettingsRow(label: "Status") {
-                Text(String(describing: appState.modelSwitch?.phase ?? .ready))
-                    .foregroundStyle(ink.secondary)
-            }
-        }
     }
 }
 
