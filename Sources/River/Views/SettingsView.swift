@@ -61,8 +61,8 @@ struct SettingsView: View {
                     Text(model.label).tag(model.name)
                 }
             }
-            if let hint = Constants.curatedModels.first(where: { $0.name == selectedModel })?.hint {
-                Text(hint)
+            if let summary = Constants.curatedModels.first(where: { $0.name == selectedModel })?.summary {
+                Text(summary)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

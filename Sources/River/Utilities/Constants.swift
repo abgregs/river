@@ -52,34 +52,35 @@ enum Constants {
     // the default the `Settings.selectedModel` key sources.
     static let defaultModel: String = "openai_whisper-small.en"
 
-    // PROVISIONAL curated list for the model picker (planning 0021). The final list
-    // and default are decided by 0022's per-model scorecards, which don't exist yet —
-    // these four are placeholders: the two known-good English models plus two stronger
-    // candidates that have never been evaluated here. Names are the exact
-    // `argmaxinc/whisperkit-coreml` repo folders WhisperKit downloads (verified against
-    // WhisperKit 0.18's model tables). Sizes are each folder's total in that repo, which
-    // matches the on-disk footprint (measured 2026-09-29). Each
-    // entry must earn its place via a 0022 scorecard before this list is finalized.
+    // The Model section's catalogue (planning 0036), in no particular order: the table groups
+    // and sorts it. The two new English models join it with their engine in PR 7a (planning
+    // 0037). Names are the exact `argmaxinc/whisperkit-coreml` repo folders WhisperKit
+    // downloads (verified against WhisperKit 0.18's model tables). Sizes are the Hugging Face
+    // file sizes of what WhisperKit downloads, Whisper Base measured from River's cache
+    // (2026-11-09). Descriptions are the settings panel study's (round 13). Still provisional:
+    // each entry must earn its place via a 0022 scorecard.
     static let curatedModels: [ModelOption] = [
         ModelOption(
-            name: "openai_whisper-base.en",
-            label: "Base (English)",
-            hint: "Fastest, smallest (~150 MB). Lower accuracy."
+            name: "openai_whisper-base.en", label: "Whisper Base", provider: "OpenAI", family: "Whisper",
+            summary: "Quickest to load. Fine for short, clear sentences; weaker on names and fast speech.",
+            downloadMegabytes: 147, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
         ModelOption(
-            name: defaultModel,   // openai_whisper-small.en
-            label: "Small (English)",
-            hint: "Balanced speed and accuracy (~490 MB). Current default."
+            name: defaultModel, label: "Whisper Small", provider: "OpenAI", family: "Whisper",
+            summary: "A steady all-rounder for everyday writing.",
+            downloadMegabytes: 487, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
         ModelOption(
-            name: "distil-whisper_distil-large-v3",
-            label: "Distil Large v3",
-            hint: "High accuracy, distilled for speed (~1.5 GB). The first load can take a few minutes."
+            name: "openai_whisper-large-v3-v20240930_turbo", label: "Whisper Large v3 Turbo", provider: "OpenAI",
+            family: "Whisper",
+            summary: "Whisper’s most accurate model, with a faster decoder. The first load takes minutes.",
+            downloadMegabytes: 1639, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
         ModelOption(
-            name: "openai_whisper-large-v3-v20240930_turbo",
-            label: "Large v3 Turbo",
-            hint: "Most accurate, turbo decoding (~1.6 GB). Slowest to load; the first load can take a few minutes."
+            name: "distil-whisper_distil-large-v3", label: "Distil Large v3", provider: "Hugging Face",
+            family: "Distil-Whisper",
+            summary: "Close to Whisper Large v3 accuracy with less work per word. The first load takes minutes.",
+            downloadMegabytes: 1515, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
     ]
 

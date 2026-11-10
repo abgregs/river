@@ -95,13 +95,25 @@ struct CuratedModelListTests {
     }
 
     @MainActor
-    @Test("every entry has a name, label, and hint")
+    @Test("every entry fills each column the catalogue shows")
     func entriesAreComplete() {
         for model in Constants.curatedModels {
             #expect(!model.name.isEmpty)
             #expect(!model.label.isEmpty)
-            #expect(!model.hint.isEmpty)
+            #expect(!model.provider.isEmpty)
+            #expect(!model.family.isEmpty)
+            #expect(!model.summary.isEmpty)
+            #expect(model.downloadMegabytes > 0)
         }
+    }
+
+    // The default is what a fresh install downloads, on every Mac River supports (macOS 14):
+    // a default that needed a newer macOS would leave a macOS 14 Mac with no model at all.
+    @MainActor
+    @Test("the default model runs on River's oldest supported macOS")
+    func defaultRunsOnOldestMacOS() throws {
+        let model = try #require(Constants.curatedModels.first { $0.name == Constants.defaultModel })
+        #expect(model.minimumMacOS <= 14)
     }
 
     @MainActor
