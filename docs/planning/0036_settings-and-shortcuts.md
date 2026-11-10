@@ -4,7 +4,9 @@
 
 ## The panel
 
-- **One settings panel replaces the Settings window.** It uses the floating surface, `HUDSurface` ([../design/color.md](../design/color.md)), with one section per area below. PR 7 removes the SwiftUI `Settings` scene and `SettingsView`.
+- **One settings window replaces today's.** It is an ordinary macOS window with River's tint inside, one section per area below (maintainer, 2026-11-09, settings panel study round 11). macOS draws its frame: corner, edge, shadow and window buttons. Minimise and zoom are dimmed, and the window's title is the section shown, hidden on screen. **Why:** Apple's guidelines say to avoid custom window frames and controls, and to dim a settings window's minimise and zoom buttons. It does not use `HUDSurface`; the floating surfaces take its edge instead ([../design/color.md](../design/color.md)). PR 7 removes the SwiftUI `Settings` scene and `SettingsView`.
+- **It stays open behind other apps** (maintainer, 2026-11-10). It is a normal-level window: it neither floats over the app in front nor closes when River loses focus, so you can grant a permission in System Settings and come back to it.
+- **Pop-up menus are the system's.** Their highlight is the user's accent colour, as are the keyboard focus ring and selected text; only River's own controls are monochrome (maintainer, 2026-11-10). **Why:** AppKit draws its menus in the system's colours, and recolouring them means River drawing every item itself, which is the custom control Apple's guidelines warn against.
 - **It opens from "Settings…" in the menu bar menu** (⌘, while the menu is open, as today). One panel at a time; choosing "Settings…" again brings it forward.
 - **It makes River the active app while it is open**, as "Settings…" does today. Unlike the indicator's panel, it can become key, so the recorder receives key presses. **Why:** the recorder probe saw every key once the panel was key in an active app; a panel that leaves its app inactive was not tested, and settings need no such thing ([../research/shortcut-recorder.md](../research/shortcut-recorder.md), §2).
 - Labels are sentence case and name what the user controls. A toggle describes its on state.
@@ -19,18 +21,27 @@
 | Shortcuts | Copy last transcription | recorder, clearable | `copyLastShortcut` (new) | none | 9 |
 | Shortcuts | Show or hide live text | recorder, clearable | `liveTextShortcut` (new) | ⌃⌥L | 10 |
 | Dictation | Play sounds when dictation starts and stops | toggle | `playFeedbackSounds` | off | 7 |
-| Dictation | Only use the microphone while dictating | toggle | `micOnlyWhileDictating` | off | 7 |
-| Model | Model | picker, with its hint and load status | `selectedModel` | `openai_whisper-small.en` | 7 |
+| Dictation | Keep the microphone ready | toggle | `keepMicrophoneReady` (new; replaces `micOnlyWhileDictating`, inverted) | on | 7 |
+| Model | Model | catalogue: the model in use with its status, search, a provider filter, a table with a Select button per row | `selectedModel` | `openai_whisper-small.en` | 7 |
 | General | Open River at login | toggle | `launchAtLogin` | off | 7 |
 | General | Check for updates automatically | toggle, release builds only | Sparkle's `automaticallyChecksForUpdates` | on | 7 |
 | Permissions | Microphone · Input Monitoring · Accessibility | "Granted", or an "Open System Settings…" button | none (the capabilities' status) | | 7 |
 
-- **Shortcuts footer:** "Cancel a recording with fn or Esc." When fn is the dictation shortcut, it reads "Cancel a recording with Esc."
+- **Cancel line:** "Cancel a recording with fn or Esc." follows the Start by description, in the same text (maintainer, 2026-11-09; it was the Shortcuts footer). When fn is the dictation shortcut, it reads "Cancel a recording with Esc."
 - **Start by** keeps today's three modes under shorter labels, each with today's one-line description, worded for a shortcut ("Hold the shortcut while speaking; release to finish.").
-- **Dictation** keeps today's footer under the microphone toggle.
+- **Dictation** shows the microphone switch's description from [0033](0033_warm-microphone-pre-roll.md) ("What the user is told"). The switch is turned around from PR #79's "Only use the microphone while dictating" (maintainer, 2026-11-09): on by default and named for its on state. `micOnlyWhileDictating` never shipped in a release, so the new key replaces it with no migration.
+- **Model** (maintainer, 2026-11-09, settings panel study round 13):
+  - The window grows to 820 × 540 for this section and returns to 600 × 380 for the others.
+  - Choosing another model switches only once it is ready. Until then, dictation keeps using the current model. This needs per-model download state ([0026](0026_model-switch-availability.md)).
+  - Each row's button says "Select".
+  - No model is marked "Recommended" in `v0.3.0`, and the build adds no setting for it (maintainer, 2026-11-09, round 14).
+  - Rows don't list languages, because River writes English only in `v0.3.0`; languages are deferred.
+  - New models in `v0.3.0` must be English-only, unless a multilingual model is clearly better at English. The two new rows are NVIDIA Parakeet TDT v2 and Fermion Research's Phonon-2 (English-only; it needs macOS 15, and on macOS 14 its row says so).
+  - Left out: Parakeet TDT v3 and Phonon-2.5, which differ mainly in their languages, and Phonon-2.5 English, which has no Core ML build yet.
+  - Both new models run through a second engine, FluidAudio, which PR 7a adds ([0037](0037_fluidaudio-engine.md)). PR 7 shows the Whisper models and builds the catalogue with the fields the new rows need. The model list is approved (maintainer, 2026-11-10), after a spike ran both models through FluidAudio 0.18.3 on macOS 15: Parakeet TDT v2 inside the signed app, Phonon-2 in a test program.
 - **The update toggle** binds to Sparkle's own property, so River declares no key string for it (rule 4). Without it, the answer to Sparkle's first-launch prompt could never be changed. Dev builds hide it, as they hide "Check for Updates…".
-- **Permissions** reuses each capability's live status and its `openSystemSettings()`; no new mechanism. First-run onboarding is unchanged.
-- **The panel ends with the version line**, "River 0.3.0 (build)".
+- **Permissions** reuses each capability's live status and its `openSystemSettings()`; no new mechanism. First-run onboarding is unchanged. While any permission is missing, the Permissions item in the sidebar carries a badge and the window opens on Permissions. Each permission has a one-line description of what River uses it for (maintainer, 2026-11-10; the wording can change in review).
+- **The panel ends with the version line**, "River 0.3.0 (build)". Clicking it opens the standard macOS About window, whose Credits area names each model and open-source package River ships, with its licence (maintainer, 2026-11-10). The same notices ship as a plain-text file in the app's resources, and `make verify` fails without it. **Why:** River ships MIT and Apache-2.0 packages and MIT-licensed Whisper models, and both licences require their notice to travel with every copy; no release so far has carried one. The menu bar menu gains no item.
 - **No row, by decision:**
   - `streamingDictation` stays a hidden `defaults write` fallback (0034, decision 1).
   - `showLiveText` (new, Bool, default off) is the remembered live text state. Only its shortcut changes it (0034, decision 2).
@@ -76,7 +87,7 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
   - A combination in macOS's own list (`CopySymbolicHotKeys`, enabled entries) is saved with a warning: "macOS also uses this shortcut. Both will run." Inform, don't block.
   - A refusal at registration, such as macOS 15.0 refusing an ⌥-only combination, is shown in the same place.
   - A saved shortcut that fails at launch shows "Not working: another app uses this shortcut." on its row.
-- **Fn as the dictation shortcut** turns the fn cancel off, as today, and the footer says so; Esc and the menu item still cancel.
+- **Fn as the dictation shortcut** turns the fn cancel off, as today, and the cancel line says so; Esc and the menu item still cancel.
 - **A River combination pressed during a lone-modifier hold** (Right ⌥ as the Hold key, then ⌃⌥V) discards the recording that hold started, with no cue, and the combination's action runs.
 - **Mode warnings.** The Caps Lock + Hold warning becomes one rule for any recorded key that is unreliable in the chosen mode. PR 8 first checks what River's tap sees for one Caps Lock press: the recorder probe saw one event per press, which would make a tap mode need two presses.
 - **Changes apply** as today for the dictation shortcut and mode ([../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md), "Live apply"). The other shortcuts apply at once.
