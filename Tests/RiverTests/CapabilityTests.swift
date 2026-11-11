@@ -11,6 +11,7 @@ import Testing
 @MainActor
 final class FakeCapability: Capability {
     let displayName: String
+    let usageSummary = "Fake use."
     let setupInstructions: String?
     private let subject: CurrentValueSubject<CapabilityStatus, Never>
 
@@ -43,6 +44,7 @@ struct CapabilityProtocolTests {
         // "open System Settings" — that is the only path a self-signed build has.
         final class DefaultGrantCapability: Capability {
             let displayName = "Default"
+            let usageSummary = "Default use."
             let subject = CurrentValueSubject<CapabilityStatus, Never>(.denied)
             var status: AnyPublisher<CapabilityStatus, Never> { subject.eraseToAnyPublisher() }
             var currentStatus: CapabilityStatus { subject.value }
@@ -62,6 +64,7 @@ struct CapabilityProtocolTests {
         // the default must be nil so the onboarding row hides the instruction text.
         final class BareCapability: Capability {
             let displayName = "Bare"
+            let usageSummary = "Bare use."
             let subject = CurrentValueSubject<CapabilityStatus, Never>(.denied)
             var status: AnyPublisher<CapabilityStatus, Never> { subject.eraseToAnyPublisher() }
             var currentStatus: CapabilityStatus { subject.value }

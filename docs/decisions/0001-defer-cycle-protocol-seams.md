@@ -42,6 +42,7 @@ Defer the protocol extraction. Keep concrete cycle collaborators + `skip*ForTest
 ## Notes
 
 - 2026-10-26: `MicrophoneCapability`'s implementation moved from `AVAudioEngine` to a HAL output unit pinned to a device chosen by `InputDeviceSelection` (warm-microphone spec, decision 4). Its interface (`startEngine`, `stopEngine`, `audioBuffers`, `inputLevels`, `skipEngineForTesting`, `publishForTest`) did not change and no caller did. That is one implementation replacing another behind one concrete type, not a second adapter, so the deferral holds. The "alternative audio source" condition above means a second source beside the first.
+- 2026-11-11: PR 7 ([#92](https://github.com/abgregs/river/pull/92)) added another `TranscriptionManager` flag, `stageFailsForTesting`, for a model loading beside the one in use. Two revisit conditions above are now met: `transcribeResultForTesting` already injects a successful transcription, and PR 7a adds a second engine, FluidAudio. PR 7a revisits this decision for model loading: one loader per engine beneath the switching logic, with a fake loader replacing the flags in tests ([0037](../planning/0037_fluidaudio-engine.md)).
 
 ## Related
 

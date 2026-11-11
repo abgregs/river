@@ -52,34 +52,35 @@ enum Constants {
     // the default the `Settings.selectedModel` key sources.
     static let defaultModel: String = "openai_whisper-small.en"
 
-    // PROVISIONAL curated list for the model picker (planning 0021). The final list
-    // and default are decided by 0022's per-model scorecards, which don't exist yet —
-    // these four are placeholders: the two known-good English models plus two stronger
-    // candidates that have never been evaluated here. Names are the exact
-    // `argmaxinc/whisperkit-coreml` repo folders WhisperKit downloads (verified against
-    // WhisperKit 0.18's model tables). Sizes are each folder's total in that repo, which
-    // matches the on-disk footprint (measured 2026-09-29). Each
-    // entry must earn its place via a 0022 scorecard before this list is finalized.
+    // The Model section's catalogue (planning 0036), in no particular order: the table groups
+    // and sorts it. The two new English models join it with their engine in PR 7a (planning
+    // 0037). Names are the exact `argmaxinc/whisperkit-coreml` repo folders WhisperKit
+    // downloads (verified against WhisperKit 0.18's model tables). Sizes are the Hugging Face
+    // file sizes of what WhisperKit downloads, Whisper Base measured from River's cache
+    // (2026-11-09). Descriptions are the settings panel study's (round 13). Still provisional:
+    // each entry must earn its place via a 0022 scorecard.
     static let curatedModels: [ModelOption] = [
         ModelOption(
-            name: "openai_whisper-base.en",
-            label: "Base (English)",
-            hint: "Fastest, smallest (~150 MB). Lower accuracy."
+            name: "openai_whisper-base.en", label: "Whisper Base", provider: "OpenAI", family: "Whisper",
+            summary: "Quickest to load. Fine for short, clear sentences; weaker on names and fast speech.",
+            downloadMegabytes: 147, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
         ModelOption(
-            name: defaultModel,   // openai_whisper-small.en
-            label: "Small (English)",
-            hint: "Balanced speed and accuracy (~490 MB). Current default."
+            name: defaultModel, label: "Whisper Small", provider: "OpenAI", family: "Whisper",
+            summary: "A steady all-rounder for everyday writing.",
+            downloadMegabytes: 487, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
         ModelOption(
-            name: "distil-whisper_distil-large-v3",
-            label: "Distil Large v3",
-            hint: "High accuracy, distilled for speed (~1.5 GB). The first load can take a few minutes."
+            name: "openai_whisper-large-v3-v20240930_turbo", label: "Whisper Large v3 Turbo", provider: "OpenAI",
+            family: "Whisper",
+            summary: "Whisper’s most accurate model, with a faster decoder. The first load takes minutes.",
+            downloadMegabytes: 1639, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
         ModelOption(
-            name: "openai_whisper-large-v3-v20240930_turbo",
-            label: "Large v3 Turbo",
-            hint: "Most accurate, turbo decoding (~1.6 GB). Slowest to load; the first load can take a few minutes."
+            name: "distil-whisper_distil-large-v3", label: "Distil Large v3", provider: "Hugging Face",
+            family: "Distil-Whisper",
+            summary: "Close to Whisper Large v3 accuracy with less work per word. The first load takes minutes.",
+            downloadMegabytes: 1515, engine: .whisperKit, minimumMacOS: 14, licence: .mit
         ),
     ]
 
@@ -260,31 +261,45 @@ enum Constants {
     static let hudEdgeLight: Double = 1.5
     static let hudFarEdgeShade: Double = 1.2
     static let hudSheen: Double = 1.0
-    // Along the light, the rim is bright at the first stop and fades through the next two; the
-    // shade is at its end. The sheen is gone by `hudSheenReach`.
+    // Along the light, Light's rim is bright at the first stop and fades through the next two;
+    // the shade is at its end. The sheen is gone by `hudSheenReach`.
     static let hudRimStops: [Double] = [0, 0.26, 0.58]
     static let hudSheenReach: Double = 0.52
     static let hudRimWidth: Double = 1
     static let hudOuterLineWidth: Double = 0.5
+    // One edge with the Settings window (docs/design/color.md; maintainer, 2026-11-09, settings
+    // panel study round 12). Settings is a native window, so macOS draws its edge, and the
+    // floating surfaces match it. The message and the live text wear the window's edge: the tint,
+    // a 0.5 pt inner line of white in Dark only, the outer line, and the window's two shadows.
+    // The indicator keeps its lit glass, and in Dark its rim is the window's inner line, lit:
+    // `hudDarkRimOpacities` at the lit and the far corner, so it is never brighter than a
+    // window's edge. A 1 pt rim set as shares of the surface reached 93 % white and grew into a
+    // heavy line down half a large panel.
+    static let hudInnerLineWidth: Double = 0.5
+    static let hudDarkInnerLineOpacity: Double = 0.22
+    static let hudDarkRimOpacities: [Double] = [0.22, 0.08]
+    // The window's shadows: a close one and a wide one, radii half the study's CSS blur.
+    static let hudWindowShadowRadii: [Double] = [6, 28]
+    static let hudWindowShadowOffsets: [Double] = [4, 20]
+    static let hudDarkWindowShadowOpacities: [Double] = [0.3, 0.55]
+    static let hudLightWindowShadowOpacities: [Double] = [0.12, 0.3]
     // The inner shade: the outside of the edge moved toward the light and blurred, so it falls
     // inside the far edges only.
     static let hudInnerShadeOffsetX: Double = -2
     static let hudInnerShadeOffsetY: Double = -3
     static let hudInnerShadeRadius: Double = 3
-    // Dark: the rim's three stops, the far-edge shade, the sheen, the inner shade, the outer line.
-    static let hudDarkRimOpacities: [Double] = [0.62, 0.22, 0.05]
-    static let hudDarkFarEdgeShadeOpacity: Double = 0.4
+    // Dark: the sheen, the inner shade, and the window's outer line.
     static let hudDarkSheenOpacity: Double = 0.085
     static let hudDarkInnerShadeOpacity: Double = 0.3
-    static let hudDarkOuterLineOpacity: Double = 0.6
+    static let hudDarkOuterLineOpacity: Double = 0.85
     // Light: white light only shows on the light tint near full strength, so the rim and sheen
-    // run brighter and the shades lighter; a black outer line at the dark value would read as a
-    // frame.
+    // run brighter and the shades lighter. The rim's three stops and its far-edge shade, the
+    // sheen, the inner shade, and the window's outer line.
     static let hudLightRimOpacities: [Double] = [1, 0.75, 0.35]
     static let hudLightFarEdgeShadeOpacity: Double = 0.1
     static let hudLightSheenOpacity: Double = 0.5
     static let hudLightInnerShadeOpacity: Double = 0.07
-    static let hudLightOuterLineOpacity: Double = 0.14
+    static let hudLightOuterLineOpacity: Double = 0.22
     // Two shadows, drawn outside the edge only, falling
     // straight down like every window's: the panel shares the screen's light, whatever lights
     // its edge. A wide soft one, and a tight one where the panel meets the desktop. Each opacity
@@ -301,10 +316,20 @@ enum Constants {
     // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface; 0.8 holds
     // 4.5:1 on both tints (PaletteTests).
     static let hudSecondaryTextOpacity: Double = 0.8
-    // Transparent margin around the HUD content so the far shadow is not clipped by the panel.
-    static let hudShadowMargin: Double = 48
+    // Transparent margin around the HUD content so no shadow is clipped by the panel: the window
+    // shadow's wide blur fades out about 2.7 radii past its offset, below a message alone at
+    // the bottom of the stack.
+    static let hudShadowMargin: Double = 96
     // Enter rises and exit drops by this much over `hudFadeSeconds`; Reduce Motion drops the rise.
     static let hudFadeRise: Double = 6
+
+    // The Settings window (planning 0036; settings panel study, rounds 11 to 14): a fixed size
+    // that grows for the Model section's table only, a rail of sections on the left. The
+    // content starts below the window's 28 pt title-bar band.
+    static let settingsWindowSize = CGSize(width: 600, height: 380)
+    static let settingsModelWindowSize = CGSize(width: 820, height: 540)
+    static let settingsRailWidth: Double = 176
+    static let settingsTitleBarHeight: Double = 28
 
     // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
     static let hudMessageCornerRadius: Double = 16

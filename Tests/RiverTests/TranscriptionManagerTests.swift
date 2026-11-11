@@ -80,6 +80,81 @@ struct TranscriptionManagerModelSwitchTests {
         #expect(mgr.currentModelName == "openai_whisper-small.en")
         #expect(mgr.currentModelLoadState == .ready)   // untouched — no needless reload
     }
+
+    // planning 0036, Model: a new model takes over only once it is ready. Until then the
+    // user can still dictate, so the model in use, and the state the menu bar and the
+    // recording gate read, must not move.
+    @MainActor
+    @Test("a new model loads beside a ready one, which stays in use until the switch commits")
+    func readyModelStaysInUseUntilCommit() async {
+        let mgr = stagingManager()
+        await mgr.switchModel(to: "openai_whisper-base.en")
+        #expect(mgr.currentModelName == "openai_whisper-small.en")
+        #expect(mgr.currentModelLoadState == .ready)
+        #expect(mgr.currentModelSwitch == ModelSwitch(target: "openai_whisper-base.en", phase: .ready))
+
+        #expect(mgr.commitModelSwitch())
+        #expect(mgr.currentModelName == "openai_whisper-base.en")
+        #expect(mgr.currentModelSwitch == nil)
+        #expect(!mgr.commitModelSwitch())   // nothing left to commit
+    }
+
+    @MainActor
+    @Test("a failed new model leaves the one in use, and choosing it again retries")
+    func failedStageKeepsCurrentAndRetries() async {
+        let mgr = stagingManager()
+        mgr.stageFailsForTesting = true
+        await mgr.switchModel(to: "openai_whisper-base.en")
+        #expect(mgr.currentModelSwitch?.phase == .failed)
+        #expect(!mgr.commitModelSwitch())
+        #expect(mgr.currentModelName == "openai_whisper-small.en")
+        #expect(mgr.currentModelLoadState == .ready)
+
+        mgr.stageFailsForTesting = false
+        await mgr.switchModel(to: "openai_whisper-base.en")
+        #expect(mgr.currentModelSwitch?.phase == .ready)
+    }
+
+    @MainActor
+    @Test("choosing the model in use again drops the switch in progress")
+    func choosingCurrentDropsSwitch() async {
+        let mgr = stagingManager()
+        await mgr.switchModel(to: "openai_whisper-base.en")
+        await mgr.switchModel(to: "openai_whisper-small.en")
+        #expect(mgr.currentModelSwitch == nil)
+        #expect(!mgr.commitModelSwitch())
+        #expect(mgr.currentModelName == "openai_whisper-small.en")
+    }
+
+    // The first download, or a model that never loaded: there is nothing to keep using, so
+    // waiting beside it would only delay the user's choice.
+    @MainActor
+    @Test("with no ready model, a new choice replaces the current one at once", arguments: [ModelLoadState.downloading, .loading, .failed])
+    func noReadyModelReplacesAtOnce(state: ModelLoadState) async {
+        let mgr = stagingManager()
+        mgr.setModelLoadStateForTesting(state)
+        await mgr.switchModel(to: "openai_whisper-base.en")
+        #expect(mgr.currentModelName == "openai_whisper-base.en")
+        #expect(mgr.currentModelSwitch == nil)
+    }
+
+    // A failed load was a dead end that needed a relaunch (planning 0026, item 4).
+    @MainActor
+    @Test("choosing a failed model again loads it again")
+    func failedModelRetries() async {
+        let mgr = stagingManager()
+        mgr.setModelLoadStateForTesting(.failed)
+        await mgr.switchModel(to: "openai_whisper-small.en")
+        #expect(mgr.currentModelLoadState != .failed)
+    }
+
+    @MainActor
+    private func stagingManager() -> TranscriptionManager {
+        let mgr = TranscriptionManager(modelName: "openai_whisper-small.en")
+        mgr.setModelLoadStateForTesting(.ready)
+        mgr.skipLoadForTesting = true
+        return mgr
+    }
 }
 
 @Suite("Curated model list")
@@ -95,13 +170,25 @@ struct CuratedModelListTests {
     }
 
     @MainActor
-    @Test("every entry has a name, label, and hint")
+    @Test("every entry fills each column the catalogue shows")
     func entriesAreComplete() {
         for model in Constants.curatedModels {
             #expect(!model.name.isEmpty)
             #expect(!model.label.isEmpty)
-            #expect(!model.hint.isEmpty)
+            #expect(!model.provider.isEmpty)
+            #expect(!model.family.isEmpty)
+            #expect(!model.summary.isEmpty)
+            #expect(model.downloadMegabytes > 0)
         }
+    }
+
+    // The default is what a fresh install downloads, on every Mac River supports (macOS 14):
+    // a default that needed a newer macOS would leave a macOS 14 Mac with no model at all.
+    @MainActor
+    @Test("the default model runs on River's oldest supported macOS")
+    func defaultRunsOnOldestMacOS() throws {
+        let model = try #require(Constants.curatedModels.first { $0.name == Constants.defaultModel })
+        #expect(model.minimumMacOS <= 14)
     }
 
     @MainActor

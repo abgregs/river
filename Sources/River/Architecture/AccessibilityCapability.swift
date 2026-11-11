@@ -30,6 +30,7 @@ enum AccessibilityCapabilityError: Error, LocalizedError {
 @MainActor
 final class AccessibilityCapability: Capability {
     let displayName = "Accessibility"
+    let usageSummary = "Types the text at your cursor."
     let setupInstructions: String? =
         "Open System Settings → Privacy & Security → Accessibility, click +, navigate to /Applications/River.app, and toggle it on. Then quit and relaunch River."
 

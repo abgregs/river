@@ -10,14 +10,14 @@ struct MicrophoneReadinessTests {
     @Test("every input favourable keeps the microphone ready")
     func allFavourableIsReady() {
         #expect(MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, onboardingComplete: true, model: .ready, system: .available
+            keepMicrophoneReady: true, onboardingComplete: true, model: .ready, system: .available
         ))
     }
 
-    @Test("the switch closes the microphone between dictations")
+    @Test("turning the switch off closes the microphone between dictations")
     func switchCloses() {
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: true, onboardingComplete: true, model: .ready, system: .available
+            keepMicrophoneReady: false, onboardingComplete: true, model: .ready, system: .available
         ))
     }
 
@@ -26,7 +26,7 @@ struct MicrophoneReadinessTests {
         // Onboarding is the permissions window: until every permission is granted River
         // cannot dictate, so the microphone indicator must not light (AC 4).
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, onboardingComplete: false, model: .ready, system: .available
+            keepMicrophoneReady: true, onboardingComplete: false, model: .ready, system: .available
         ))
     }
 
@@ -35,7 +35,7 @@ struct MicrophoneReadinessTests {
         // The first-run download and onboarding happen here: no indicator before the
         // user can dictate.
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, onboardingComplete: true, model: model, system: .available
+            keepMicrophoneReady: true, onboardingComplete: true, model: model, system: .available
         ))
     }
 
@@ -46,7 +46,7 @@ struct MicrophoneReadinessTests {
     ])
     func unavailableSystemCloses(system: SystemAvailability) {
         #expect(!MicrophoneReadiness.shouldListen(
-            micOnlyWhileDictating: false, onboardingComplete: true, model: .ready, system: system
+            keepMicrophoneReady: true, onboardingComplete: true, model: .ready, system: system
         ))
     }
 }

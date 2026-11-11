@@ -10,6 +10,9 @@ enum CapabilityStatus: Equatable {
 @MainActor
 protocol Capability: AnyObject {
     var displayName: String { get }
+    /// What River uses the permission for, in one line, under its name in Settings'
+    /// Permissions section (planning 0036).
+    var usageSummary: String { get }
     /// Onboarding-only instruction text for permissions the user must grant by
     /// hand (Accessibility, Input Monitoring). `nil` when the capability can
     /// auto-prompt (Microphone). Lives on the capability so `OnboardingView`

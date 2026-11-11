@@ -8,7 +8,7 @@ River now streams: it decodes speech while the user talks and shows the text abo
 
 ## Decisions
 
-1. **Streaming is the only pipeline, with no setting.** Every dictation streams, whether the live text is shown or hidden and whatever the microphone switch says. The text is typed once, at release, as before. The "Transcribe while I speak" toggle is removed, not renamed. `Settings.streamingDictation` stays as a hidden `defaults write` fallback until the gate below is passed. (Decided 2026-10-22.)
+1. **Streaming is the only pipeline, with no setting.** Every dictation streams, whether the live text is shown or hidden and whatever the microphone switch says. The text is typed once, at release, as before. The "Transcribe while I speak" toggle is removed, not renamed. PR 10 removes it unconditionally. `Settings.streamingDictation` stays as a hidden `defaults write` fallback; no UI reaches it. (Decided 2026-10-22; the accuracy gate dropped 2026-11-09, see "Accuracy".)
 2. **Showing the live text is the user's opt-in.** Whether the live text shows is one remembered state, `showLiveText`, **hidden by default, first run included** (maintainer, 2026-10-31; earlier drafts said shown on first run). In `v0.3.0` the user shows or hides it **with a shortcut only**; the hover menu and the click toggle are cut from this release (maintainer, 2026-11-04; see "Panel controls"). There is no Settings toggle for it.
 3. **Hidden and shown behave differently, and both are cheap.**
    - Hidden: the panel shows the mark only; the word count is cut from `v0.3.0`. No provisional (preview) decodes run; committed segments are still decoded, so release stays fast.
@@ -16,12 +16,12 @@ River now streams: it decodes speech while the user talks and shows the text abo
    - On hide, the last preview is kept and new ones stop; a decode already in flight finishes and its result is dropped. Showing again never forces a decode, so toggling back and forth costs no more than leaving the text shown.
 4. **Settings holds two entries for this area, and only two.**
    - **"Show or hide live text":** a shortcut recorder in the Shortcuts section, **default ⌃⌥L**, which the user can record over or clear. Amended 2026-11-04 from "empty by default": the shortcut is now the only way to show the text, so it ships set. Registered as a hot key and fired on press ([0036](0036_settings-and-shortcuts.md)).
-   - **"Only use the microphone while dictating":** on/off, default off, in the Dictation section. Shipped in PR #79, merged 2026-10-29; see [0033](0033_warm-microphone-pre-roll.md), decision 3. It controls only when the microphone is open, never whether River streams or what the panel shows.
+   - **"Keep the microphone ready":** on/off, default on, in the Dictation section. Shipped in PR #79 (merged 2026-10-29) as "Only use the microphone while dictating", default off; turned around in PR 7 (maintainer, 2026-11-09). See [0033](0033_warm-microphone-pre-roll.md), decision 3. It controls only when the microphone is open, never whether River streams or what the panel shows.
 5. **Privacy is unchanged by streaming.** Streaming captures nothing beyond the press-to-release window. The only extra audio is the warm microphone's 0.5 s pre-roll before the press, held in memory and discarded continuously, and the user is told so plainly ([0033](0033_warm-microphone-pre-roll.md), "What the user is told"). Nothing is kept after release.
 
-## Gate
+## Accuracy
 
-**Real-speech accuracy parity before the one-shot path goes.** The streaming review measured no segmentation cost, but only on synthetic clips cut at quiet points. Replay a few long real dictations both ways (the untracked `StreamingReplayTests.swift` compares against one-shot). Until that passes, the toggle may stay and `streamingDictation` stays a working fallback.
+**No parity gate (maintainer, 2026-11-09).** Streaming is table stakes for River, not an option to fall back from, and it works well in daily use. The planned replay of long real dictations against the one-shot path no longer blocks removing the toggle. Streaming accuracy keeps improving through later evals and probes ([0022](0022_transcription-eval-harness.md)) as they're needed.
 
 ## Panel controls (deferred past `v0.3.0`)
 
@@ -44,7 +44,7 @@ Direction from 2026-10-21, not final. The maintainer deferred all of it past `v0
 3. Showing the live text with the shortcut takes effect during a recording and is remembered for the next one.
 4. With the live text hidden, no preview decode runs (log), and release-to-text time matches the shown case.
 5. ⌃⌥L toggles the live text on a fresh install; a recorded shortcut replaces it; with the shortcut cleared, nothing is bound and the text stays as last set.
-6. "Only use the microphone while dictating" behaves as 0033 specifies, with the live text shown or hidden.
+6. "Keep the microphone ready" behaves as 0033 specifies, with the live text shown or hidden.
 
 ## Related
 

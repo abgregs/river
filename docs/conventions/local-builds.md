@@ -123,7 +123,7 @@ Load time scales with model size:
 
 When smoking anything **other than transcription quality** — cancel gestures, clipboard behavior, permissions, sound cues, HUD states — transcription accuracy is irrelevant. You only need words to come out. Use `base.en` and every rebuild gets dramatically cheaper.
 
-Switch it in Settings → Transcription → Model, or out-of-band with the app quit:
+Switch it in Settings → Model, or out-of-band with the app quit (River reads the key only at launch):
 
 ```bash
 defaults write com.river.app selectedModel openai_whisper-base.en

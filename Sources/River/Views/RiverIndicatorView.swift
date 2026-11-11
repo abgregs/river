@@ -134,7 +134,7 @@ struct RiverIndicatorView: View {
         // notices keep the full width their wrapped prose needs.
         .frame(width: isPreparingLabelOnly ? nil : Constants.hudMessageWidth, alignment: .leading)
         .foregroundStyle(Color(nsColor: Palette.HUD.for(colorScheme).text))
-        .modifier(HUDSurface(cornerRadius: Constants.hudMessageCornerRadius))
+        .modifier(HUDSurface(cornerRadius: Constants.hudMessageCornerRadius, edge: .window))
         .accessibilityElement(children: .combine)
     }
 }
@@ -201,7 +201,7 @@ struct KawaMarkPanelFace: View {
     var body: some View {
         let face = KawaMarkFrame(channels: channels, time: time, reduceMotion: reduceMotion, engine: engine, glassLibrary: glassLibrary)
             .frame(width: Constants.indicatorPanelWidth, height: Constants.indicatorPanelHeight)
-            .modifier(HUDSurface(cornerRadius: Constants.indicatorPanelCornerRadius))
+            .modifier(HUDSurface(cornerRadius: Constants.indicatorPanelCornerRadius, edge: .lit))
         // The opacity reaches each of the surface's layers on its own, so where they stack, at
         // the rim, the edge outlasts the fill. In Light mode the bright rim then stood out over a
         // dark desktop as the panel left (maintainer, on device, 2026-11-04), so the light panel
@@ -243,15 +243,21 @@ struct KawaMarkFrame: View {
 }
 
 /// The surface every floating shape shares (the mark's panel, the message rectangle, the
-/// transcript panel): an opaque tint (charcoal in Dark mode, mist in Light), lit as a solid sheet
-/// of glass from the upper left, where Glass lights its ripples from (Constants, the lit edge).
-/// Opaque, so the panel looks the same over any desktop (maintainer, 2026-11-04). Under the
-/// content: two shadows falling straight down, the tint, and a sheen from the lit corner. Over it,
-/// so neither text nor frost covers the edge: a soft shade inside the far edges, a rim bright at
-/// the lit corner that dies away into a shade at the far one, and a dark outer line that keeps the
-/// edge crisp.
+/// transcript panel): an opaque tint (charcoal in Dark mode, mist in Light), with one of two edges.
+/// Opaque, so the panel looks the same over any desktop (maintainer, 2026-11-04).
+///
+/// - `.window`, the message and the live text: the Settings window's edge (docs/design/color.md,
+///   one edge with the Settings window), with no sheen, rim or inner shade. A dark surface adds a
+///   light inner line; an outer line and the window's two shadows hold the edge.
+/// - `.lit`, the mark's panel: a solid sheet of glass lit from the upper left, where Glass lights
+///   its ripples from (Constants, the lit edge). Under the content: two shadows falling straight
+///   down, the tint, and a sheen from the lit corner. Over it, so neither the frost nor anything
+///   else covers the edge: a soft shade inside the far edges, the rim, and the outer line.
 struct HUDSurface: ViewModifier {
+    enum Edge { case window, lit }
+
     let cornerRadius: Double
+    let edge: Edge
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
@@ -261,15 +267,27 @@ struct HUDSurface: ViewModifier {
             .background {
                 ZStack {
                     shape.fill(Color(nsColor: colors.tint))
-                    GeometryReader { proxy in shape.fill(Self.sheen(colors, size: proxy.size)) }
+                    if edge == .lit {
+                        GeometryReader { proxy in shape.fill(Self.sheen(colors, size: proxy.size)) }
+                    }
                 }
-                .background { Self.shadows(shape) }
+                .background {
+                    switch edge {
+                    case .lit: Self.litShadows(shape)
+                    case .window: Self.windowShadows(shape, colors: colors)
+                    }
+                }
             }
             .overlay {
                 ZStack {
-                    Self.innerShade(shape, opacity: colors.innerShadeOpacity * Constants.hudFarEdgeShade)
-                    GeometryReader { proxy in
-                        shape.strokeBorder(Self.rim(colors, size: proxy.size), lineWidth: Constants.hudRimWidth)
+                    switch edge {
+                    case .lit:
+                        Self.innerShade(shape, opacity: colors.innerShadeOpacity * Constants.hudFarEdgeShade)
+                        GeometryReader { proxy in
+                            shape.strokeBorder(Self.rim(colors.rim, size: proxy.size), lineWidth: colors.rim.width)
+                        }
+                    case .window:
+                        shape.strokeBorder(.white.opacity(colors.innerLineOpacity), lineWidth: Constants.hudInnerLineWidth)
                     }
                     shape.inset(by: -Constants.hudOuterLineWidth)
                         .strokeBorder(.black.opacity(colors.outerLineOpacity), lineWidth: Constants.hudOuterLineWidth)
@@ -300,15 +318,13 @@ struct HUDSurface: ViewModifier {
         return (UnitPoint(x: 0.5 - x, y: 0.5 - y), UnitPoint(x: 0.5 + x, y: 0.5 + y))
     }
 
-    // White light along the rim from the lit corner, ending in the far-edge shade. An opacity
-    // the multiplier lifts past 1 holds at 1, as CSS clamps it.
-    private static func rim(_ colors: Palette.HUD, size: CGSize) -> LinearGradient {
-        let light = zip(colors.rimOpacities, Constants.hudRimStops).map { opacity, location in
-            Gradient.Stop(color: .white.opacity(min(1, opacity * Constants.hudEdgeLight)), location: location)
-        }
-        let shade = Gradient.Stop(color: .black.opacity(min(1, colors.farEdgeShadeOpacity * Constants.hudFarEdgeShade)), location: 1)
+    // White light along the rim from the lit corner, ending in the far-edge shade when the rim
+    // has one.
+    private static func rim(_ rim: Palette.HUD.Rim, size: CGSize) -> LinearGradient {
+        var stops = rim.stops.map { Gradient.Stop(color: .white.opacity($0.opacity), location: $0.location) }
+        if let shade = rim.farShadeOpacity { stops.append(.init(color: .black.opacity(shade), location: 1)) }
         let axis = lightAxis(in: size)
-        return LinearGradient(stops: light + [shade], startPoint: axis.start, endPoint: axis.end)
+        return LinearGradient(stops: stops, startPoint: axis.start, endPoint: axis.end)
     }
 
     private static func sheen(_ colors: Palette.HUD, size: CGSize) -> LinearGradient {
@@ -331,22 +347,35 @@ struct HUDSurface: ViewModifier {
             .mask(shape)
     }
 
-    // The two shadows with the shape cut out of them, so they only ever show outside the edge:
-    // the black shape that casts each would otherwise fringe the tint's antialiased edge. Each
-    // is cast by its own shape: a second `.shadow` on the first would shadow the first shadow too.
-    private static func shadows(_ shape: RoundedRectangle) -> some View {
+    private static func litShadows(_ shape: RoundedRectangle) -> some View {
         let strength = Constants.hudShadowStrength
+        return outsideOnly(shape, shadows: [
+            (Constants.hudShadowOpacity * strength, Constants.hudShadowRadius, Constants.hudShadowOffset),
+            (Constants.hudContactShadowOpacity * strength, Constants.hudContactShadowRadius, Constants.hudContactShadowOffset),
+        ])
+    }
+
+    private static func windowShadows(_ shape: RoundedRectangle, colors: Palette.HUD) -> some View {
+        outsideOnly(shape, shadows: zip(colors.windowShadowOpacities, zip(Constants.hudWindowShadowRadii, Constants.hudWindowShadowOffsets))
+            .map { ($0, $1.0, $1.1) })
+    }
+
+    // Shadows with the shape cut out of them, so they only ever show outside the edge: the black
+    // shape that casts each would otherwise fringe the tint's antialiased edge. Each is cast by
+    // its own shape: a second `.shadow` on the first would shadow the first shadow too.
+    private static func outsideOnly(_ shape: RoundedRectangle, shadows: [(opacity: Double, radius: Double, y: Double)]) -> some View {
+        // The mask reaches past the farthest shadow, about three radii beyond its offset, so it
+        // never cuts one off.
+        let reach = shadows.map { 3 * $0.radius + abs($0.y) }.max() ?? 0
         return ZStack {
-            shape.fill(.black)
-                .shadow(color: .black.opacity(Constants.hudShadowOpacity * strength), radius: Constants.hudShadowRadius,
-                        y: Constants.hudShadowOffset)
-            shape.fill(.black)
-                .shadow(color: .black.opacity(Constants.hudContactShadowOpacity * strength), radius: Constants.hudContactShadowRadius,
-                        y: Constants.hudContactShadowOffset)
+            ForEach(shadows.indices, id: \.self) { i in
+                shape.fill(.black)
+                    .shadow(color: .black.opacity(shadows[i].opacity), radius: shadows[i].radius, y: shadows[i].y)
+            }
         }
         .mask {
             Rectangle()
-                .padding(-Constants.hudShadowMargin)
+                .padding(-reach)
                 .overlay { shape.blendMode(.destinationOut) }
                 .compositingGroup()
         }

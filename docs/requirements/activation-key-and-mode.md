@@ -64,10 +64,10 @@ There is no path that tears down the event tap mid-cycle; reconfiguration is alw
 
 The Activation section of Settings contains:
 
-1. **Activation Key picker** — dropdown with the 10 human-readable labels above.
-2. **Activation Mode picker** — segmented or list picker with the three modes; each row shows the mode name and a one-line description.
+1. **Activation Key picker** — dropdown with the 10 human-readable labels above, as "Dictation shortcut" in the Settings window's Shortcuts section until PR 8's recorder replaces it ([0036](../planning/0036_settings-and-shortcuts.md)).
+2. **Activation Mode picker** — "Start by", a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description and the cancel line under it.
 3. **Inline warnings** when applicable:
-   - Caps Lock + Hold → "Caps Lock toggles on press and is unreliable in Hold mode. Switch to Single Tap or Double Tap."
+   - Caps Lock + Hold → "Caps Lock toggles on press and is unreliable in Hold mode. Choose Tap or Double-tap."
    - (Future) Fn key → "Function (Fn) may conflict with the system Globe key on newer Macs."
 
 ## Related

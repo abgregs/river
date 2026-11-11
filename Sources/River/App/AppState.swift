@@ -20,6 +20,8 @@ final class AppState {
     /// Model load lifecycle — `.loading` until the model is warm, then `.ready`.
     /// Menu bar reads this to show "Downloading model…" / "Preparing model…" during launch.
     private(set) var modelLoadState: ModelLoadState = .loading
+    // The model in use and a model loading beside it, for the Settings Model section.
+    private(set) var modelSelection = ModelSelection(inUse: Constants.defaultModel, inUseState: .loading, next: nil)
     /// Transient HUD toast (planning 0018). Distinct from `errorMessage` (the
     /// lingering menu row): it auto-dismisses after `errorToastDurationSeconds` and
     /// clears on a fresh recording. The menu row is the record; the toast is the alert.
@@ -79,6 +81,9 @@ final class AppState {
     func bind(transcription: TranscriptionManager) {
         transcription.modelLoadState
             .sink { [weak self] loadState in self?.apply(modelLoadState: loadState) }
+            .store(in: &cancellables)
+        transcription.selection
+            .sink { [weak self] selection in self?.apply(modelSelection: selection) }
             .store(in: &cancellables)
     }
 
@@ -171,6 +176,12 @@ final class AppState {
     // `bind`), so a test can show the transcript panel without a live session.
     func apply(liveTranscript text: String) {
         liveTranscript = text
+    }
+
+    // internal for testability — the model selection entry point (also used by
+    // `bind(transcription:)`), so a snapshot can show a switch without loading a model.
+    func apply(modelSelection selection: ModelSelection) {
+        modelSelection = selection
     }
 
     // internal for testability — clears the toast when its timer fires. Separate so

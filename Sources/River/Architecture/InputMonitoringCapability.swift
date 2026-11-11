@@ -15,6 +15,7 @@ enum TapEvent: Equatable, Sendable {
 @MainActor
 final class InputMonitoringCapability: Capability {
     let displayName = "Input Monitoring"
+    let usageSummary = "Notices your dictation shortcut in any app."
     let setupInstructions: String? =
         "Open System Settings → Privacy & Security → Input Monitoring, click +, add /Applications/River.app, and toggle it on. Then click Refresh permission status below — if it still shows Not granted, quit and relaunch River."
 

@@ -73,6 +73,17 @@ final class UpdaterManager {
         )
     }
 
+    /// Sparkle's own "check automatically" preference, behind the Settings toggle (planning
+    /// 0036): River declares no key for it, so Sparkle's first-launch answer and this toggle
+    /// are one value. `nil` until `start()` has run, so a dev build has no toggle to show.
+    var automaticallyChecksForUpdates: Bool? {
+        controller?.updater.automaticallyChecksForUpdates
+    }
+
+    func setAutomaticallyChecksForUpdates(_ enabled: Bool) {
+        controller?.updater.automaticallyChecksForUpdates = enabled
+    }
+
     /// User-initiated update check, wired to the "Check for Updates…" menu item.
     /// No-op until `start()` has run.
     func checkForUpdates() {
