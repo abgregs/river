@@ -64,8 +64,9 @@ final class RiverSession {
     private var pendingReconfigurations: [() -> Void] = []
     // A single slot, not a list: a model switch replaces the whole model, so only
     // the latest selection matters — collapsing A→B→C during one cycle to just C
-    // avoids reloading models the user already moved past.
-    private var pendingModelSwitch: (() -> Void)?
+    // avoids reloading models the user already moved past. Published so the Model
+    // section can show the choice as Waiting until the cycle ends (planning 0036, Model).
+    private let waitingModelSubject = CurrentValueSubject<String?, Never>(nil)
     // A staged model that became ready mid-cycle: committed on the return to `.idle`, so no
     // recording changes model halfway (planning 0036, Model).
     private var pendingModelCommit = false
@@ -98,6 +99,8 @@ final class RiverSession {
     var hasLastTranscript: Bool { lastTranscript != nil }
     // The streaming transcript of the current recording, for the transcript panel.
     var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
+    // A model chosen mid-cycle, which loads once the cycle returns to `.idle`; nil otherwise.
+    var waitingModel: AnyPublisher<String?, Never> { waitingModelSubject.eraseToAnyPublisher() }
 
     init(
         accessibility: AccessibilityCapability,
@@ -498,7 +501,7 @@ final class RiverSession {
             applyModelSwitch(newModel)
             modelReloadApplyCount += 1
         case .recording, .processing:
-            pendingModelSwitch = { [weak self] in self?.applyModelSwitch(newModel) }
+            waitingModelSubject.send(newModel)
             modelReloadDeferCount += 1
         }
     }
@@ -515,9 +518,9 @@ final class RiverSession {
             pendingModelCommit = false
             transcription.commitModelSwitch()
         }
-        guard let pending = pendingModelSwitch else { return }
-        pendingModelSwitch = nil
-        pending()
+        guard let waiting = waitingModelSubject.value else { return }
+        waitingModelSubject.send(nil)
+        applyModelSwitch(waiting)
         modelReloadApplyCount += 1
     }
 }

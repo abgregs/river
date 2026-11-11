@@ -117,7 +117,8 @@ struct ModelSectionView: View {
     private func row(_ model: ModelOption, showsProvider: Bool, divider: Bool, ink: SettingsInk) -> some View {
         let status = ModelCatalogue.status(
             of: model, activeModel: appState.activeModel, activeLoadState: appState.modelLoadState,
-            modelSwitch: appState.modelSwitch, macOSMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+            modelSwitch: appState.modelSwitch, waitingModel: appState.waitingModel,
+            macOSMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
             isDownloaded: downloaded.contains(model.name))
         let unavailable = if case .needsMacOS = status { true } else { false }
         return HStack(alignment: .center, spacing: 12) {
@@ -200,13 +201,13 @@ private struct CurrentModelBlock: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 ModelPhaseStatus(phase: activePhase, barWidth: 96) { selectModel(appState.activeModel) }
             }
-            if let modelSwitch = appState.modelSwitch, let target = model(modelSwitch.target) {
+            if let next = nextModel, let target = model(next.target) {
                 HStack(spacing: 16) {
-                    switchLine(target: target.label, current: current?.label ?? appState.activeModel, failed: modelSwitch.phase == .failed)
+                    switchLine(target: target.label, current: current?.label ?? appState.activeModel, phase: next.phase)
                         .font(.system(size: 11))
                         .foregroundStyle(ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ModelPhaseStatus(phase: phase(modelSwitch.phase), barWidth: 96) { selectModel(modelSwitch.target) }
+                    ModelPhaseStatus(phase: next.phase, barWidth: 96) { selectModel(next.target) }
                 }
                 .padding(.top, 10)
                 .overlay(alignment: .top) { Rectangle().fill(ink.opacity(0.08)).frame(height: 1) }
@@ -215,11 +216,23 @@ private struct CurrentModelBlock: View {
         }
     }
 
-    private func switchLine(target: String, current: String, failed: Bool) -> Text {
+    /// The model that takes over next: one chosen during a dictation, or else one loading
+    /// beside the model in use. A choice of the model in use only cancels, so it shows nothing.
+    private var nextModel: (target: String, phase: ModelPhaseStatus.Phase)? {
+        if let waiting = appState.waitingModel,
+           ModelCatalogue.isWaiting(waiting, modelSwitch: appState.modelSwitch) {
+            return waiting == appState.activeModel ? nil : (waiting, .waiting)
+        }
+        return appState.modelSwitch.map { ($0.target, phase($0.phase)) }
+    }
+
+    private func switchLine(target: String, current: String, phase: ModelPhaseStatus.Phase) -> Text {
         let name = Text(target).fontWeight(.medium).foregroundColor(SettingsInk(colorScheme).color)
-        return failed
-            ? name + Text(" didn’t finish loading. River is still using \(current).")
-            : Text("Switching to ") + name + Text(" when it’s ready. Until then, River keeps using \(current).")
+        return switch phase {
+        case .failed: name + Text(" didn’t finish loading. River is still using \(current).")
+        case .waiting: Text("Switching to ") + name + Text(" after this dictation. Until then, River keeps using \(current).")
+        default: Text("Switching to ") + name + Text(" when it’s ready. Until then, River keeps using \(current).")
+        }
     }
 
     private var activePhase: ModelPhaseStatus.Phase {
@@ -247,7 +260,7 @@ private struct CurrentModelBlock: View {
 /// Ready, a load in progress (an indeterminate bar: River gets no download percentage), or
 /// a failure with Try Again.
 private struct ModelPhaseStatus: View {
-    enum Phase { case ready, downloading, preparing, failed }
+    enum Phase { case ready, waiting, downloading, preparing, failed }
 
     let phase: Phase
     let barWidth: Double
@@ -261,6 +274,8 @@ private struct ModelPhaseStatus: View {
             case .ready:
                 Image(systemName: "checkmark").font(.system(size: 11, weight: .medium))
                 Text("Ready")
+            case .waiting:
+                Text("Waiting")
             case .downloading, .preparing:
                 IndeterminateBar(width: barWidth)
                 Text(phase == .downloading ? "Downloading…" : "Preparing…")
@@ -275,7 +290,7 @@ private struct ModelPhaseStatus: View {
     }
 }
 
-/// A row's trailing cell: In use, a load in progress, a macOS requirement, or Select.
+/// A row's trailing cell: In use, Waiting, a load in progress, a macOS requirement, or Select.
 private struct ModelRowAction: View {
     let model: ModelOption
     let status: ModelCatalogue.RowStatus
@@ -292,6 +307,8 @@ private struct ModelRowAction: View {
                     Text("In use").fontWeight(.medium)
                 }
                 .foregroundStyle(ink.color)
+            case .waiting:
+                Text("Waiting")
             case .downloading, .preparing:
                 IndeterminateBar(width: 36)
                 Text(status == .downloading ? "Downloading…" : "Preparing…")

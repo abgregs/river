@@ -27,6 +27,8 @@ enum ModelCatalogue {
     /// What a row's trailing cell shows.
     enum RowStatus: Equatable {
         case inUse
+        /// Chosen during a dictation; it loads once that dictation ends.
+        case waiting
         case downloading
         case preparing
         /// The load failed; the row offers Try Again.
@@ -66,9 +68,11 @@ enum ModelCatalogue {
     }
 
     /// A row's trailing cell. The model in use reads "In use" once it is ready; until then, and
-    /// for a model loading beside it, the row shows the load's phase.
+    /// for a model loading beside it, the row shows the load's phase. A model chosen during a
+    /// dictation reads "Waiting", unless it is already loading, which goes on unchanged.
     static func status(of model: ModelOption, activeModel: String, activeLoadState: ModelLoadState,
-                       modelSwitch: ModelSwitch?, macOSMajor: Int, isDownloaded: Bool) -> RowStatus {
+                       modelSwitch: ModelSwitch?, waitingModel: String?, macOSMajor: Int,
+                       isDownloaded: Bool) -> RowStatus {
         if model.name == activeModel {
             switch activeLoadState {
             case .ready: return .inUse
@@ -77,6 +81,7 @@ enum ModelCatalogue {
             case .failed: return .failed
             }
         }
+        if model.name == waitingModel, isWaiting(model.name, modelSwitch: modelSwitch) { return .waiting }
         if let modelSwitch, modelSwitch.target == model.name {
             switch modelSwitch.phase {
             case .downloading: return .downloading
@@ -86,6 +91,13 @@ enum ModelCatalogue {
         }
         if model.minimumMacOS > macOSMajor { return .needsMacOS(model.minimumMacOS) }
         return .selectable(downloaded: isDownloaded)
+    }
+
+    /// Whether a model chosen during a dictation still has to wait for it to end. Choosing the
+    /// model already loading beside the one in use changes nothing, and a failed one loads again.
+    static func isWaiting(_ waitingModel: String, modelSwitch: ModelSwitch?) -> Bool {
+        guard let modelSwitch, modelSwitch.target == waitingModel else { return true }
+        return modelSwitch.phase == .failed
     }
 
     private static func distinct(_ values: [String]) -> [String] {

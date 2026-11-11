@@ -23,6 +23,8 @@ final class AppState {
     // The model in use and a model loading beside it, for the Settings Model section.
     private(set) var activeModel: String = Constants.defaultModel
     private(set) var modelSwitch: ModelSwitch?
+    // A model chosen during a dictation, which loads once that dictation ends.
+    private(set) var waitingModel: String?
     /// Transient HUD toast (planning 0018). Distinct from `errorMessage` (the
     /// lingering menu row): it auto-dismisses after `errorToastDurationSeconds` and
     /// clears on a fresh recording. The menu row is the record; the toast is the alert.
@@ -74,6 +76,9 @@ final class AppState {
             .store(in: &cancellables)
         session.liveTranscript
             .sink { [weak self] text in self?.apply(liveTranscript: text) }
+            .store(in: &cancellables)
+        session.waitingModel
+            .sink { [weak self] model in self?.apply(waitingModel: model) }
             .store(in: &cancellables)
     }
 
@@ -180,6 +185,12 @@ final class AppState {
     // `bind`), so a test can show the transcript panel without a live session.
     func apply(liveTranscript text: String) {
         liveTranscript = text
+    }
+
+    // internal for testability — the waiting-model entry point (also used by `bind`), so
+    // a snapshot can show the Model section's Waiting state without a live session.
+    func apply(waitingModel model: String?) {
+        waitingModel = model
     }
 
     // internal for testability — clears the toast when its timer fires. Separate so

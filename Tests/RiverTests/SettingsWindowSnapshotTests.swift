@@ -28,10 +28,13 @@ struct SettingsWindowSnapshotTests {
         let model = SettingsWindowModel(appState: appState, capabilities: [microphone, inputMonitoring, accessibility],
                                         updater: UpdaterManager(), selectModel: { _ in })
         model.permissionMissing = true
-        // Each section, then the Model section with a switch that failed.
-        let shots = SettingsSection.allCases.map { ($0, $0.rawValue) } + [(.model, "model-switch-failed")]
+        // Each section, then the Model section with a choice waiting for a dictation to end,
+        // and with a switch that failed.
+        let shots = SettingsSection.allCases.map { ($0, $0.rawValue) }
+            + [(.model, "model-waiting"), (.model, "model-switch-failed")]
         for (section, shot) in shots {
             model.section = section
+            appState.apply(waitingModel: shot == "model-waiting" ? "openai_whisper-base.en" : nil)
             if shot == "model-switch-failed" {
                 transcription.stageFailsForTesting = true
                 await transcription.switchModel(to: "openai_whisper-large-v3-v20240930_turbo")

@@ -47,7 +47,7 @@ struct ModelCatalogueTests {
     func rowStatus() {
         func status(_ model: ModelOption, load: ModelLoadState = .ready, switching: ModelSwitch? = nil, macOS: Int = 15) -> ModelCatalogue.RowStatus {
             ModelCatalogue.status(of: model, activeModel: Self.small.name, activeLoadState: load, modelSwitch: switching,
-                                  macOSMajor: macOS, isDownloaded: false)
+                                  waitingModel: nil, macOSMajor: macOS, isDownloaded: false)
         }
         #expect(status(Self.small) == .inUse)
         #expect(status(Self.small, load: .downloading) == .downloading)
@@ -56,6 +56,22 @@ struct ModelCatalogueTests {
         #expect(status(Self.base, switching: ModelSwitch(target: Self.base.name, phase: .failed)) == .failed)
         #expect(status(Self.sequoiaOnly, macOS: 14) == .needsMacOS(15))
         #expect(status(Self.sequoiaOnly, macOS: 15) == .selectable(downloaded: false))
+    }
+
+    // A Select pressed during a dictation does nothing until it ends, so the row must say so
+    // rather than keep offering Select; a choice that is already loading keeps its progress.
+    @Test("a model chosen during a dictation reads Waiting until it starts to load")
+    func waitingStatus() {
+        func status(_ model: ModelOption, waiting: String?, switching: ModelSwitch? = nil) -> ModelCatalogue.RowStatus {
+            ModelCatalogue.status(of: model, activeModel: Self.small.name, activeLoadState: .ready, modelSwitch: switching,
+                                  waitingModel: waiting, macOSMajor: 15, isDownloaded: true)
+        }
+        #expect(status(Self.base, waiting: Self.base.name) == .waiting)
+        #expect(status(Self.distil, waiting: Self.base.name) == .selectable(downloaded: true))
+        #expect(status(Self.small, waiting: Self.small.name) == .inUse)
+        #expect(status(Self.base, waiting: Self.base.name, switching: ModelSwitch(target: Self.base.name, phase: .downloading)) == .downloading)
+        #expect(status(Self.base, waiting: Self.base.name, switching: ModelSwitch(target: Self.base.name, phase: .failed)) == .waiting)
+        #expect(status(Self.base, waiting: Self.base.name, switching: ModelSwitch(target: Self.distil.name, phase: .preparing)) == .waiting)
     }
 
     @Test("sizes read in decimal megabytes and gigabytes")

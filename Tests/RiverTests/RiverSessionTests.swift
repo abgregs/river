@@ -486,6 +486,31 @@ struct RiverSessionTests {
         #expect(env.store.value(for: Settings.selectedModel) == "openai_whisper-base.en")
     }
 
+    // The Model section shows a choice made mid-dictation as Waiting; only the latest choice
+    // waits, and it stops waiting the moment the dictation ends and it starts to load.
+    @MainActor
+    @Test("a model chosen mid-recording is published as waiting until the return to .idle")
+    func waitingModelIsPublished() async throws {
+        let env = makeSession()
+        let appState = AppState()
+        appState.bind(to: env.session)
+        try await env.session.start()
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        env.session.selectModel("openai_whisper-base.en")
+        #expect(appState.waitingModel == "openai_whisper-base.en")
+        env.session.selectModel("openai_whisper-large-v3-v20240930_turbo")
+        #expect(appState.waitingModel == "openai_whisper-large-v3-v20240930_turbo")
+
+        env.microphone.publishForTest(makeBuffer())
+        await env.session.handleDeactivate()
+        #expect(env.session.currentState == .idle)
+        #expect(appState.waitingModel == nil)
+        await waitUntil { env.transcription.currentModelName == "openai_whisper-large-v3-v20240930_turbo" }
+        #expect(env.transcription.currentModelName == "openai_whisper-large-v3-v20240930_turbo")
+    }
+
     // A relaunch loads `selectedModel` with nothing to fall back on, so it must only ever
     // name a model that took over, never a choice that failed.
     @MainActor
