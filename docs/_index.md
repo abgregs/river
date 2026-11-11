@@ -35,7 +35,7 @@ Concerns that cut across categories, where two rules can each be accurate yet co
 - **Permissions and signing identity** — TCC, the capabilities, onboarding, and the dev versus Developer ID signatures. *last audited: never*
 - **The cycle state seam** — `RiverState` transitions and every observer: menu bar, panel, sounds, hotkey. *last audited: 2026-11-04*
 - **User content privacy** — audio, transcripts, logs, the clipboard, the eval corpus, and release artifacts. *last audited: 2026-10-29*
-- **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: never*
+- **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: 2026-11-11*
 - **Bundle and release artifacts** — the Makefile, `make verify`, the release workflow's assets, the cask, and the appcast. *last audited: 2026-10-16*
 
 ## Conventions of these docs

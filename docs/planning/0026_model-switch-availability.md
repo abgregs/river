@@ -1,5 +1,7 @@
 # Planning: Model Switch Availability & Download Management (roadmap 0026)
 
+**Status: partly built (maintainer, 2026-11-11).** PR 7 ([#92](https://github.com/abgregs/river/pull/92), [0036](0036_settings-and-shortcuts.md), Model) built finding 4 and part of the design: the model in use keeps working while a new one downloads and prepares beside it, and Try Again retries a failed load without a relaunch. The full file-set check (finding 3) moves to [0038](0038_model-storage.md), open question 2, since that PR's total and Delete rely on it. Still open and unscheduled: a deselected download continuing in the background, and per-model download tracking. Until then, choosing another model cancels the download in progress.
+
 From the 2026-08-18 on-device smoke of 0004/0021/0002 (the first real-device pass over the model picker + HUD): switching models works, but the *availability model* around it is stricter than it needs to be, and two robustness gaps surfaced in the field. A cached model should be usable near-instantly regardless of what else is downloading; an in-flight download should survive being deselected; and the cache/failure edges found during the smoke need hardening.
 
 ## Problem

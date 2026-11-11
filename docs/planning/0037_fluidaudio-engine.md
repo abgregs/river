@@ -17,12 +17,13 @@ Not yet measured: accuracy on the maintainer's own voice (the spike used synthes
 ## Design
 
 - **One import boundary per engine.** Today only `TranscriptionManager` imports WhisperKit. A new file is the only one that imports FluidAudio. `TranscriptionManager` picks the engine from the model's catalogue entry, and `RiverSession` keeps calling `transcribe(audioSamples:)`, so the dictation cycle and the live text's `DictationStream` don't change.
+- **One loader per engine, beneath the switching logic.** PR 7's switching (a model loading beside the one in use, taking over at `.idle`, the `ModelSelection` it publishes) does not depend on the engine, but its code is mixed with WhisperKit's: creating the model, its folder, and the downloaded check. This PR moves those three behind one loader per engine, so the switching logic is written and tested once, and tests use a fake loader in place of `skipLoadForTesting` and `stageFailsForTesting`. This is the revisit [ADR 0001](../decisions/0001-defer-cycle-protocol-seams.md) names for a second transcription backend (architecture review of PR #92, 2026-11-11).
 - **Pinned exactly**, as WhisperKit is: FluidAudio is pre-1.0, and a minor version may change its API. Raise it on purpose, after testing.
 - **The catalogue entry** carries each model's engine, minimum macOS and credit. PR 7 adds the fields with the Whisper models; this PR adds the two rows.
 - **The same load states.** Downloading, then Preparing, then Ready, as for Whisper. The 19 s first preparation shows as Preparing.
 - **Phonon-2 needs macOS 15.** On macOS 14 its row says so and cannot be selected. River still supports macOS 14.
 - **The custom dictionary is Whisper's.** Prompt biasing and the retry without the prompt (`resolveWithEmptyPromptRetry`) are Whisper features. The FluidAudio path takes no dictionary terms; nothing in `v0.3.0` lets the user set any ([0036](0036_settings-and-shortcuts.md), "Not in `v0.3.0`").
-- **Where models live.** FluidAudio keeps its models in its own folder under Application Support, which raises no permission prompt (the concern in [0010](0010_relocate-model-cache.md)). The cached check is per engine.
+- **Where models live: open.** By default FluidAudio keeps its models in its own folder under Application Support, which raises no permission prompt (the concern in [0010](0010_relocate-model-cache.md)). [0038](0038_model-storage.md) shows River's models folder and deletes models from it, so this PR either points FluidAudio's downloads into `River/models` or makes 0038's folder line and Delete cover both folders. Check whether FluidAudio's download location can be set before choosing. The downloaded check is per engine either way.
 
 ## Licences
 
@@ -32,7 +33,7 @@ Not yet measured: accuracy on the maintainer's own voice (the spike used synthes
 
 ## Not in this PR
 
-Parakeet TDT v3, Phonon-2.5 and Phonon-2.5 English (0036); languages; removing downloaded models.
+Parakeet TDT v3, Phonon-2.5 and Phonon-2.5 English (0036); languages. Deleting downloaded models is [0038](0038_model-storage.md), which lands first; this PR adds its two models to 0038's folder line and Delete.
 
 ## Acceptance criteria
 
@@ -44,9 +45,13 @@ Parakeet TDT v3, Phonon-2.5 and Phonon-2.5 English (0036); languages; removing d
 6. The About window credits both models (creator, licence link, conversion note), FluidAudio and the text-processing library.
 7. River still builds with only the Command Line Tools, apart from the Glass shader, which already needs Xcode's `metal`.
 8. On device, the maintainer dictates everyday sentences with each new model and judges the text.
+9. Model switching is tested once, through a fake loader; only each engine's loader imports its engine.
+10. The two new models count in 0038's folder total and can be deleted like the Whisper models.
 
 ## Related
 
 - [0036](0036_settings-and-shortcuts.md): the Model section and its catalogue.
 - [0026](0026_model-switch-availability.md): per-model download state, which switching when ready needs.
 - [0010](0010_relocate-model-cache.md): why models stay out of Documents.
+- [0038](0038_model-storage.md): where models are saved, and deleting them.
+- [ADR 0001](../decisions/0001-defer-cycle-protocol-seams.md): the deferred protocol seams this PR revisits for model loading.

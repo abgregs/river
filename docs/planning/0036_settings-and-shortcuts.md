@@ -1,6 +1,6 @@
 # Settings and shortcuts (0036)
 
-**Status: planned for `v0.3.0`, not started.** Every setting River offers in `v0.3.0`, how the settings panel groups and labels them, and how River registers and records its shortcuts. Agreed with the maintainer on 2026-11-04 and 2026-11-05. PRs 7 to 10 of the `v0.3.0` plan ([current-focus.md](current-focus.md)) build it. The panel's visual design (layout, icons, size) is PR 7's design rounds, not this spec. The live text and microphone decisions are in [0034](0034_live-text-and-microphone-settings.md). The mechanism rests on [../research/shortcut-registration.md](../research/shortcut-registration.md) and [../research/shortcut-recorder.md](../research/shortcut-recorder.md).
+**Status: PR 7 built and in review as [#92](https://github.com/abgregs/river/pull/92) (2026-11-11); PRs 8 to 10 not started.** Every setting River offers in `v0.3.0`, how the settings panel groups and labels them, and how River registers and records its shortcuts. Agreed with the maintainer on 2026-11-04 and 2026-11-05. PRs 7 to 10 of the `v0.3.0` plan ([current-focus.md](current-focus.md)) build it. The panel's visual design (layout, icons, size) is PR 7's design rounds, not this spec. The live text and microphone decisions are in [0034](0034_live-text-and-microphone-settings.md). The mechanism rests on [../research/shortcut-registration.md](../research/shortcut-registration.md) and [../research/shortcut-recorder.md](../research/shortcut-recorder.md).
 
 ## The panel
 
