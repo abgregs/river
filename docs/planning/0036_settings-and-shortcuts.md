@@ -33,6 +33,7 @@
 - **Model** (maintainer, 2026-11-09, settings panel study round 13):
   - The window grows to 820 × 540 for this section and returns to 600 × 380 for the others.
   - Choosing another model switches only once it is ready. Until then, dictation keeps using the current model. This needs per-model download state ([0026](0026_model-switch-availability.md)).
+  - A choice made during a dictation starts loading at once, beside the model in use. If it is ready before the dictation ends, its row reads Waiting and the line above the table says "*Model* is ready. River switches to it after this dictation." It takes over when the dictation ends (maintainer, 2026-11-11).
   - Each row's button says "Select".
   - No model is marked "Recommended" in `v0.3.0`, and the build adds no setting for it (maintainer, 2026-11-09, round 14).
   - Rows don't list languages, because River writes English only in `v0.3.0`; languages are deferred.

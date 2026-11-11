@@ -62,14 +62,6 @@ final class RiverSession {
     // during one Hold recording or `.processing` window, and both must apply on
     // the return to `.idle` — a single slot would drop the earlier one.
     private var pendingReconfigurations: [() -> Void] = []
-    // A single slot, not a list: a model switch replaces the whole model, so only
-    // the latest selection matters — collapsing A→B→C during one cycle to just C
-    // avoids reloading models the user already moved past. Published so the Model
-    // section can show the choice as Waiting until the cycle ends (planning 0036, Model).
-    private let waitingModelSubject = CurrentValueSubject<String?, Never>(nil)
-    // A staged model that became ready mid-cycle: committed on the return to `.idle`, so no
-    // recording changes model halfway (planning 0036, Model).
-    private var pendingModelCommit = false
     // The mode driving the current recording — decides whether a mid-recording
     // key/mode change applies live (tap modes) or is deferred (Hold).
     private var activeMode: ActivationMode = Constants.defaultActivationMode
@@ -78,11 +70,6 @@ final class RiverSession {
     // counters rather than inspecting the handler closures.
     private(set) var configurationApplyCount = 0
     private(set) var configurationDeferCount = 0
-    // Separate counters for the model-switch path (planning 0021): it shares the
-    // apply-or-defer contract but never the tap-mode live branch, and keeping it off
-    // the hotkey counters keeps each path's tests independent.
-    private(set) var modelReloadApplyCount = 0
-    private(set) var modelReloadDeferCount = 0
 
     var state: AnyPublisher<RiverState, Never> { stateSubject.eraseToAnyPublisher() }
     var currentState: RiverState { stateSubject.value }
@@ -99,8 +86,6 @@ final class RiverSession {
     var hasLastTranscript: Bool { lastTranscript != nil }
     // The streaming transcript of the current recording, for the transcript panel.
     var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
-    // A model chosen mid-cycle, which loads once the cycle returns to `.idle`; nil otherwise.
-    var waitingModel: AnyPublisher<String?, Never> { waitingModelSubject.eraseToAnyPublisher() }
 
     init(
         accessibility: AccessibilityCapability,
@@ -316,7 +301,8 @@ final class RiverSession {
         stateSubject.send(.idle)
         logger.info("State -> idle")
         applyPendingReconfigurations()
-        applyPendingModelSwitch()
+        // A model that became ready mid-cycle takes over now; a no-op unless one is ready.
+        transcription.commitModelSwitch()
     }
 
     // Retains the transcript, then types it at the cursor. Retained before the paste
@@ -377,7 +363,8 @@ final class RiverSession {
         logger.info("State -> idle (canceled)")
         noticeSubject.send(ActivationNotice.recordingCanceled)
         applyPendingReconfigurations()
-        applyPendingModelSwitch()
+        // A model that became ready mid-cycle takes over now; a no-op unless one is ready.
+        transcription.commitModelSwitch()
     }
 
     // Pending reconfigurations parked during a non-idle cycle fire on the
@@ -412,32 +399,32 @@ final class RiverSession {
                 }
             }
             .store(in: &cancellables)
-        settings.publisher(for: Settings.selectedModel)
-            .sink { [weak self] newModel in self?.reconfigureModel(newModel) }
-            .store(in: &cancellables)
-        transcription.modelSwitch
-            .sink { [weak self] modelSwitch in
-                guard let self, modelSwitch?.phase == .ready else { return }
-                if self.currentState == .idle {
+        transcription.selection
+            .sink { [weak self] selection in
+                guard let self else { return }
+                // `selectedModel` records the model in use once it is ready, so a relaunch
+                // loads one that worked; it is written here only, and read only at launch.
+                if selection.inUseState == .ready,
+                   self.settings.value(for: Settings.selectedModel) != selection.inUse {
+                    self.settings.setValue(selection.inUse, for: Settings.selectedModel)
+                }
+                // A model ready beside the one in use takes over at `.idle`; one that becomes
+                // ready mid-cycle takes over on the return to `.idle`.
+                if selection.next?.phase == .ready, self.currentState == .idle {
                     self.transcription.commitModelSwitch()
-                } else {
-                    self.pendingModelCommit = true
                 }
             }
             .store(in: &cancellables)
-        // `selectedModel` is the model in use, so a relaunch loads one that worked: a choice
-        // that is still loading, or that failed, is not saved until it takes over.
-        transcription.activeModel
-            .sink { [weak self] model in self?.settings.setValue(model, for: Settings.selectedModel) }
-            .store(in: &cancellables)
     }
 
-    /// The Model section's Select and Try Again (planning 0036). Goes through the same
-    /// apply-or-defer path as a `selectedModel` change, and reaches the manager even when
-    /// the choice equals the saved model, which a setting write would not: that is how a
-    /// failed model is retried and a staged switch is dropped.
+    /// The Model section's Select and Try Again (planning 0036): makes `name` the model River
+    /// uses. It starts loading at once, even mid-dictation, since a dictation only starts with
+    /// a ready model and the new one loads beside it; it takes over only at `.idle`, so no
+    /// recording changes model halfway. Choosing the model in use retries it after a failure,
+    /// or drops a model loading beside it.
     func selectModel(_ name: String) {
-        reconfigureModel(name)
+        let transcription = self.transcription
+        Task { @MainActor in await transcription.switchModel(to: name) }
     }
 
     // The ready microphone (planning 0033, decision 5): the capture unit runs between
@@ -486,41 +473,5 @@ final class RiverSession {
             pendingReconfigurations.append(apply)
             configurationDeferCount += 1
         }
-    }
-
-    // Model-switch reconfiguration (planning 0021). Mirrors the hotkey apply-or-defer
-    // contract, minus the tap-mode live branch: reloading the model mid-recording
-    // would swap `whisperKit` out from under the pending `.processing` transcribe, so
-    // a switch is only ever applied at `.idle` — immediately when idle, or on the
-    // deferred return to `.idle` otherwise. While the model in use is ready, the manager
-    // loads the new one beside it and the switch commits once it is ready, again only at
-    // `.idle`; with no ready model it reloads in place and re-enters the 0004 load states.
-    private func reconfigureModel(_ newModel: String) {
-        switch currentState {
-        case .idle:
-            applyModelSwitch(newModel)
-            modelReloadApplyCount += 1
-        case .recording, .processing:
-            waitingModelSubject.send(newModel)
-            modelReloadDeferCount += 1
-        }
-    }
-
-    private func applyModelSwitch(_ newModel: String) {
-        let transcription = self.transcription
-        Task { @MainActor in await transcription.switchModel(to: newModel) }
-    }
-
-    // Fires the parked model switch on the return to `.idle`, closing the same
-    // deferral loop as `applyPendingReconfigurations` for the model path.
-    private func applyPendingModelSwitch() {
-        if pendingModelCommit {
-            pendingModelCommit = false
-            transcription.commitModelSwitch()
-        }
-        guard let waiting = waitingModelSubject.value else { return }
-        waitingModelSubject.send(nil)
-        applyModelSwitch(waiting)
-        modelReloadApplyCount += 1
     }
 }

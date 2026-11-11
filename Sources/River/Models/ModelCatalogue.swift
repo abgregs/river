@@ -27,7 +27,7 @@ enum ModelCatalogue {
     /// What a row's trailing cell shows.
     enum RowStatus: Equatable {
         case inUse
-        /// Chosen during a dictation; it loads once that dictation ends.
+        /// Ready beside the model in use, and taking over once the dictation ends.
         case waiting
         case downloading
         case preparing
@@ -67,37 +67,33 @@ enum ModelCatalogue {
             .sorted { ascending ? $0.downloadMegabytes < $1.downloadMegabytes : $0.downloadMegabytes > $1.downloadMegabytes }
     }
 
-    /// A row's trailing cell. The model in use reads "In use" once it is ready; until then, and
-    /// for a model loading beside it, the row shows the load's phase. A model chosen during a
-    /// dictation reads "Waiting", unless it is already loading, which goes on unchanged.
-    static func status(of model: ModelOption, activeModel: String, activeLoadState: ModelLoadState,
-                       modelSwitch: ModelSwitch?, waitingModel: String?, macOSMajor: Int,
-                       isDownloaded: Bool) -> RowStatus {
-        if model.name == activeModel {
-            switch activeLoadState {
+    /// What `selection` says about a model: in use (once ready, "In use"; until then the load's
+    /// phase), or loading beside it, where `.ready` reads "Waiting" because it takes over when
+    /// the dictation in progress ends. `nil` for every other model. The Model section's rows and
+    /// its status lines all read this, so they always agree.
+    static func status(ofModelNamed name: String, in selection: ModelSelection) -> RowStatus? {
+        if name == selection.inUse {
+            switch selection.inUseState {
             case .ready: return .inUse
             case .downloading: return .downloading
             case .loading: return .preparing
             case .failed: return .failed
             }
         }
-        if model.name == waitingModel, isWaiting(model.name, modelSwitch: modelSwitch) { return .waiting }
-        if let modelSwitch, modelSwitch.target == model.name {
-            switch modelSwitch.phase {
-            case .downloading: return .downloading
-            case .preparing, .ready: return .preparing
-            case .failed: return .failed
-            }
+        guard let next = selection.next, next.target == name else { return nil }
+        switch next.phase {
+        case .downloading: return .downloading
+        case .preparing: return .preparing
+        case .ready: return .waiting
+        case .failed: return .failed
         }
-        if model.minimumMacOS > macOSMajor { return .needsMacOS(model.minimumMacOS) }
-        return .selectable(downloaded: isDownloaded)
     }
 
-    /// Whether a model chosen during a dictation still has to wait for it to end. Choosing the
-    /// model already loading beside the one in use changes nothing, and a failed one loads again.
-    static func isWaiting(_ waitingModel: String, modelSwitch: ModelSwitch?) -> Bool {
-        guard let modelSwitch, modelSwitch.target == waitingModel else { return true }
-        return modelSwitch.phase == .failed
+    /// A row's trailing cell: what the selection says about it, else whether this Mac can run it.
+    static func status(of model: ModelOption, selection: ModelSelection, macOSMajor: Int, isDownloaded: Bool) -> RowStatus {
+        if let status = status(ofModelNamed: model.name, in: selection) { return status }
+        if model.minimumMacOS > macOSMajor { return .needsMacOS(model.minimumMacOS) }
+        return .selectable(downloaded: isDownloaded)
     }
 
     private static func distinct(_ values: [String]) -> [String] {

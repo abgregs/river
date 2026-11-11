@@ -37,8 +37,7 @@ struct ModelSectionView: View {
                 .padding(.top, 8)
         }
         .onAppear(perform: refreshDownloaded)
-        .onChange(of: appState.activeModel) { refreshDownloaded() }
-        .onChange(of: appState.modelSwitch) { refreshDownloaded() }
+        .onChange(of: appState.modelSelection) { refreshDownloaded() }
     }
 
     private func table(_ ink: SettingsInk) -> some View {
@@ -116,8 +115,7 @@ struct ModelSectionView: View {
 
     private func row(_ model: ModelOption, showsProvider: Bool, divider: Bool, ink: SettingsInk) -> some View {
         let status = ModelCatalogue.status(
-            of: model, activeModel: appState.activeModel, activeLoadState: appState.modelLoadState,
-            modelSwitch: appState.modelSwitch, waitingModel: appState.waitingModel,
+            of: model, selection: appState.modelSelection,
             macOSMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
             isDownloaded: downloaded.contains(model.name))
         let unavailable = if case .needsMacOS = status { true } else { false }
@@ -187,11 +185,12 @@ private struct CurrentModelBlock: View {
 
     var body: some View {
         let ink = SettingsInk(colorScheme)
-        let current = model(appState.activeModel)
+        let selection = appState.modelSelection
+        let current = model(selection.inUse)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(current?.label ?? appState.activeModel).fontWeight(.semibold)
+                    Text(current?.label ?? selection.inUse).fontWeight(.semibold)
                     if let current {
                         Text("\(current.provider) · \(ModelCatalogue.formattedSize(megabytes: current.downloadMegabytes))")
                             .font(.system(size: 11).monospacedDigit())
@@ -199,15 +198,18 @@ private struct CurrentModelBlock: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                ModelPhaseStatus(phase: activePhase, barWidth: 96) { selectModel(appState.activeModel) }
+                if let status = ModelCatalogue.status(ofModelNamed: selection.inUse, in: selection) {
+                    ModelPhaseStatus(status: status, barWidth: 96) { selectModel(selection.inUse) }
+                }
             }
-            if let next = nextModel, let target = model(next.target) {
+            if let next = selection.next, let target = model(next.target),
+               let status = ModelCatalogue.status(ofModelNamed: next.target, in: selection) {
                 HStack(spacing: 16) {
-                    switchLine(target: target.label, current: current?.label ?? appState.activeModel, phase: next.phase)
+                    switchLine(target: target.label, current: current?.label ?? selection.inUse, status: status)
                         .font(.system(size: 11))
                         .foregroundStyle(ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ModelPhaseStatus(phase: next.phase, barWidth: 96) { selectModel(next.target) }
+                    ModelPhaseStatus(status: status, barWidth: 96) { selectModel(next.target) }
                 }
                 .padding(.top, 10)
                 .overlay(alignment: .top) { Rectangle().fill(ink.opacity(0.08)).frame(height: 1) }
@@ -216,39 +218,12 @@ private struct CurrentModelBlock: View {
         }
     }
 
-    /// The model that takes over next: one chosen during a dictation, or else one loading
-    /// beside the model in use. A choice of the model in use only cancels, so it shows nothing.
-    private var nextModel: (target: String, phase: ModelPhaseStatus.Phase)? {
-        if let waiting = appState.waitingModel,
-           ModelCatalogue.isWaiting(waiting, modelSwitch: appState.modelSwitch) {
-            return waiting == appState.activeModel ? nil : (waiting, .waiting)
-        }
-        return appState.modelSwitch.map { ($0.target, phase($0.phase)) }
-    }
-
-    private func switchLine(target: String, current: String, phase: ModelPhaseStatus.Phase) -> Text {
+    private func switchLine(target: String, current: String, status: ModelCatalogue.RowStatus) -> Text {
         let name = Text(target).fontWeight(.medium).foregroundColor(SettingsInk(colorScheme).color)
-        return switch phase {
+        return switch status {
         case .failed: name + Text(" didn’t finish loading. River is still using \(current).")
-        case .waiting: Text("Switching to ") + name + Text(" after this dictation. Until then, River keeps using \(current).")
+        case .waiting: name + Text(" is ready. River switches to it after this dictation.")
         default: Text("Switching to ") + name + Text(" when it’s ready. Until then, River keeps using \(current).")
-        }
-    }
-
-    private var activePhase: ModelPhaseStatus.Phase {
-        switch appState.modelLoadState {
-        case .ready: .ready
-        case .downloading: .downloading
-        case .loading: .preparing
-        case .failed: .failed
-        }
-    }
-
-    private func phase(_ phase: ModelSwitch.Phase) -> ModelPhaseStatus.Phase {
-        switch phase {
-        case .downloading: .downloading
-        case .preparing, .ready: .preparing
-        case .failed: .failed
         }
     }
 
@@ -257,12 +232,10 @@ private struct CurrentModelBlock: View {
     }
 }
 
-/// Ready, a load in progress (an indeterminate bar: River gets no download percentage), or
-/// a failure with Try Again.
+/// The status beside the current model and the next one: Ready, Waiting, a load in progress
+/// (an indeterminate bar: River gets no download percentage), or a failure with Try Again.
 private struct ModelPhaseStatus: View {
-    enum Phase { case ready, waiting, downloading, preparing, failed }
-
-    let phase: Phase
+    let status: ModelCatalogue.RowStatus
     let barWidth: Double
     let retry: () -> Void
     @Environment(\.colorScheme) private var colorScheme
@@ -270,19 +243,21 @@ private struct ModelPhaseStatus: View {
     var body: some View {
         let ink = SettingsInk(colorScheme)
         HStack(spacing: 8) {
-            switch phase {
-            case .ready:
+            switch status {
+            case .inUse:
                 Image(systemName: "checkmark").font(.system(size: 11, weight: .medium))
                 Text("Ready")
             case .waiting:
                 Text("Waiting")
             case .downloading, .preparing:
                 IndeterminateBar(width: barWidth)
-                Text(phase == .downloading ? "Downloading…" : "Preparing…")
+                Text(status == .downloading ? "Downloading…" : "Preparing…")
             case .failed:
                 Image(systemName: "exclamationmark.triangle").font(.system(size: 11))
                 Text("Couldn’t load")
                 Button("Try Again", action: retry).buttonStyle(RiverBezelButtonStyle())
+            case .needsMacOS, .selectable:
+                EmptyView()
             }
         }
         .foregroundStyle(ink.secondary)

@@ -98,58 +98,53 @@ struct RiverSessionTests {
         #expect(notices.count == 1)
     }
 
+    // `selectedModel` records the model in use for the next launch; it is not a way to choose
+    // one. If the session still listened to it, every takeover would come back as a new choice.
     @MainActor
-    @Test("start subscribes to the model publisher and applies the current selection while idle")
-    func startSubscribesToModel() async throws {
-        // planning 0021: the selectedModel publisher emits its current value on
-        // subscribe and applies while idle — a separate counter from the hotkey path.
+    @Test("the saved model is a record, not an input: writing it does not switch models")
+    func savedModelIsNotAnInput() async throws {
         let env = makeSession()
-        #expect(env.session.modelReloadApplyCount == 0)
         try await env.session.start()
-        #expect(env.session.modelReloadApplyCount == 1)
-        #expect(env.session.modelReloadDeferCount == 0)
-        #expect(env.session.configurationApplyCount == 2)  // hotkey path unaffected
+        env.store.setValue("openai_whisper-base.en", for: Settings.selectedModel)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        #expect(env.transcription.currentModelName == Constants.defaultModel)
+        #expect(env.transcription.currentModelSwitch == nil)
     }
 
     @MainActor
-    @Test("model change while idle applies immediately")
-    func modelChangeWhileIdleApplies() async throws {
+    @Test("a model chosen while idle takes over once it is ready, and is saved")
+    func modelChosenWhileIdleTakesOver() async throws {
         let env = makeSession()
         try await env.session.start()
-        let baseline = env.session.modelReloadApplyCount
-        env.store.setValue("openai_whisper-base.en", for: Settings.selectedModel)
-        #expect(env.session.modelReloadApplyCount == baseline + 1)
-        #expect(env.session.modelReloadDeferCount == 0)
-        // The switch is applied through a MainActor Task, so the re-point lands on the
-        // next turn of the run loop, not synchronously.
+        env.session.selectModel("openai_whisper-base.en")
+        // The choice reaches the manager through a MainActor Task, on the next run loop turn.
         await waitUntil { env.transcription.currentModelName == "openai_whisper-base.en" }
         #expect(env.transcription.currentModelName == "openai_whisper-base.en")
+        #expect(env.store.value(for: Settings.selectedModel) == "openai_whisper-base.en")
     }
 
+    // planning 0036, Model: a choice made mid-dictation starts loading at once, beside the
+    // model in use, so the Model section shows its real progress; it never takes over the
+    // recording in progress (planning 0021 AC2), only the return to .idle.
     @MainActor
-    @Test("a model change mid-cycle defers to the return to .idle")
-    func modelChangeMidCycleDefers() async throws {
-        // A switch mid-recording/processing must never reload the model out from
-        // under the in-flight transcribe; it parks and applies on return to .idle
-        // (planning 0021 AC2), mirroring the hotkey deferral.
+    @Test("a model chosen mid-recording loads at once and takes over on the return to .idle")
+    func modelChosenMidRecordingLoadsAtOnce() async throws {
         let env = makeSession()
         try await env.session.start()
-        let applyBaseline = env.session.modelReloadApplyCount
-
         env.session.handleActivate()  // → .recording (Hold default)
         try await Task.sleep(nanoseconds: 20_000_000)
 
-        env.store.setValue("openai_whisper-base.en", for: Settings.selectedModel)
-        #expect(env.session.modelReloadApplyCount == applyBaseline)   // not applied yet
-        #expect(env.session.modelReloadDeferCount == 1)               // parked
+        env.session.selectModel("openai_whisper-base.en")
+        await waitUntil { env.transcription.currentModelSwitch?.phase == .ready }
+        #expect(env.transcription.currentModelSwitch?.phase == .ready)          // loaded, Waiting
         #expect(env.transcription.currentModelName == Constants.defaultModel)  // still the old model
+        #expect(env.store.value(for: Settings.selectedModel) == Constants.defaultModel)
 
         env.microphone.publishForTest(makeBuffer())
         await env.session.handleDeactivate()
         #expect(env.session.currentState == .idle)
-        #expect(env.session.modelReloadApplyCount == applyBaseline + 1)        // pending applied
-        await waitUntil { env.transcription.currentModelName == "openai_whisper-base.en" }
         #expect(env.transcription.currentModelName == "openai_whisper-base.en")
+        #expect(env.store.value(for: Settings.selectedModel) == "openai_whisper-base.en")
     }
 
     @MainActor
@@ -486,29 +481,28 @@ struct RiverSessionTests {
         #expect(env.store.value(for: Settings.selectedModel) == "openai_whisper-base.en")
     }
 
-    // The Model section shows a choice made mid-dictation as Waiting; only the latest choice
-    // waits, and it stops waiting the moment the dictation ends and it starts to load.
+    // The latest choice wins. A model ready mid-dictation that the user then moves past must
+    // not take over at the end of the dictation, nor be saved for the next launch.
     @MainActor
-    @Test("a model chosen mid-recording is published as waiting until the return to .idle")
-    func waitingModelIsPublished() async throws {
+    @Test("a later choice mid-recording replaces a model that was ready, which never takes over")
+    func laterChoiceReplacesReadyModel() async throws {
         let env = makeSession()
-        let appState = AppState()
-        appState.bind(to: env.session)
         try await env.session.start()
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
 
-        env.session.selectModel("openai_whisper-base.en")
-        #expect(appState.waitingModel == "openai_whisper-base.en")
-        env.session.selectModel("openai_whisper-large-v3-v20240930_turbo")
-        #expect(appState.waitingModel == "openai_whisper-large-v3-v20240930_turbo")
+        await env.transcription.switchModel(to: "openai_whisper-base.en")
+        #expect(env.transcription.currentModelSwitch?.phase == .ready)
+        env.transcription.stageFailsForTesting = true
+        env.session.selectModel("distil-whisper_distil-large-v3")
+        await waitUntil { env.transcription.currentModelSwitch?.target == "distil-whisper_distil-large-v3" }
 
         env.microphone.publishForTest(makeBuffer())
         await env.session.handleDeactivate()
         #expect(env.session.currentState == .idle)
-        #expect(appState.waitingModel == nil)
-        await waitUntil { env.transcription.currentModelName == "openai_whisper-large-v3-v20240930_turbo" }
-        #expect(env.transcription.currentModelName == "openai_whisper-large-v3-v20240930_turbo")
+        #expect(env.transcription.currentModelName == Constants.defaultModel)
+        #expect(env.store.value(for: Settings.selectedModel) == Constants.defaultModel)
+        #expect(env.transcription.currentModelSwitch == ModelSwitch(target: "distil-whisper_distil-large-v3", phase: .failed))
     }
 
     // A relaunch loads `selectedModel` with nothing to fall back on, so it must only ever
@@ -540,26 +534,20 @@ struct RiverSessionTests {
     }
 
     @MainActor
-    @Test("a model switch deferred during a canceled recording still applies on return to .idle")
-    func pendingModelSwitchAppliesOnCancel() async throws {
-        // The model-switch deferral (planning 0021) shares the cancel return-to-idle
-        // path: a switch parked mid-recording applies when cancel ends the cycle.
+    @Test("a model ready during a canceled recording takes over when cancel ends the cycle")
+    func readyModelCommitsOnCancel() async throws {
         let env = makeSession()
         try await env.session.start()
-        let applyBaseline = env.session.modelReloadApplyCount
-
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
 
-        env.store.setValue("openai_whisper-base.en", for: Settings.selectedModel)
-        #expect(env.session.modelReloadApplyCount == applyBaseline)  // parked
-        #expect(env.session.modelReloadDeferCount == 1)
+        env.session.selectModel("openai_whisper-base.en")
+        await waitUntil { env.transcription.currentModelSwitch?.phase == .ready }
+        #expect(env.transcription.currentModelName == Constants.defaultModel)
 
         env.session.handleCancel()
 
         #expect(env.session.currentState == .idle)
-        #expect(env.session.modelReloadApplyCount == applyBaseline + 1)  // applied on cancel
-        await waitUntil { env.transcription.currentModelName == "openai_whisper-base.en" }
         #expect(env.transcription.currentModelName == "openai_whisper-base.en")
     }
 

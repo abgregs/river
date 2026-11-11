@@ -34,7 +34,11 @@ struct SettingsWindowSnapshotTests {
             + [(.model, "model-waiting"), (.model, "model-switch-failed")]
         for (section, shot) in shots {
             model.section = section
-            appState.apply(waitingModel: shot == "model-waiting" ? "openai_whisper-base.en" : nil)
+            if shot == "model-waiting" {
+                appState.apply(modelSelection: ModelSelection(
+                    inUse: transcription.currentSelection.inUse, inUseState: .ready,
+                    next: ModelSwitch(target: "openai_whisper-base.en", phase: .ready)))
+            }
             if shot == "model-switch-failed" {
                 transcription.stageFailsForTesting = true
                 await transcription.switchModel(to: "openai_whisper-large-v3-v20240930_turbo")

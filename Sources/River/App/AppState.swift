@@ -21,10 +21,7 @@ final class AppState {
     /// Menu bar reads this to show "Downloading model…" / "Preparing model…" during launch.
     private(set) var modelLoadState: ModelLoadState = .loading
     // The model in use and a model loading beside it, for the Settings Model section.
-    private(set) var activeModel: String = Constants.defaultModel
-    private(set) var modelSwitch: ModelSwitch?
-    // A model chosen during a dictation, which loads once that dictation ends.
-    private(set) var waitingModel: String?
+    private(set) var modelSelection = ModelSelection(inUse: Constants.defaultModel, inUseState: .loading, next: nil)
     /// Transient HUD toast (planning 0018). Distinct from `errorMessage` (the
     /// lingering menu row): it auto-dismisses after `errorToastDurationSeconds` and
     /// clears on a fresh recording. The menu row is the record; the toast is the alert.
@@ -77,9 +74,6 @@ final class AppState {
         session.liveTranscript
             .sink { [weak self] text in self?.apply(liveTranscript: text) }
             .store(in: &cancellables)
-        session.waitingModel
-            .sink { [weak self] model in self?.apply(waitingModel: model) }
-            .store(in: &cancellables)
     }
 
     // internal for testability — wires the model load state publisher so the
@@ -88,11 +82,8 @@ final class AppState {
         transcription.modelLoadState
             .sink { [weak self] loadState in self?.apply(modelLoadState: loadState) }
             .store(in: &cancellables)
-        transcription.activeModel
-            .sink { [weak self] model in self?.activeModel = model }
-            .store(in: &cancellables)
-        transcription.modelSwitch
-            .sink { [weak self] modelSwitch in self?.modelSwitch = modelSwitch }
+        transcription.selection
+            .sink { [weak self] selection in self?.apply(modelSelection: selection) }
             .store(in: &cancellables)
     }
 
@@ -187,10 +178,10 @@ final class AppState {
         liveTranscript = text
     }
 
-    // internal for testability — the waiting-model entry point (also used by `bind`), so
-    // a snapshot can show the Model section's Waiting state without a live session.
-    func apply(waitingModel model: String?) {
-        waitingModel = model
+    // internal for testability — the model selection entry point (also used by
+    // `bind(transcription:)`), so a snapshot can show a switch without loading a model.
+    func apply(modelSelection selection: ModelSelection) {
+        modelSelection = selection
     }
 
     // internal for testability — clears the toast when its timer fires. Separate so

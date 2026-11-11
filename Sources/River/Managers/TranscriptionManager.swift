@@ -38,6 +38,18 @@ struct ModelSwitch: Equatable {
     var phase: Phase
 }
 
+/// Which model River uses and which takes over next (planning 0036, Model), as one value so
+/// every reader sees a consistent pair: the Model section decides each row and its status line
+/// from it, and the session commits a ready switch and saves the model in use from it.
+struct ModelSelection: Equatable {
+    /// The model `transcribe` runs.
+    var inUse: String
+    var inUseState: ModelLoadState
+    /// A model loading beside it. Its `.ready` phase lasts only while a dictation is in
+    /// progress: at `.idle` the session commits a ready switch at once.
+    var next: ModelSwitch?
+}
+
 enum TranscriptionError: Error, LocalizedError {
     /// `transcribe` was called before `loadModel` completed. The session
     /// surfaces this in the log; M7 will fold it into the user-visible error
@@ -80,9 +92,8 @@ enum TranscriptionError: Error, LocalizedError {
 @MainActor
 final class TranscriptionManager {
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "transcribe")
-    // Mutable so the model picker (planning 0021) can switch models off-cycle via
-    // `switchModel(to:)`; the active model always drives `loadModel` and the cache path.
-    private var modelName: String
+    // The model in use drives `loadModel` and the cache path; `switchModel(to:)` changes it.
+    private var modelName: String { selectionSubject.value.inUse }
 
     private var whisperKit: WhisperKit?
     private var loadTask: Task<WhisperKit, Error>?
@@ -96,28 +107,27 @@ final class TranscriptionManager {
     private var staged: WhisperKit?
     private var stagedTask: Task<WhisperKit, Error>?
     private var stageGeneration = 0
-    private let switchSubject = CurrentValueSubject<ModelSwitch?, Never>(nil)
-    private let activeModelSubject: CurrentValueSubject<String, Never>
 
-    /// The model loading beside the one in use, if any.
-    var modelSwitch: AnyPublisher<ModelSwitch?, Never> { switchSubject.eraseToAnyPublisher() }
-    var currentModelSwitch: ModelSwitch? { switchSubject.value }
-    /// The model in use: the one `transcribe` runs and `modelLoadState` describes.
-    var activeModel: AnyPublisher<String, Never> { activeModelSubject.eraseToAnyPublisher() }
+    // The one record of the model in use, its load state and the model loading beside it.
+    // Every change sends a whole value, so no reader sees a half-made switch. Initialized from
+    // a synchronous disk check so the first value is already correct when `bind(transcription:)`
+    // subscribes in AppDelegate.
+    private let selectionSubject: CurrentValueSubject<ModelSelection, Never>
 
-    // Published model load state — the menu bar observes this to show an honest
-    // "Downloading…" / "Preparing…" / "Ready" status during the launch window.
-    // Initialized from a synchronous disk check so the first emitted value is
-    // already correct when `bind(transcription:)` subscribes in AppDelegate.
-    private let loadStateSubject: CurrentValueSubject<ModelLoadState, Never>
+    /// The model in use and the model loading beside it.
+    var selection: AnyPublisher<ModelSelection, Never> { selectionSubject.eraseToAnyPublisher() }
+    var currentSelection: ModelSelection { selectionSubject.value }
 
-    /// Observable publisher of the model load lifecycle.
+    /// The in-use model's load lifecycle: the menu bar shows an honest "Downloading…" /
+    /// "Preparing…" / "Ready" from it.
     var modelLoadState: AnyPublisher<ModelLoadState, Never> {
-        loadStateSubject.eraseToAnyPublisher()
+        selectionSubject.map(\.inUseState).removeDuplicates().eraseToAnyPublisher()
     }
 
     /// Synchronous accessor for the session's model-readiness gate.
-    var currentModelLoadState: ModelLoadState { loadStateSubject.value }
+    var currentModelLoadState: ModelLoadState { selectionSubject.value.inUseState }
+    // internal for testability — the model loading beside the one in use.
+    var currentModelSwitch: ModelSwitch? { selectionSubject.value.next }
 
     /// User-curated terms that bias decoding toward proper nouns and jargon.
     /// M8 will wire `Settings.customDictionaryTerms` → `setCustomDictionaryTerms`.
@@ -126,19 +136,18 @@ final class TranscriptionManager {
     private var customDictionaryTerms: [String] = []
 
     init(modelName: String = Constants.defaultModel) {
-        self.modelName = modelName
-        activeModelSubject = CurrentValueSubject(modelName)
         // Synchronous disk check: if the model files are already on disk the user
         // will see "Preparing model…" (warm launch); otherwise "Downloading model…" (cold).
         let downloadBase = Self.modelDownloadBase()
         let isCached = Self.isModelCached(downloadBase: downloadBase, modelName: modelName)
-        loadStateSubject = CurrentValueSubject(isCached ? .loading : .downloading)
+        selectionSubject = CurrentValueSubject(
+            ModelSelection(inUse: modelName, inUseState: isCached ? .loading : .downloading, next: nil))
     }
 
     // internal for testability — drives the load state without touching the real
     // model, so session tests can exercise the model-readiness gate.
     func setModelLoadStateForTesting(_ state: ModelLoadState) {
-        loadStateSubject.send(state)
+        update { $0.inUseState = state }
     }
 
     // internal for testability — the model download root. Application Support
@@ -302,7 +311,13 @@ final class TranscriptionManager {
     // which state fired and when. State names only — no user content (logging.md).
     private func emitLoadState(_ state: ModelLoadState) {
         logger.info("Model load state -> \(String(describing: state), privacy: .public)")
-        loadStateSubject.send(state)
+        update { $0.inUseState = state }
+    }
+
+    private func update(_ change: (inout ModelSelection) -> Void) {
+        var selection = selectionSubject.value
+        change(&selection)
+        if selection != selectionSubject.value { selectionSubject.send(selection) }
     }
 
     // internal for testability — the model picker's current selection, so session
@@ -320,14 +335,14 @@ final class TranscriptionManager {
     func prepareModelSwitch(to newModelName: String) -> Bool {
         guard newModelName != modelName else { return false }
         loadGeneration += 1
-        modelName = newModelName
-        activeModelSubject.send(newModelName)
         whisperKit = nil
         loadTask?.cancel()
         loadTask = nil
         dropStagedModel()
         let isCached = Self.isModelCached(downloadBase: Self.modelDownloadBase(), modelName: newModelName)
-        emitLoadState(isCached ? .loading : .downloading)
+        let state: ModelLoadState = isCached ? .loading : .downloading
+        logger.info("Model load state -> \(String(describing: state), privacy: .public)")
+        update { $0 = ModelSelection(inUse: newModelName, inUseState: state, next: nil) }
         return true
     }
 
@@ -348,8 +363,9 @@ final class TranscriptionManager {
     // runs without a WhisperKit download.
     var stageFailsForTesting = false
 
-    /// Chooses a model (planning 0036, Model). Called from `RiverSession` only at `.idle` (or
-    /// on the deferred return to `.idle`).
+    /// Chooses a model (planning 0036, Model). Called from `RiverSession` at any time: a
+    /// dictation only starts with a ready model, so a choice made during one always loads
+    /// beside it and never replaces the model a recording is using.
     /// - While the model in use is ready, the new one loads beside it and the session commits
     ///   the switch once it is ready (`commitModelSwitch`); dictation keeps the current model
     ///   until then.
@@ -358,20 +374,20 @@ final class TranscriptionManager {
     /// - Choosing the model in use drops a staged switch, or retries the model if it failed.
     func switchModel(to newModelName: String) async {
         if newModelName == modelName {
-            if switchSubject.value != nil {
+            if currentModelSwitch != nil {
                 dropStagedModel()
-            } else if loadStateSubject.value == .failed {
+            } else if currentModelLoadState == .failed {
                 await retryActiveModel()
             }
             return
         }
-        guard loadStateSubject.value == .ready else {
+        guard currentModelLoadState == .ready else {
             guard prepareModelSwitch(to: newModelName) else { return }
             if skipLoadForTesting { return }
             try? await loadModel()
             return
         }
-        if let current = switchSubject.value, current.target == newModelName, current.phase != .failed { return }
+        if let current = currentModelSwitch, current.target == newModelName, current.phase != .failed { return }
         await stage(newModelName)
     }
 
@@ -379,15 +395,13 @@ final class TranscriptionManager {
     /// The session calls this only at `.idle`, so no recording ever changes model halfway.
     @discardableResult
     func commitModelSwitch() -> Bool {
-        guard let pending = switchSubject.value, pending.phase == .ready else { return false }
+        guard let pending = currentModelSwitch, pending.phase == .ready else { return false }
         loadGeneration += 1
         whisperKit = staged
         staged = nil
         stagedTask = nil
         loadTask = nil
-        modelName = pending.target
-        activeModelSubject.send(pending.target)
-        switchSubject.send(nil)
+        update { $0 = ModelSelection(inUse: pending.target, inUseState: .ready, next: nil) }
         logger.info("Switched to model \(pending.target, privacy: .public)")
         return true
     }
@@ -397,16 +411,16 @@ final class TranscriptionManager {
         let generation = stageGeneration
         let downloadBase = Self.modelDownloadBase()
         let isCached = Self.isModelCached(downloadBase: downloadBase, modelName: target)
-        switchSubject.send(ModelSwitch(target: target, phase: isCached ? .preparing : .downloading))
+        update { $0.next = ModelSwitch(target: target, phase: isCached ? .preparing : .downloading) }
         logger.info("Loading model \(target, privacy: .public) beside the one in use")
         if skipLoadForTesting {
-            switchSubject.send(ModelSwitch(target: target, phase: stageFailsForTesting ? .failed : .ready))
+            update { $0.next = ModelSwitch(target: target, phase: stageFailsForTesting ? .failed : .ready) }
             return
         }
         let task = Task<WhisperKit, Error> { [weak self, logger] in
             try await Self.makeWhisperKit(modelName: target, downloadBase: downloadBase, logger: logger) { state in
                 guard let self, self.stageGeneration == generation else { return }
-                self.switchSubject.send(ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing))
+                self.update { $0.next = ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing) }
             }
         }
         stagedTask = task
@@ -414,11 +428,11 @@ final class TranscriptionManager {
             let wk = try await task.value
             guard generation == stageGeneration else { return }
             staged = wk
-            switchSubject.send(ModelSwitch(target: target, phase: .ready))
+            update { $0.next = ModelSwitch(target: target, phase: .ready) }
         } catch {
             guard generation == stageGeneration else { return }
             stagedTask = nil
-            switchSubject.send(ModelSwitch(target: target, phase: .failed))
+            update { $0.next = ModelSwitch(target: target, phase: .failed) }
             logger.error("Staged model load failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
         }
     }
@@ -429,7 +443,7 @@ final class TranscriptionManager {
         stagedTask?.cancel()
         stagedTask = nil
         staged = nil
-        if switchSubject.value != nil { switchSubject.send(nil) }
+        update { $0.next = nil }
     }
 
     // A failed model chosen again loads from the start: the failed load left no task to join.
