@@ -159,4 +159,65 @@ struct SettingsStoreTests {
             try? await Task.sleep(nanoseconds: 5_000_000)   // up to ~1s total
         }
     }
+
+    // MARK: - activationKeyCode migration (spec 0036)
+
+    @MainActor
+    @Test("a saved lone-modifier key becomes the dictation shortcut, and the old key is dropped")
+    func migratesValidKey() {
+        // A user upgrading to v0.3.0 keeps the key they chose. The old key is removed
+        // so it can never be read again, or migrate a second time over a newer choice.
+        let defaults = UserDefaults(suiteName: "test-\(UUID())")!
+        defaults.set(59, forKey: Settings.activationKeyCode.name)
+        let store = SettingsStore(defaults: defaults)
+
+        store.migrateActivationKeyCode()
+        #expect(store.value(for: Settings.dictationShortcut) == .modifier(keyCode: 59))
+        #expect(!store.hasStoredValue(for: Settings.activationKeyCode))
+    }
+
+    @MainActor
+    @Test("a saved key that is no longer a dictation key is dropped and the default applies", arguments: [
+        57 as Any,          // Caps Lock: removed, no mode works on it
+        49 as Any,          // never a supported key
+        "garbage" as Any,   // unreadable
+    ])
+    func dropsInvalidKey(_ saved: Any) {
+        // Migrating it would hand the user a key that cannot work; the default does.
+        let defaults = UserDefaults(suiteName: "test-\(UUID())")!
+        defaults.set(saved, forKey: Settings.activationKeyCode.name)
+        let store = SettingsStore(defaults: defaults)
+
+        store.migrateActivationKeyCode()
+        #expect(!store.hasStoredValue(for: Settings.dictationShortcut))
+        #expect(store.value(for: Settings.dictationShortcut) == .modifier(keyCode: 61))
+        #expect(!store.hasStoredValue(for: Settings.activationKeyCode))
+    }
+
+    @MainActor
+    @Test("the migration never overwrites a dictation shortcut already saved")
+    func keepsExistingShortcut() {
+        // "Once": a shortcut recorded after the upgrade wins over the leftover old key.
+        let defaults = UserDefaults(suiteName: "test-\(UUID())")!
+        let combination = Shortcut.combination(keyCode: 49, modifiers: [.control, .option])
+        defaults.set(combination.rawValue, forKey: Settings.dictationShortcut.name)
+        defaults.set(59, forKey: Settings.activationKeyCode.name)
+        let store = SettingsStore(defaults: defaults)
+
+        store.migrateActivationKeyCode()
+        #expect(store.value(for: Settings.dictationShortcut) == combination)
+        #expect(!store.hasStoredValue(for: Settings.activationKeyCode))
+    }
+
+    @MainActor
+    @Test("with nothing saved the migration writes nothing")
+    func noSavedKeyIsNoOp() {
+        // A fresh install must keep reading the default, not a pinned copy of it, so
+        // a future default change still reaches it.
+        let defaults = UserDefaults(suiteName: "test-\(UUID())")!
+        let store = SettingsStore(defaults: defaults)
+
+        store.migrateActivationKeyCode()
+        #expect(!store.hasStoredValue(for: Settings.dictationShortcut))
+    }
 }

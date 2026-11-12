@@ -17,16 +17,24 @@ struct ActivationModeTests {
     func noticeCopy() {
         // If the copy stops naming the new key/mode, the user can't tell what now
         // stops the recording — the whole point of the live-apply notice.
-        #expect(ActivationNotice.keyChanged(toKeyCode: 61).contains("Right Option"))
+        #expect(ActivationNotice.keyChanged(to: .modifier(keyCode: 61)).contains("Right Option"))
         #expect(ActivationNotice.modeChanged(to: .doubleTap).contains("Double-tap"))
     }
 
     @Test("keyChanged falls back to generic phrasing for an unknown keycode")
     func keyChangedUnknownKeycode() {
-        // A keycode absent from `ActivationKeyOption.all` (e.g. a future/removed
-        // key) must not crash or emit a blank label — the `?? "the new key"`
+        // A keycode absent from `ActivationKeyOption.all` (e.g. the removed Caps
+        // Lock) must not crash or emit a blank label — the `?? "the new key"`
         // fallback keeps the notice grammatical.
-        let notice = ActivationNotice.keyChanged(toKeyCode: -1)
+        let notice = ActivationNotice.keyChanged(to: .modifier(keyCode: 57))
         #expect(notice.contains("the new key"))
+    }
+
+    @Test("keyChanged names a combination as the new shortcut")
+    func keyChangedCombination() {
+        // A combination has no label in the lone-modifier table; the notice must
+        // still read as a sentence and say a shortcut, not a key, changed.
+        let notice = ActivationNotice.keyChanged(to: .combination(keyCode: 49, modifiers: [.control, .option]))
+        #expect(notice.contains("the new shortcut"))
     }
 }

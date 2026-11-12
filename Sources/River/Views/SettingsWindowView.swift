@@ -171,29 +171,24 @@ private struct RailItem: View {
 // MARK: - Sections
 
 private struct ShortcutsPane: View {
-    @AppStorage(Settings.activationKeyCode.name)
-    private var activationKeyCode: Int = Settings.activationKeyCode.defaultValue
+    @AppStorage(Settings.dictationShortcut.name)
+    private var dictationShortcut: Shortcut = Settings.dictationShortcut.defaultValue
     @AppStorage(Settings.activationMode.name)
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Interim until PR 8's recorder (planning 0036, Interim rows).
+            // Lone modifiers only until PR 8's recorder (planning 0036, Interim rows).
             SettingsRow(label: "Dictation shortcut", divider: false) {
                 RiverPopUp(title: "Dictation shortcut",
-                           options: ActivationKeyOption.all.map { ($0.keyCode, $0.label) },
-                           selection: $activationKeyCode)
-            }
-            if let warning = ActivationKeyOption.capsLockHoldWarning(keyCode: activationKeyCode, mode: activationMode) {
-                Label(warning, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 11))
-                    .padding(.bottom, 8)
+                           options: ActivationKeyOption.all.map { (Shortcut.modifier(keyCode: $0.keyCode), $0.label) },
+                           selection: $dictationShortcut)
             }
             // The cancel sentence never breaks across lines (planning 0036, Cancel line).
             SettingsRow(label: "Start by",
                         description: Text("\(activationMode.description) ")
-                            + Text(ActivationKeyOption.cancelLine(keyCode: activationKeyCode)
+                            + Text(ActivationKeyOption.cancelLine(for: dictationShortcut)
                                 .replacingOccurrences(of: " ", with: "\u{00A0}"))) {
                 RiverSegmentedChoice(title: "Start by",
                                      options: ActivationMode.allCases.map { ($0, $0.label) },

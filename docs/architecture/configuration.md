@@ -24,7 +24,7 @@ Settings keys (the target set; declared progressively as their consumers land �
 
 | Key | Type | Default | Primary consumer |
 |---|---|---|---|
-| `activationKeyCode` | `Int` | `Constants.defaultActivationKeyCode` (61, Right Option) | `RiverSession` → `HotkeyManager` |
+| `dictationShortcut` | `Shortcut` | `Constants.defaultDictationShortcut` (Right Option) | `RiverSession` → `HotkeyManager` |
 | `activationMode` | `ActivationMode` | `Constants.defaultActivationMode` (`.hold`) | `RiverSession` → `HotkeyManager` |
 | `customDictionaryTerms` | `[String]` | `Constants.defaultDictionaryTerms` | *no planned consumer — the [0008](../planning/0008_custom-dictionary-redesign.md) redesign was dropped 2026-07-06; key and prompt plumbing retained in code pending removal* |
 | `selectedModel` | `String` | `Constants.defaultModel` | Written by `RiverSession` once a model is in use and ready; read by `AppDelegate` at launch |
@@ -32,7 +32,7 @@ Settings keys (the target set; declared progressively as their consumers land �
 | `pauseMediaWhileDictating` | `Bool` | `true` | `MediaPauseManager` |
 | `keepMicrophoneReady` | `Bool` | `true` | `RiverSession` → `AudioCaptureManager.setReady` ([0033](../planning/0033_warm-microphone-pre-roll.md)) |
 
-As of M9, `activationKeyCode` (M4), `activationMode` (M9), `customDictionaryTerms`, `launchAtLogin`, and `selectedModel` (the model picker, [0021](../planning/0021_model-picker.md)) are declared. Declared since: `playFeedbackSounds` ([0016](../planning/0016_recording-sound-cues.md)), `streamingDictation` (the streaming prototype), and `keepMicrophoneReady` ([0033](../planning/0033_warm-microphone-pre-roll.md); it replaced the unreleased `micOnlyWhileDictating`, inverted). `pauseMediaWhileDictating` lands once `MediaPauseManager` exists (deferred — see [../planning/0003_pause-media-while-dictating.md](../planning/0003_pause-media-while-dictating.md)). **`doubleTapWindowMs` is deliberately *not* a setting** — it's an internal `Constants` tunable (above) consumed by `HotkeyManager`'s `TapStateMachine`. The user shouldn't have to reason about a double-tap window, so there is no UI control and no slider; a fixed 400 ms is used always.
+As of M9, `activationKeyCode` (M4; replaced by `dictationShortcut` in v0.3.0, migrated once at launch — see [../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md)), `activationMode` (M9), `customDictionaryTerms`, `launchAtLogin`, and `selectedModel` (the model picker, [0021](../planning/0021_model-picker.md)) are declared. Declared since: `playFeedbackSounds` ([0016](../planning/0016_recording-sound-cues.md)), `streamingDictation` (the streaming prototype), and `keepMicrophoneReady` ([0033](../planning/0033_warm-microphone-pre-roll.md); it replaced the unreleased `micOnlyWhileDictating`, inverted). `pauseMediaWhileDictating` lands once `MediaPauseManager` exists (deferred — see [../planning/0003_pause-media-while-dictating.md](../planning/0003_pause-media-while-dictating.md)). **`doubleTapWindowMs` is deliberately *not* a setting** — it's an internal `Constants` tunable (above) consumed by `HotkeyManager`'s `TapStateMachine`. The user shouldn't have to reason about a double-tap window, so there is no UI control and no slider; a fixed 400 ms is used always.
 
 SwiftUI binds via `@AppStorage` using the same key names (see [settings-store.md](settings-store.md) for the rule that prevents drift). Non-SwiftUI consumers read via `store.value(for:)` and observe via `store.publisher(for:)`.
 
@@ -41,10 +41,10 @@ SwiftUI binds via `@AppStorage` using the same key names (see [settings-store.md
 Live-apply is a structural property of [`RiverSession`](river-session.md), not a discipline rule.
 
 1. SwiftUI writes a new value through `@AppStorage` (or, equivalently, a programmatic call to `store.setValue(...)`).
-2. `SettingsStore.publisher(for: Settings.activationKeyCode)` emits the new typed value (and only when the value actually changed — duplicate writes do not re-emit).
+2. `SettingsStore.publisher(for: Settings.dictationShortcut)` emits the new typed value (and only when the value actually changed — duplicate writes do not re-emit).
 3. The session's subscription receives it on the main actor.
 4. The session inspects its own state and the active mode:
-   - **`.idle`** → `HotkeyManager` reconfigures the hotkey **in place** — it swaps the watched key/mode while the one event tap keeps running (no rebuild; see [threading-invariant.md](threading-invariant.md)).
+   - **`.idle`** → `HotkeyManager` reconfigures the hotkey **in place** — it swaps the watched key/mode while the one event tap keeps running (no rebuild; see [threading-invariant.md](threading-invariant.md)); a combination moves its `HotKeyRegistry` registration.
    - **`.recording` in a tap mode** → the change applies **live, in place**, the recording continues, and the session emits a notice on its `notices` publisher telling the user the new key/mode now stops the recording. Safe precisely because the surviving tap drops no audio.
    - **`.recording` in Hold mode, or `.processing`** → stored as a pending reconfiguration, applied on the next return to `.idle`. Hold defers because the user is physically holding the old key, whose release must stay watched.
 
