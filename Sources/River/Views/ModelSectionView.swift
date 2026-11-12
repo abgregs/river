@@ -3,20 +3,46 @@ import SwiftUI
 
 /// The Model section (planning 0036, Model; settings panel study, round 14): the model in use
 /// with its status, and a switch in progress under it; a search and a provider filter; and the
-/// catalogue's table, grouped by provider until the Download size column sorts it. The window
-/// grows to 820 × 540 for this section, and the table scrolls inside it.
+/// catalogue's table, grouped by provider until the Download size column sorts it; and the
+/// folder the models are saved in, with the space they take (planning 0038). A downloaded
+/// row's ⋯ menu, shown on hover or keyboard focus and on a right-click, offers Show in Finder
+/// and, for a model River is neither using nor loading, Delete…. The window grows to
+/// 820 × 540 for this section, and the table scrolls inside it.
 struct ModelSectionView: View {
     let appState: AppState
     let selectModel: (String) -> Void
+    let deleteModel: (String) throws -> Void
     @State private var query = ""
     @State private var provider: String?
     @State private var sort = ModelCatalogue.Sort.grouped
     @State private var downloaded: Set<String> = []
+    @State private var modelsSize: Int64?
+    @State private var hoveredRow: String?
+    @FocusState private var focusedRow: String?
+    @State private var pendingDelete: PendingDelete?
+    @State private var failedDelete: FailedDelete?
     @Environment(\.colorScheme) private var colorScheme
 
+    init(appState: AppState, selectModel: @escaping (String) -> Void, deleteModel: @escaping (String) throws -> Void,
+         hoveredRow: String? = nil) {
+        self.appState = appState
+        self.selectModel = selectModel
+        self.deleteModel = deleteModel
+        // internal for testability — the snapshot harness shows a row's ⋯ as the pointer would.
+        _hoveredRow = State(initialValue: hoveredRow)
+    }
+
+    private struct PendingDelete { let model: ModelOption; let freed: Int64 }
+    private struct FailedDelete { let model: ModelOption; let message: String }
+
     private let models = Constants.curatedModels
-    // The status column fits "Downloaded" beside Select, its widest content.
-    private static let columnWidths = (name: 136.0, size: 76.0, status: 132.0)
+    private let downloadBase = TranscriptionManager.modelDownloadBase()
+    // The status column fits "Downloaded" beside Select, its widest content. The ⋯ menu
+    // follows it, 4 pt after, in its own column, so the status column keeps its layout; the
+    // name column gives up the width it takes, so descriptions keep theirs, and the longest
+    // name still wraps in two lines.
+    private static let columnWidths = (name: 116.0, size: 76.0, status: 132.0, menu: 16.0)
+    private static let menuGap = 4.0
 
     var body: some View {
         let ink = SettingsInk(colorScheme)
@@ -31,13 +57,50 @@ struct ModelSectionView: View {
             }
             .padding(.bottom, 8)
             table(ink)
-            Text("Sizes are downloads. Each model works entirely on this Mac once it is downloaded.")
-                .font(.system(size: 11))
-                .foregroundStyle(ink.secondary)
-                .padding(.top, 8)
+            footer(ink)
         }
         .onAppear(perform: refreshDownloaded)
         .onChange(of: appState.modelSelection) { refreshDownloaded() }
+        .alert(pendingDelete.map { "Delete \($0.model.label)?" } ?? "",
+               isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+               presenting: pendingDelete) { pending in
+            Button("Delete model", role: .destructive) { delete(pending.model) }
+            Button("Cancel", role: .cancel) {}
+        } message: { pending in
+            Text("This frees \(ModelCatalogue.formattedSize(bytes: pending.freed)). You can download it again later.")
+        }
+    }
+
+    // The note under the table, and where the models are saved: the folder, the space every
+    // model in it takes as measured on disk, and Show in Finder.
+    private func footer(_ ink: SettingsInk) -> some View {
+        let folder = TranscriptionManager.modelsFolder(downloadBase: downloadBase)
+        let path = (folder.path as NSString).abbreviatingWithTildeInPath
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Sizes are downloads. Each model works entirely on this Mac once it is downloaded.")
+                if let modelsSize {
+                    Text("Models are saved in \(path) and take \(ModelCatalogue.formattedSize(bytes: modelsSize)).")
+                } else {
+                    Text("Models are saved in \(path).")
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(ink.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if modelsSize != nil {
+                Button("Show in Finder") { NSWorkspace.shared.open(folder) }
+                    .buttonStyle(RiverBezelButtonStyle(height: 20, fontSize: 12))
+            }
+        }
+        .padding(.top, 8)
+        .alert(failedDelete.map { "Couldn’t delete \($0.model.label)" } ?? "",
+               isPresented: Binding(get: { failedDelete != nil }, set: { if !$0 { failedDelete = nil } }),
+               presenting: failedDelete) { _ in
+            Button("OK") {}
+        } message: { failed in
+            Text(failed.message)
+        }
     }
 
     private func table(_ ink: SettingsInk) -> some View {
@@ -72,7 +135,8 @@ struct ModelSectionView: View {
             .fixedSize()
             .frame(width: Self.columnWidths.size, alignment: .trailing)
             .accessibilityValue(sort == .grouped ? "Grouped by provider" : sort == .ascending ? "Smallest first" : "Largest first")
-            Color.clear.frame(width: Self.columnWidths.status, height: 1).accessibilityHidden(true)
+            Color.clear.frame(width: Self.columnWidths.status + Self.menuGap + Self.columnWidths.menu, height: 1)
+                .accessibilityHidden(true)
         }
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(ink.secondary)
@@ -118,6 +182,7 @@ struct ModelSectionView: View {
             of: model, selection: appState.modelSelection,
             macOSMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
             isDownloaded: downloaded.contains(model.name))
+        let isDownloaded = downloaded.contains(model.name)
         let unavailable = if case .needsMacOS = status { true } else { false }
         return HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
@@ -137,15 +202,66 @@ struct ModelSectionView: View {
                 .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle(unavailable ? ink.opacity(0.7) : ink.opacity(0.86))
                 .frame(width: Self.columnWidths.size, alignment: .trailing)
-            ModelRowAction(model: model, status: status, selectModel: selectModel)
-                .frame(width: Self.columnWidths.status, alignment: .trailing)
+            HStack(spacing: Self.menuGap) {
+                ModelRowAction(model: model, status: status, selectModel: selectModel, focusedRow: $focusedRow)
+                    .frame(width: Self.columnWidths.status, alignment: .trailing)
+                rowMenuButton(model, status: status, isDownloaded: isDownloaded, ink: ink)
+                    .frame(width: Self.columnWidths.menu)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 50)
         .background(status == .inUse ? ink.opacity(0.07) : .clear)
         .overlay(alignment: .top) { if divider { Rectangle().fill(ink.opacity(0.06)).frame(height: 1) } }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering { hoveredRow = model.name } else if hoveredRow == model.name { hoveredRow = nil }
+        }
+        .contextMenu { if isDownloaded { rowMenu(model, status: status) } }
         .accessibilityElement(children: .contain)
+    }
+
+    // A downloaded row's ⋯: shown while the pointer is over the row or the keyboard is on it,
+    // and always there for VoiceOver.
+    @ViewBuilder
+    private func rowMenuButton(_ model: ModelOption, status: ModelCatalogue.RowStatus, isDownloaded: Bool, ink: SettingsInk) -> some View {
+        if isDownloaded {
+            Menu { rowMenu(model, status: status) } label: {
+                Image(systemName: "ellipsis.circle").font(.system(size: 13)).foregroundStyle(ink.secondary)
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .focused($focusedRow, equals: model.name)
+            .opacity(hoveredRow == model.name || focusedRow == model.name ? 1 : 0)
+            .accessibilityLabel("Actions for \(model.label)")
+        }
+    }
+
+    // The ⋯ menu and the right-click menu: Show in Finder for any downloaded model, and
+    // Delete… where `ModelCatalogue.offersDelete` allows it, absent rather than dimmed.
+    @ViewBuilder
+    private func rowMenu(_ model: ModelOption, status: ModelCatalogue.RowStatus) -> some View {
+        Button("Show in Finder") {
+            NSWorkspace.shared.activateFileViewerSelecting([TranscriptionManager.modelFolder(downloadBase: downloadBase, modelName: model.name)])
+        }
+        if ModelCatalogue.offersDelete(status) {
+            Divider()
+            Button("Delete…") {
+                pendingDelete = PendingDelete(model: model, freed: TranscriptionManager.diskUsage(downloadBase: downloadBase, modelName: model.name))
+            }
+        }
+    }
+
+    private func delete(_ model: ModelOption) {
+        do {
+            try deleteModel(model.name)
+        } catch {
+            failedDelete = FailedDelete(model: model, message: LogRedaction.redactUserPaths(error.localizedDescription))
+        }
+        refreshDownloaded()
     }
 
     private func noMatches(_ ink: SettingsInk) -> some View {
@@ -170,9 +286,11 @@ struct ModelSectionView: View {
         return attributed
     }
 
+    // Which models are downloaded, and the models folder's size: on showing, on every change
+    // to the selection (a download or load moving on), and after a delete.
     private func refreshDownloaded() {
-        let base = TranscriptionManager.modelDownloadBase()
-        downloaded = Set(models.map(\.name).filter { TranscriptionManager.isModelCached(downloadBase: base, modelName: $0) })
+        downloaded = Set(models.map(\.name).filter { TranscriptionManager.isModelCached(downloadBase: downloadBase, modelName: $0) })
+        modelsSize = TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: downloadBase))
     }
 }
 
@@ -270,6 +388,8 @@ private struct ModelRowAction: View {
     let model: ModelOption
     let status: ModelCatalogue.RowStatus
     let selectModel: (String) -> Void
+    // Select shares the row's focus value with its ⋯ menu, so a keyboard-focused row shows it.
+    let focusedRow: FocusState<String?>.Binding
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -306,6 +426,7 @@ private struct ModelRowAction: View {
     private func selectButton(_ title: String) -> some View {
         Button(title) { selectModel(model.name) }
             .buttonStyle(RiverBezelButtonStyle(height: 20, fontSize: 12))
+            .focused(focusedRow, equals: model.name)
             .accessibilityLabel("\(title) \(model.label)")
     }
 }

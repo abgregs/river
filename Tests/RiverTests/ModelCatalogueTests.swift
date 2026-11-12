@@ -72,10 +72,26 @@ struct ModelCatalogueTests {
         #expect(ModelCatalogue.status(ofModelNamed: Self.distil.name, in: selection) == nil)
     }
 
+    // planning 0038: deleting the model in use would break dictation, and deleting one that is
+    // downloading or loading would pull its files out from under the load; a model not on
+    // disk has nothing to delete.
+    @Test("only a downloaded model River is neither using nor loading offers Delete")
+    func deleteOffer() {
+        #expect(ModelCatalogue.offersDelete(.selectable(downloaded: true)))
+        for status: ModelCatalogue.RowStatus in [.inUse, .waiting, .downloading, .preparing, .failed, .needsMacOS(15),
+                                                 .selectable(downloaded: false)] {
+            #expect(!ModelCatalogue.offersDelete(status))
+        }
+    }
+
+    // A measured size reads like the table's download sizes and like Finder: decimal units,
+    // so the confirmation's "frees 1.6 GB" matches what Finder shows for the folder.
     @Test("sizes read in decimal megabytes and gigabytes")
     func sizes() {
         #expect(ModelCatalogue.formattedSize(megabytes: 487) == "487 MB")
         #expect(ModelCatalogue.formattedSize(megabytes: 1639) == "1.6 GB")
+        #expect(ModelCatalogue.formattedSize(bytes: 1_638_526_976) == "1.6 GB")
+        #expect(ModelCatalogue.formattedSize(bytes: 146_763_776) == "147 MB")
     }
 
     private static func model(_ name: String, _ label: String, _ provider: String, _ family: String, _ size: Int,
