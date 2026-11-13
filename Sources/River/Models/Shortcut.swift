@@ -15,11 +15,11 @@ enum Shortcut: Hashable, Sendable {
     case modifier(keyCode: Int)
     case combination(keyCode: Int, modifiers: ShortcutModifiers)
 
-    /// The keycodes a lone modifier may use: the ones `ActivationKeyOption` lists.
+    /// The keycodes a lone modifier may use: the `ModifierKey`s that can be alone.
     /// Caps Lock (57) is not among them: River's tap sees one event per Caps Lock
     /// press and none on release, so no mode can work on it. Nor is fn (63): it
     /// cancels a recording.
-    static var loneModifierKeyCodes: Set<Int> { Set(ActivationKeyOption.all.map(\.keyCode)) }
+    static let loneModifierKeyCodes = Set(ModifierKey.allCases.filter(\.canBeAlone).map(\.keyCode))
 
     // Every modifier keycode, Caps Lock included. None of them is the key of a
     // combination: the tap watches them, and a hot key needs a non-modifier key.

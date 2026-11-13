@@ -24,8 +24,8 @@ enum ShortcutText {
     static func keys(_ shortcut: Shortcut, character: KeyCharacter = layoutCharacter) -> Keys {
         switch shortcut {
         case .modifier(let code):
-            guard let lone = loneModifiers[code] else { return Keys(keys: []) }
-            return Keys(side: lone.side.isEmpty ? nil : lone.side, keys: [lone.glyph])
+            guard let key = ModifierKey(rawValue: code) else { return Keys(keys: []) }
+            return Keys(side: key.side.map(sideWord), keys: [names(of: key).glyph])
         case .combination(let code, let modifiers):
             return Keys(keys: keys(modifiers).keys + [keyName(code, character: character)])
         }
@@ -40,8 +40,8 @@ enum ShortcutText {
     static func spoken(_ shortcut: Shortcut, character: KeyCharacter = layoutCharacter) -> String {
         switch shortcut {
         case .modifier(let code):
-            guard let lone = loneModifiers[code] else { return "" }
-            return lone.side.isEmpty ? lone.name : "\(lone.side) \(lone.name)"
+            guard let key = ModifierKey(rawValue: code) else { return "" }
+            return [key.side.map(sideWord), names(of: key).name].compactMap { $0 }.joined(separator: " ")
         case .combination(let code, let modifiers):
             let names = order.filter { modifiers.contains($0.modifier) }.map(\.name)
             return (names + [spokenKeyName(code, character: character)]).joined(separator: " ")
@@ -62,14 +62,19 @@ enum ShortcutText {
         (.control, "⌃", "Control"), (.option, "⌥", "Option"), (.shift, "⇧", "Shift"), (.command, "⌘", "Command"),
     ]
 
-    // Every key the flags-changed path reports, fn included so a refused fn still reads.
-    private static let loneModifiers: [Int: (side: String, glyph: String, name: String)] = [
-        62: ("Right", "⌃", "Control"), 59: ("Left", "⌃", "Control"),
-        61: ("Right", "⌥", "Option"), 58: ("Left", "⌥", "Option"),
-        54: ("Right", "⌘", "Command"), 55: ("Left", "⌘", "Command"),
-        60: ("Right", "⇧", "Shift"), 56: ("Left", "⇧", "Shift"),
-        63: ("", "fn", "Function"),
-    ]
+    // A lone modifier reads as its family does, and fn, which has none, as macOS writes it, so a
+    // refused fn still reads.
+    private static func names(of key: ModifierKey) -> (glyph: String, name: String) {
+        guard let family = order.first(where: { $0.modifier == key.family }) else { return ("fn", "Function") }
+        return (family.glyph, family.name)
+    }
+
+    private static func sideWord(_ side: ModifierKey.Side) -> String {
+        switch side {
+        case .left: "Left"
+        case .right: "Right"
+        }
+    }
 
     private static let namedKeys: [Int: (glyph: String, spoken: String)] = [
         kVK_Space: ("Space", "Space"), kVK_Return: ("↩", "Return"), kVK_ANSI_KeypadEnter: ("⌅", "Enter"),

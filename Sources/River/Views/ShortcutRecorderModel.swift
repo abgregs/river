@@ -178,9 +178,9 @@ final class ShortcutRecorderModel {
             handle(.keyDown(keyCode: Int(event.keyCode), modifiers: Self.modifiers(event.modifierFlags), isRepeat: event.isARepeat))
             return nil
         case .flagsChanged:
-            let keyCode = Int(event.keyCode)
-            if let isDown = ShortcutRecorder.isDown(keyCode: keyCode, rawFlags: event.modifierFlags.rawValue) {
-                handle(.modifierChanged(keyCode: keyCode, isDown: isDown))
+            // A key River doesn't know as a modifier, such as Caps Lock, is ignored.
+            if let key = ModifierKey(rawValue: Int(event.keyCode)) {
+                handle(.modifierChanged(keyCode: key.keyCode, isDown: key.isDown(rawFlags: UInt64(event.modifierFlags.rawValue))))
             }
             return nil
         case .leftMouseDown:

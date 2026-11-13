@@ -79,17 +79,6 @@ struct ShortcutRecorderTests {
         #expect(recorder.handle(.keyDown(keyCode: kVK_ANSI_K, modifiers: .control, isRepeat: true)) == .none)
     }
 
-    @Test("the device bits tell the sides apart, fn has its own flag, and Caps Lock is ignored")
-    func isDownReadsSides() {
-        // Right ⌥ coming up while Left ⌥ is still down leaves the shared ⌥ flag set, so only
-        // the device bit says which key moved.
-        let leftOptionHeld: UInt = 0x8_0000 | 0x20
-        #expect(ShortcutRecorder.isDown(keyCode: 61, rawFlags: leftOptionHeld) == false)
-        #expect(ShortcutRecorder.isDown(keyCode: 58, rawFlags: leftOptionHeld) == true)
-        #expect(ShortcutRecorder.isDown(keyCode: 63, rawFlags: 0x80_0000) == true)
-        #expect(ShortcutRecorder.isDown(keyCode: 57, rawFlags: 0x1_0000) == nil)
-    }
-
     @Test("a saved shortcut that failed at launch says why, and one that registered says nothing")
     func notWorkingLine() {
         // The row keeps the failed shortcut so the user sees what failed and records over it.

@@ -65,28 +65,10 @@ struct ShortcutRecorder {
         }
     }
 
+    // As a combination counts the keys held: fn adds nothing.
     private mutating func updateHeld() {
-        held = heldKeys.reduce(into: []) { $0.formUnion(Self.family[$1] ?? []) }
+        held = heldKeys.reduce(into: []) { $0.formUnion(ModifierKey(rawValue: $1)?.family ?? []) }
     }
-
-    // A modifier key's family, as a combination counts it. fn has none: it is not a
-    // combination modifier.
-    private static let family: [Int: ShortcutModifiers] = [
-        59: .control, 62: .control, 58: .option, 61: .option, 56: .shift, 60: .shift, 55: .command, 54: .command,
-    ]
-
-    /// Whether the modifier key `keyCode` is down, read from an event's raw modifier flags:
-    /// the device bits tell the sides apart (`NX_DEVICE*KEYMASK`), and fn has its own flag.
-    /// Nil for a key the recorder ignores, such as Caps Lock.
-    static func isDown(keyCode: Int, rawFlags: UInt) -> Bool? {
-        guard let mask = deviceMasks[keyCode] else { return nil }
-        return rawFlags & mask != 0
-    }
-
-    private static let deviceMasks: [Int: UInt] = [
-        59: 0x0001, 62: 0x2000, 56: 0x0002, 60: 0x0004, 55: 0x0008, 54: 0x0010, 58: 0x0020, 61: 0x0040,
-        63: 0x80_0000,
-    ]
 }
 
 /// The line under a recorder's row: how to record, why a shortcut was refused, macOS's
