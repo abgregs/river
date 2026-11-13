@@ -340,6 +340,9 @@ enum Constants {
     // shrinks from 56 ms for 126 ms, and the red fades and the outline closes on the keys from
     // 77 ms for 140 ms. River's shortcuts come back a moment after every key is up, so the
     // tap's copy of the last key event arrives while they are still paused.
+    // The gap between keys in a shortcut's outline: SF's ⌃ ⌥ ⇧ ⌘ fill their advance, so set
+    // edge to edge they read as one cramped mark (on device, 2026-11-12).
+    static let recorderKeySpacing: Double = 2
     static let recorderPulsePeriod: Double = 1.6
     static let recorderPulseScale: Double = 2.75
     static let recorderPulseOpacity: Double = 0.55

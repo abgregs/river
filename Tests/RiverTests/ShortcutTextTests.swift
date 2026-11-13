@@ -27,6 +27,16 @@ struct ShortcutTextTests {
                 == "Control Option Space")
     }
 
+    @Test("each key stands apart, and a lone modifier's side apart from its glyph")
+    func keysApart() {
+        // The outline spaces keys, not letters: ⌃ ⌥ Space, never S p a c e.
+        #expect(ShortcutText.keys(.combination(keyCode: kVK_Space, modifiers: [.option, .control]), character: us)
+                == ShortcutText.Keys(keys: ["⌃", "⌥", "Space"]))
+        #expect(ShortcutText.keys(.modifier(keyCode: 61), character: us) == ShortcutText.Keys(side: "Right", keys: ["⌥"]))
+        #expect(ShortcutText.keys(.modifier(keyCode: 63), character: us) == ShortcutText.Keys(keys: ["fn"]))
+        #expect(ShortcutText.keys([.command, .shift]) == ShortcutText.Keys(keys: ["⇧", "⌘"]))
+    }
+
     @Test("named keys read as macOS writes them, Esc as River's copy writes it", arguments: [
         (kVK_Space, "Space"), (kVK_Return, "↩"), (kVK_Tab, "⇥"), (kVK_Delete, "⌫"),
         (kVK_Escape, "Esc"), (kVK_F5, "F5"), (kVK_LeftArrow, "←"), (kVK_PageDown, "⇟"),

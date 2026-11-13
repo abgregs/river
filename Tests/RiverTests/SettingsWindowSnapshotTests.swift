@@ -72,9 +72,11 @@ struct SettingsWindowSnapshotTests {
                 model.recorder.handle(.modifierChanged(keyCode: 63, isDown: true))
                 model.recorder.handle(.modifierChanged(keyCode: 63, isDown: false))
             }]),
-            // `cacheDisplay` draws each animation's end values, so the save's motion is checked
-            // on device; this is where it lands.
-            RecorderShot(name: "saved", saved: controlOptionSpace, steps: [{ $0.recorder.start() }, held, pressSpace]),
+            // An offscreen window has no display to drive SwiftUI's animations, so the save is
+            // shown where it starts, the new shortcut held in red, and where it lands; the motion
+            // between is checked on device.
+            RecorderShot(name: "saving-hold", saved: controlOptionSpace, steps: [{ $0.recorder.start() }, held, pressSpace], wait: 0.02),
+            RecorderShot(name: "saved", saved: controlOptionSpace),
             RecorderShot(name: "macos-warning", saved: controlCommandSpace,
                          hooks: Self.hooks(system: [SystemShortcuts.Entry(keyCode: kVK_Space, modifiers: [.control, .command])])),
             RecorderShot(name: "failing", saved: controlOptionSpace, prepare: { $0.apply(dictationRegistration: .takenByAnotherApp) }),
@@ -92,7 +94,7 @@ struct SettingsWindowSnapshotTests {
                 shot.prepare(appState)
                 let model = SettingsWindowModel(appState: appState, capabilities: [], updater: UpdaterManager(),
                                                 shortcutHooks: shot.hooks, selectModel: { _ in })
-                try write(model, size: Constants.settingsWindowSize, appearance: appearance, steps: shot.steps,
+                try write(model, size: Constants.settingsWindowSize, appearance: appearance, steps: shot.steps, wait: shot.wait,
                           to: directory.appendingPathComponent("settings-shortcuts-\(shot.name)-\(appearance.name).png"))
                 model.recorder.stop()
             }
@@ -105,6 +107,8 @@ struct SettingsWindowSnapshotTests {
         var hooks: ShortcutRecorderHooks = .inert
         var prepare: (AppState) -> Void = { _ in }
         var steps: [(SettingsWindowModel) -> Void] = []
+        /// How long after the last step the image is taken.
+        var wait: TimeInterval = 0.05
     }
 
     private static let appearances: [(name: String, appearance: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
@@ -122,7 +126,7 @@ struct SettingsWindowSnapshotTests {
     // Draws the window's content offscreen, runs `steps` with the view on screen so it sees each
     // change as the app would, then writes what it shows.
     private func write(_ model: SettingsWindowModel, size: CGSize, appearance: (name: String, appearance: NSAppearance.Name),
-                       steps: [(SettingsWindowModel) -> Void] = [], to url: URL) throws {
+                       steps: [(SettingsWindowModel) -> Void] = [], wait: TimeInterval = 0.05, to url: URL) throws {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
                               backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: appearance.appearance)
@@ -131,9 +135,9 @@ struct SettingsWindowSnapshotTests {
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        for step in steps {
+        for (index, step) in steps.enumerated() {
             step(model)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            RunLoop.main.run(until: Date().addingTimeInterval(index == steps.count - 1 ? wait : 0.05))
         }
         let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: rep)

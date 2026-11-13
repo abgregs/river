@@ -204,7 +204,7 @@ private struct ShortcutsPane: View {
             // line with the other rows'. Esc joins fn with PR 9.
             SettingsRow(label: "Cancel recording") {
                 HStack(spacing: 8) {
-                    ShortcutChip(text: Text("fn"))
+                    ShortcutChip(keys: ShortcutText.Keys(keys: ["fn"]))
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Function")
                     Color.clear.frame(width: DictationShortcutRow.buttonWidth, height: 1)
@@ -257,23 +257,17 @@ private struct DictationShortcutRow: View {
         }
     }
 
-    @ViewBuilder private var chip: some View {
-        switch recorder.phase {
-        case .recording:
-            let keys = recorder.tried ?? ShortcutText.glyphs(recorder.held)
-            ShortcutChip(text: keys.isEmpty ? nil : Text(keys), look: .recording,
-                         isTried: recorder.tried != nil, startedAt: recorder.startedAt)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Recording")
-        case .saving(let shortcut):
-            ShortcutChip(text: Self.text(shortcut, ink: SettingsInk(colorScheme)), look: .saving)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(ShortcutText.spoken(shortcut))
-        case .idle:
-            ShortcutChip(text: Self.text(saved, ink: SettingsInk(colorScheme)))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(ShortcutText.spoken(saved))
+    // One chip in every phase: a save animates from the recording outline it already shows.
+    // A chip per phase would be a new view at each change, starting at its end state.
+    private var chip: some View {
+        let shown: (keys: ShortcutText.Keys, look: ShortcutChip.Look, label: String) = switch recorder.phase {
+        case .recording: (recorder.tried ?? ShortcutText.keys(recorder.held), .recording, "Recording")
+        case .saving(let shortcut): (ShortcutText.keys(shortcut), .saving, ShortcutText.spoken(shortcut))
+        case .idle: (ShortcutText.keys(saved), .saved, ShortcutText.spoken(saved))
         }
+        return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil, startedAt: recorder.startedAt)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(shown.label)
     }
 
     private func line(isBusy: Bool) -> RecorderLine? {
@@ -296,13 +290,6 @@ private struct DictationShortcutRow: View {
         }
         guard let symbol else { return Text(line.text) }
         return (Text(Image(systemName: symbol)) + Text(" ") + Text(line.text)).foregroundColor(SettingsInk(colorScheme).color)
-    }
-
-    // A lone modifier names its side at the description's strength: "Right ⌥".
-    static func text(_ shortcut: Shortcut, ink: SettingsInk) -> Text {
-        let display = ShortcutText.display(shortcut)
-        guard case .modifier = shortcut, let space = display.firstIndex(of: " ") else { return Text(display) }
-        return Text(display[..<space]).foregroundColor(ink.secondary) + Text(display[space...])
     }
 }
 

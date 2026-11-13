@@ -8,15 +8,32 @@ import Foundation
 enum ShortcutText {
     typealias KeyCharacter = (Int) -> String?
 
-    /// The shortcut as the Settings window shows it: "Right ⌥", "⌃⌥Space", "fn".
+    /// A shortcut as its outline lays it out: a lone modifier's side apart from its glyph, and
+    /// each key apart, so the keys can be spaced without spreading the letters of "Space".
+    struct Keys: Equatable {
+        var side: String?
+        var keys: [String]
+    }
+
+    /// The shortcut as one line of text, for a message: "Right ⌥", "⌃⌥Space", "fn".
     static func display(_ shortcut: Shortcut, character: KeyCharacter = layoutCharacter) -> String {
+        let parts = keys(shortcut, character: character)
+        return [parts.side, parts.keys.joined()].compactMap { $0 }.joined(separator: " ")
+    }
+
+    static func keys(_ shortcut: Shortcut, character: KeyCharacter = layoutCharacter) -> Keys {
         switch shortcut {
         case .modifier(let code):
-            guard let lone = loneModifiers[code] else { return "" }
-            return lone.side.isEmpty ? lone.glyph : "\(lone.side) \(lone.glyph)"
+            guard let lone = loneModifiers[code] else { return Keys(keys: []) }
+            return Keys(side: lone.side.isEmpty ? nil : lone.side, keys: [lone.glyph])
         case .combination(let code, let modifiers):
-            return glyphs(modifiers) + keyName(code, character: character)
+            return Keys(keys: keys(modifiers).keys + [keyName(code, character: character)])
         }
+    }
+
+    /// Held modifiers as keys, in menu order.
+    static func keys(_ modifiers: ShortcutModifiers) -> Keys {
+        Keys(keys: order.filter { modifiers.contains($0.modifier) }.map(\.glyph))
     }
 
     /// The shortcut as VoiceOver reads it: "Right Option", "Control Option Space".
@@ -29,11 +46,6 @@ enum ShortcutText {
             let names = order.filter { modifiers.contains($0.modifier) }.map(\.name)
             return (names + [spokenKeyName(code, character: character)]).joined(separator: " ")
         }
-    }
-
-    /// Held modifiers, in menu order: "⌃⌥".
-    static func glyphs(_ modifiers: ShortcutModifiers) -> String {
-        order.filter { modifiers.contains($0.modifier) }.map(\.glyph).joined()
     }
 
     /// A non-modifier key: a named key ("Space", "↩", "F5"), else what it types ("V").

@@ -13,8 +13,8 @@ struct ShortcutChip: View {
         case saving
     }
 
-    /// The keys; nil for an empty recording chip, a square around the dot.
-    let text: Text?
+    /// The keys; none for an empty recording chip, a square around the dot.
+    let keys: ShortcutText.Keys
     var look: Look = .saved
     /// A refused attempt, shown dimmed.
     var isTried = false
@@ -35,13 +35,20 @@ struct ShortcutChip: View {
         HStack(spacing: 0) {
             if look != .saved {
                 dot(red)
-                    .frame(width: (text == nil ? 8 : 12) * dotBoxFraction, alignment: .trailing)
+                    .frame(width: (isEmpty ? 8 : 12) * dotBoxFraction, alignment: .trailing)
             }
-            if let text {
-                text
-                    .font(.system(size: 13))
-                    .tracking(0.13)
-                    .opacity(isTried ? 0.45 : 1)
+            if !isEmpty {
+                HStack(spacing: Constants.recorderKeySpacing) {
+                    if let side = keys.side {
+                        // A lone modifier names its side at the description's strength.
+                        Text(side).foregroundStyle(ink.secondary)
+                            .padding(.trailing, 3 - Constants.recorderKeySpacing)
+                    }
+                    ForEach(Array(keys.keys.enumerated()), id: \.offset) { _, key in Text(key) }
+                }
+                .font(.system(size: 13))
+                .tracking(0.13)
+                .opacity(isTried ? 0.45 : 1)
             }
         }
         .padding(.horizontal, 6)
@@ -53,6 +60,8 @@ struct ShortcutChip: View {
         .onAppear { settle(into: look, from: nil) }
         .onChange(of: look) { old, new in settle(into: new, from: old) }
     }
+
+    private var isEmpty: Bool { keys.side == nil && keys.keys.isEmpty }
 
     // The dot, 6 pt so its halo fits inside the 20 pt outline, pinned to the keys: as its box
     // closes it stays put and the outline's leading edge passes over it.
@@ -67,7 +76,7 @@ struct ShortcutChip: View {
         .frame(width: 6, height: 6)
         .scaleEffect(dotScale)
         .opacity(dotOpacity)
-        .padding(.trailing, text == nil ? 1 : 5)
+        .padding(.trailing, isEmpty ? 1 : 5)
         .accessibilityHidden(true)
     }
 

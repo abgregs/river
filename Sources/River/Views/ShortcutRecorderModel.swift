@@ -37,8 +37,8 @@ final class ShortcutRecorderModel {
     private(set) var phase: Phase = .idle
     /// The modifiers held while recording.
     private(set) var held: ShortcutModifiers = []
-    /// A refused attempt as written, shown dimmed beside the dot until a modifier goes down.
-    private(set) var tried: String?
+    /// A refused attempt, shown dimmed beside the dot until a modifier goes down.
+    private(set) var tried: ShortcutText.Keys?
     /// The line under the row while recording: how to record, or why a shortcut was refused.
     private(set) var line: RecorderLine?
     /// One more for each refusal: the outline shakes once.
@@ -115,17 +115,17 @@ final class ShortcutRecorderModel {
         case .clear:
             refuse(.cannotClear, tried: nil)
         case .bareKey(let keyCode):
-            refuse(.needsModifier, tried: ShortcutText.keyName(keyCode))
+            refuse(.needsModifier, tried: ShortcutText.Keys(keys: [ShortcutText.keyName(keyCode)]))
         case .candidate(let shortcut):
             switch ShortcutCheck.check(shortcut, registration: hooks.probe, system: hooks.systemShortcuts()) {
             case .save: save(shortcut, macOSAlsoUses: false)
             case .saveWithWarning: save(shortcut, macOSAlsoUses: true)
-            case .refuse(let reason): refuse(.refused(reason), tried: ShortcutText.display(shortcut))
+            case .refuse(let reason): refuse(.refused(reason), tried: ShortcutText.keys(shortcut))
             }
         }
     }
 
-    private func refuse(_ reason: RecorderLine, tried attempt: String?) {
+    private func refuse(_ reason: RecorderLine, tried attempt: ShortcutText.Keys?) {
         line = reason
         tried = attempt
         held = recorder.held

@@ -55,7 +55,7 @@ struct ShortcutRecorderModelTests {
         press(model, kVK_Space, with: [.control, .option])
         #expect(log.saved.isEmpty)
         #expect(model.phase == .recording)
-        #expect(model.tried == "⌃⌥Space")
+        #expect(model.tried == ShortcutText.Keys(keys: ["⌃", "⌥", "Space"]))
         #expect(model.line == .refused("Another app uses this shortcut. Choose another."))
         #expect(model.refusals == 1)
 
