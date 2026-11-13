@@ -64,7 +64,7 @@ struct ShortcutRecorderModelTests {
     func refusalKeepsRecording() {
         // "Choose another" means press another: the next key press tries again (spec 0036).
         let log = HooksLog()
-        log.registration = .takenByAnotherApp
+        log.check = { _ in .takenByAnotherApp }
         let model = ShortcutRecorderModel(hooks: log.hooks)
         model.start()
         press(model, kVK_Space, with: [.control, .option])
@@ -86,6 +86,7 @@ struct ShortcutRecorderModelTests {
     func fnRefused() {
         // The row's message names the row that owns it, which is on screen below.
         let log = HooksLog()
+        log.check = { $0 == RiverShortcut.cancelRecording.shortcut ? .usedByRiver(.cancelRecording) : .available }
         let model = ShortcutRecorderModel(hooks: log.hooks)
         model.start()
         model.handle(.modifierChanged(keyCode: 63, isDown: true))
@@ -113,7 +114,7 @@ struct ShortcutRecorderModelTests {
     func systemShortcutSavedWithWarning() {
         // Inform, don't block: the line stays as long as the clash is true.
         let log = HooksLog()
-        log.system = [SystemShortcuts.Entry(keyCode: kVK_Space, modifiers: [.control, .option])]
+        log.check = { [controlOptionSpace] in $0 == controlOptionSpace ? .alsoUsedByMacOS : .available }
         let model = ShortcutRecorderModel(hooks: log.hooks)
         model.start()
         press(model, kVK_Space, with: [.control, .option])
@@ -139,17 +140,15 @@ private final class HooksLog {
     var pauses = 0
     var resumes = 0
     var saved: [Shortcut] = []
-    var registration: HotKeyRegistration = .registered
-    var system: [SystemShortcuts.Entry] = []
+    var check: (Shortcut) -> ShortcutAvailability = { _ in .available }
     var pauseAllowed = true
 
     var hooks: ShortcutRecorderHooks {
         ShortcutRecorderHooks(
             pause: { self.pauses += 1; return self.pauseAllowed },
             resume: { self.resumes += 1 },
-            probe: { _ in self.registration },
-            save: { self.saved.append($0) },
-            systemShortcuts: { self.system }
+            check: { self.check($0) },
+            save: { self.saved.append($0) }
         )
     }
 }

@@ -462,9 +462,10 @@ final class RiverSession {
         hotkey.resume()
     }
 
-    /// Whether macOS would take `shortcut` as River's hot key, asked while paused.
-    func probe(_ shortcut: Shortcut) -> HotKeyRegistration {
-        hotkey.probe(shortcut)
+    /// Whether `shortcut` can be the dictation shortcut, and if not, why
+    /// (`HotkeyManager.availability(of:)`).
+    func availability(of shortcut: Shortcut) -> ShortcutAvailability {
+        hotkey.availability(of: shortcut)
     }
 
     /// The Model section's Select and Try Again (planning 0036): makes `name` the model River

@@ -199,15 +199,17 @@ private struct ShortcutsPane: View {
                                      options: ActivationMode.allCases.map { ($0, $0.label) },
                                      selection: $activationMode)
             }
-            // The keys that cancel a recording (planning 0036, Cancel recording). They are fixed,
-            // so the row has no Record button, and an empty button column keeps the keys in
-            // line with the other rows'. Esc joins fn with PR 9.
-            SettingsRow(label: "Cancel recording") {
-                HStack(spacing: 8) {
-                    ShortcutChip(keys: ShortcutText.Keys(keys: ["fn"]))
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Function")
-                    Color.clear.frame(width: DictationShortcutRow.buttonWidth, height: 1)
+            // River's other shortcuts, from the list the recorder refuses (planning 0036, Cancel
+            // recording). They are fixed, so a row has no Record button, and an empty button
+            // column keeps the keys in line with the other rows'. Esc joins fn with PR 9.
+            ForEach(RiverShortcut.allCases, id: \.self) { river in
+                SettingsRow(label: river.label) {
+                    HStack(spacing: 8) {
+                        ShortcutChip(keys: ShortcutText.keys(river.shortcut))
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(ShortcutText.spoken(river.shortcut))
+                        Color.clear.frame(width: DictationShortcutRow.buttonWidth, height: 1)
+                    }
                 }
             }
         }

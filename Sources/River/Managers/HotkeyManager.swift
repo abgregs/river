@@ -3,6 +3,18 @@ import CoreGraphics
 import Foundation
 import os
 
+/// `HotkeyManager`'s answer to "can this be the dictation shortcut?" (spec 0036, Conflicts).
+/// The recorder words each one; no copy lives here.
+enum ShortcutAvailability: Equatable {
+    case available
+    /// Available, and on macOS's own list too: saved with the warning, since both run.
+    case alsoUsedByMacOS
+    case usedByRiver(RiverShortcut)
+    case takenByAnotherApp
+    /// macOS refused the registration for another reason.
+    case refusedByMacOS
+}
+
 /// Interprets the dictation shortcut against the activation mode. A lone modifier
 /// is read from the typed `TapEvent` stream of `InputMonitoringCapability`; a
 /// combination is an exclusive hot key read from `HotKeyRegistry`. Hold mode is
@@ -60,6 +72,7 @@ final class HotkeyManager {
     private var isModifierHeld = false
     private let resumeDeadline: Duration
     private var resumeDeadlineTask: Task<Void, Never>?
+    private let systemShortcuts: () -> [SystemShortcuts.Entry]
 
     init(
         inputMonitoring: InputMonitoringCapability,
@@ -67,7 +80,8 @@ final class HotkeyManager {
         initialShortcut: Shortcut = Constants.defaultDictationShortcut,
         initialMode: ActivationMode = Constants.defaultActivationMode,
         cancelKeyCode: Int = Constants.cancelKeyCode,
-        resumeDeadline: Duration = .seconds(Constants.shortcutResumeDeadlineSeconds)
+        resumeDeadline: Duration = .seconds(Constants.shortcutResumeDeadlineSeconds),
+        systemShortcuts: @escaping () -> [SystemShortcuts.Entry] = SystemShortcuts.enabled
     ) {
         self.inputMonitoring = inputMonitoring
         self.hotKeys = hotKeys
@@ -75,6 +89,7 @@ final class HotkeyManager {
         self.mode = initialMode
         self.cancelKeyCode = cancelKeyCode
         self.resumeDeadline = resumeDeadline
+        self.systemShortcuts = systemShortcuts
         self.tapMachine = TapStateMachine(mode: initialMode, windowMs: Constants.doubleTapWindowMs)
     }
 
@@ -153,10 +168,27 @@ final class HotkeyManager {
         resumeDeadlineTask = nil
     }
 
-    /// Whether macOS would take `candidate` as River's hot key. A lone modifier needs no
-    /// registration.
-    func probe(_ candidate: Shortcut) -> HotKeyRegistration {
+    /// Whether `candidate` can be the dictation shortcut, and if not, why (spec 0036,
+    /// Conflicts): River's own shortcuts first, then whether macOS will register a
+    /// combination, then macOS's own list.
+    func availability(of candidate: Shortcut) -> ShortcutAvailability {
+        if let owner = RiverShortcut.allCases.first(where: { $0.shortcut == candidate }) {
+            return .usedByRiver(owner)
+        }
+        switch registration(of: candidate) {
+        case .registered: break
+        case .takenByAnotherApp: return .takenByAnotherApp
+        case .refused: return .refusedByMacOS
+        }
+        return SystemShortcuts.contains(candidate, in: systemShortcuts()) ? .alsoUsedByMacOS : .available
+    }
+
+    // A lone modifier needs no registration: the tap watches it. While River holds the
+    // combination itself, its own registration answers, since a probe would find River's hot
+    // key and read it as another app's.
+    private func registration(of candidate: Shortcut) -> HotKeyRegistration {
         guard case .combination(let keyCode, let modifiers) = candidate else { return .registered }
+        if !isPaused, candidate == shortcut, let own = registrationSubject.value { return own }
         return hotKeys.probe(keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags)
     }
 

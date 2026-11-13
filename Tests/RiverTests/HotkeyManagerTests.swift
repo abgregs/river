@@ -620,14 +620,6 @@ struct HotkeyManagerCombinationTests {
     }
 
     @MainActor
-    @Test("a lone modifier needs no registration to be saved")
-    func probeLoneModifier() {
-        // The tap watches a lone modifier, so macOS has nothing to refuse.
-        let (manager, _) = makeManager(mode: .hold)
-        #expect(manager.probe(.modifier(keyCode: 61)) == .registered)
-    }
-
-    @MainActor
     @Test("fn cancels whatever the dictation shortcut is")
     func fnAlwaysCancels() {
         // fn is never the dictation shortcut (spec 0036), so its press is always the
@@ -838,4 +830,79 @@ struct HotkeyManagerResumeTests {
         }
         #expect(!manager.isPaused)
     }
+}
+
+@Suite("HotkeyManager availability")
+@MainActor
+struct HotkeyManagerAvailabilityTests {
+    // What the Settings recorder asks before it saves (spec 0036, Conflicts). macOS's answer and
+    // its own shortcut list are injected, so no test registers a real hot key.
+    private let controlOptionSpace = Shortcut.combination(keyCode: 49, modifiers: [.control, .option])
+
+    private func makeManager(
+        registering status: OSStatus = noErr, system: [SystemShortcuts.Entry] = [], probes: ProbeLog? = nil
+    ) -> HotkeyManager {
+        let hotKeys = HotKeyRegistry(calls: HotKeyRegistry.Calls(
+            installHandler: { _ in noErr },
+            register: { _, _, _ in probes?.count += 1; return (status, nil) },
+            unregister: { _ in }))
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), systemShortcuts: { system })
+        manager.bindEventStream()
+        return manager
+    }
+
+    @Test("fn is refused as River's cancel key before macOS is asked")
+    func fnIsRiversOwn() {
+        // fn as the dictation key would leave a recording with no cancel key (spec 0036).
+        let probes = ProbeLog()
+        let manager = makeManager(probes: probes)
+        #expect(manager.availability(of: .modifier(keyCode: 63)) == .usedByRiver(.cancelRecording))
+        #expect(probes.count == 0)
+    }
+
+    @Test("a lone modifier needs no registration")
+    func loneModifierFree() {
+        // The tap watches a lone modifier, so macOS has nothing to refuse.
+        let probes = ProbeLog()
+        let manager = makeManager(registering: OSStatus(eventHotKeyExistsErr), probes: probes)
+        #expect(manager.availability(of: .modifier(keyCode: 58)) == .available)
+        #expect(probes.count == 0)
+    }
+
+    @Test("a combination another app holds, or macOS won't take, is refused with its reason")
+    func registrationRefusals() {
+        // Saving it would leave a dictation shortcut that does nothing (spec 0036, AC 6).
+        #expect(makeManager(registering: OSStatus(eventHotKeyExistsErr)).availability(of: controlOptionSpace) == .takenByAnotherApp)
+        #expect(makeManager(registering: -9868).availability(of: controlOptionSpace) == .refusedByMacOS)
+    }
+
+    @Test("a combination on macOS's own list is available with the warning")
+    func systemShortcutWarns() {
+        // Inform, don't block: both run, and the user decides (spec 0036, Conflicts).
+        let manager = makeManager(system: [SystemShortcuts.Entry(keyCode: 49, modifiers: [.control, .option])])
+        #expect(manager.availability(of: controlOptionSpace) == .alsoUsedByMacOS)
+        #expect(manager.availability(of: .combination(keyCode: 49, modifiers: .command)) == .available)
+    }
+
+    @Test("River's own registration of the saved combination is not read as another app's")
+    func ownRegistrationAnswers() {
+        // While River holds ⌃⌥Space, a probe of it fails as taken, though nothing else has it;
+        // the Settings pane asks about the saved shortcut while River's shortcuts run.
+        let probes = ProbeLog()
+        let manager = makeManager(probes: probes)
+        manager.setShortcut(controlOptionSpace)
+        let registered = probes.count
+        #expect(manager.availability(of: controlOptionSpace) == .available)
+        #expect(probes.count == registered)
+
+        manager.pause()   // the hot key let go, so macOS is asked again
+        #expect(manager.availability(of: controlOptionSpace) == .available)
+        #expect(probes.count == registered + 1)
+    }
+}
+
+@MainActor
+private final class ProbeLog {
+    var count = 0
 }

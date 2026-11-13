@@ -59,6 +59,7 @@ struct RiverSessionTests {
 Some methods are `internal` (not `private`) specifically so tests can exercise them without going through real OS APIs:
 
 - `HotkeyManager.handle(_:)` / `bindEventStream()` — interpretation and Combine binding seams, exercised by feeding synthetic `TapEvent`s
+- `HotkeyManager(systemShortcuts:)` — macOS's own shortcut list injected, so availability tests need no `CopySymbolicHotKeys` read
 - `HotkeyManager(resumeDeadline:)` — how long a resume waits for the tap's key-up before giving up, shortened so a test sees a silent tap release the shortcuts without waiting 10 s
 - `InputMonitoringCapability.decode(_:)` — pure `CGEvent` → `TapEvent` decoder, `nonisolated` so the C tap callback can call it without crossing an actor boundary
 - `InputMonitoringCapability.publishForTest(_:)` — pushes a synthetic `TapEvent` into the stream, bypassing the real tap (which requires an Input Monitoring grant on the running process)
@@ -102,7 +103,7 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `MenuBarGlyphImages.withDot(_:muted:)` — the runtime drawing of Listening and Transcribing (the red dot, the muted one), rendered under each appearance so the dot's colors and the mark's are checked without a menu bar
 - `ModifierKey` — the pure modifier-key table and its down-or-up rule, tested so a dropped key, Caps Lock or fn coming back as a lone key, or a side misread from the device bits is a failing test, not silent drift (mirrors `MenuBarPresentation`)
 - `HotKeyRegistry(calls:)` / `publishForTest(_:)` — the Carbon register, unregister and handler calls are injected (`.inert` accepts everything), so tests check typed refusals and drive hot key presses and releases without registering a real hot key; mirrors `InputMonitoringCapability.publishForTest`
-- `ShortcutRecorderModel.handle(_:)` and `ShortcutRecorderHooks` — one key event as the window's monitor delivers it, and the session's reach (pause, resume, probe, save, macOS's list) as closures, so tests and the Settings snapshots drive the recorder with no key press and no session
+- `ShortcutRecorderModel.handle(_:)` and `ShortcutRecorderHooks` — one key event as the window's monitor delivers it, and the session's reach (pause, resume, check, save) as closures, so tests and the Settings snapshots drive the recorder with no key press and no session
 - `ShortcutText`'s injected `character` — what a key types on the keyboard layout, replaced by the US layout so tests read the same on any Mac
 - `SystemShortcuts.entries(from:)` — the pure read of `CopySymbolicHotKeys`' dictionaries
 - `AppState.apply(dictationRegistration:)` — drives a failing dictation shortcut's badge and line without another app holding it

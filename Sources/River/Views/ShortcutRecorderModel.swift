@@ -3,22 +3,23 @@ import Observation
 import SwiftUI
 
 /// What recording a shortcut reaches outside the Settings window: River's shortcuts, paused
-/// while the recorder listens; macOS's answer to a combination; the setting; and macOS's own
-/// shortcut list. Closures, as `selectModel` is, so the window never reaches past the session
-/// and a snapshot or test needs no session.
+/// while the recorder listens; River's answer to a shortcut; and the setting. Closures, as
+/// `selectModel` is, so the window never reaches past the session and a snapshot or test needs
+/// no session.
 struct ShortcutRecorderHooks {
     /// Pauses River's shortcuts; false while a dictation runs, when recording is unavailable.
     var pause: () -> Bool
     /// Brings River's shortcuts back once every modifier key is up, so the keys just
     /// recorded never reach them.
     var resume: () -> Void
-    var probe: (Shortcut) -> HotKeyRegistration
+    /// Whether a shortcut can be the dictation shortcut, and if not, why
+    /// (`HotkeyManager.availability(of:)`).
+    var check: (Shortcut) -> ShortcutAvailability
     var save: (Shortcut) -> Void
-    var systemShortcuts: () -> [SystemShortcuts.Entry]
 
     /// Accepts every shortcut and reaches nothing.
     static let inert = ShortcutRecorderHooks(
-        pause: { true }, resume: {}, probe: { _ in .registered }, save: { _ in }, systemShortcuts: { [] }
+        pause: { true }, resume: {}, check: { _ in .available }, save: { _ in }
     )
 }
 
@@ -69,7 +70,7 @@ final class ShortcutRecorderModel {
 
     /// Checks the saved shortcut against macOS's own list, for the line that stays while true.
     func refresh(saved: Shortcut) {
-        isSystemShortcut = SystemShortcuts.contains(saved, in: hooks.systemShortcuts())
+        isSystemShortcut = hooks.check(saved) == .alsoUsedByMacOS
     }
 
     func toggle() {
@@ -115,10 +116,11 @@ final class ShortcutRecorderModel {
         case .bareKey(let keyCode):
             refuse(.needsModifier, tried: ShortcutText.Keys(keys: [ShortcutText.keyName(keyCode)]))
         case .candidate(let shortcut):
-            switch ShortcutCheck.check(shortcut, registration: hooks.probe, system: hooks.systemShortcuts()) {
-            case .save: save(shortcut, macOSAlsoUses: false)
-            case .saveWithWarning: save(shortcut, macOSAlsoUses: true)
-            case .refuse(let reason): refuse(.refused(reason), tried: ShortcutText.keys(shortcut))
+            let availability = hooks.check(shortcut)
+            if let refusal = RecorderLine.refusal(availability, of: shortcut) {
+                refuse(refusal, tried: ShortcutText.keys(shortcut))
+            } else {
+                save(shortcut, macOSAlsoUses: availability == .alsoUsedByMacOS)
             }
         }
     }

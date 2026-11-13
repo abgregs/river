@@ -71,9 +71,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ShortcutRecorderHooks(
             pause: { [weak self] in self?.session.pauseShortcuts() ?? false },
             resume: { [weak self] in self?.session.resumeShortcuts() },
-            probe: { [weak self] in self?.session.probe($0) ?? .registered },
-            save: { [weak self] in self?.settings.setValue($0, for: Settings.dictationShortcut) },
-            systemShortcuts: SystemShortcuts.enabled
+            check: { [weak self] in self?.session.availability(of: $0) ?? .available },
+            save: { [weak self] in self?.settings.setValue($0, for: Settings.dictationShortcut) }
         )
     }
 

@@ -1,4 +1,5 @@
 import Carbon.HIToolbox
+import Foundation
 
 /// The Settings recorder's key logic (spec 0036, The recorder). Pure, so it is tested with
 /// synthetic key events, as `TapStateMachine` is; `ShortcutRecorderModel` feeds it the
@@ -92,6 +93,32 @@ struct RecorderLine: Equatable {
     static let busy = RecorderLine(kind: .hint, text: "Available when this dictation ends.")
 
     static func refused(_ reason: String) -> RecorderLine { RecorderLine(kind: .refusal, text: reason) }
+
+    /// Why the recorder refuses `candidate`, or nil when it saves it. A refusal keeps the
+    /// recorder listening, so the next key press tries again (spec 0036, Conflicts).
+    static func refusal(
+        _ availability: ShortcutAvailability, of candidate: Shortcut,
+        osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
+        character: ShortcutText.KeyCharacter = ShortcutText.layoutCharacter
+    ) -> RecorderLine? {
+        switch availability {
+        case .available, .alsoUsedByMacOS: nil
+        case .usedByRiver(let owner):
+            .refused("\(owner.label) uses \(ShortcutText.display(candidate, character: character)). Choose another.")
+        case .takenByAnotherApp: .refused("Another app uses this shortcut. Choose another.")
+        case .refusedByMacOS: .refused(macOSRefusal(of: candidate, osVersion: osVersion))
+        }
+    }
+
+    // macOS 15.0 and 15.1 refuse a combination whose only modifiers are ⌥ or ⌥⇧ (spec 0036,
+    // Accepted limits); the line names the Mac's own version.
+    static func macOSRefusal(of candidate: Shortcut, osVersion: OperatingSystemVersion) -> String {
+        if case .combination(_, let modifiers) = candidate, modifiers.contains(.option),
+           modifiers.isSubset(of: [.option, .shift]), osVersion.majorVersion == 15, osVersion.minorVersion < 2 {
+            return "macOS 15.\(osVersion.minorVersion) needs ⌃ or ⌘ in this shortcut. Choose another."
+        }
+        return "macOS refused this shortcut. Choose another."
+    }
 
     /// A saved shortcut whose registration failed at launch.
     static func notWorking(_ registration: HotKeyRegistration) -> RecorderLine? {

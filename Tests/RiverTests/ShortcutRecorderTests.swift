@@ -1,4 +1,5 @@
 import Carbon.HIToolbox
+import Foundation
 import Testing
 @testable import River
 
@@ -77,6 +78,29 @@ struct ShortcutRecorderTests {
         // A held key would otherwise retry the same refused shortcut many times a second.
         var recorder = ShortcutRecorder()
         #expect(recorder.handle(.keyDown(keyCode: kVK_ANSI_K, modifiers: .control, isRepeat: true)) == .none)
+    }
+
+    @Test("a refusal names River's row, another app, or the Mac's own version; a save has no line")
+    func refusalLines() {
+        // The line tells the user what to change: another shortcut, or a ⌃ or ⌘ on macOS 15.0
+        // and 15.1, which refuse ⌥-only combinations (spec 0036, Accepted limits).
+        let us: ShortcutText.KeyCharacter = { ShortcutText.usLayout[$0] }
+        let sequoia = OperatingSystemVersion(majorVersion: 15, minorVersion: 2, patchVersion: 0)
+        let fifteenOne = OperatingSystemVersion(majorVersion: 15, minorVersion: 1, patchVersion: 0)
+        let optionK = Shortcut.combination(keyCode: kVK_ANSI_K, modifiers: .option)
+        #expect(RecorderLine.refusal(.usedByRiver(.cancelRecording), of: .modifier(keyCode: 63), osVersion: sequoia, character: us)
+                == .refused("Cancel recording uses fn. Choose another."))
+        #expect(RecorderLine.refusal(.takenByAnotherApp, of: optionK, osVersion: sequoia, character: us)
+                == .refused("Another app uses this shortcut. Choose another."))
+        #expect(RecorderLine.refusal(.refusedByMacOS, of: optionK, osVersion: fifteenOne, character: us)
+                == .refused("macOS 15.1 needs ⌃ or ⌘ in this shortcut. Choose another."))
+        #expect(RecorderLine.refusal(.refusedByMacOS, of: .combination(keyCode: kVK_ANSI_K, modifiers: [.option, .shift]),
+                                     osVersion: OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0), character: us)
+                == .refused("macOS 15.0 needs ⌃ or ⌘ in this shortcut. Choose another."))
+        #expect(RecorderLine.refusal(.refusedByMacOS, of: optionK, osVersion: sequoia, character: us)
+                == .refused("macOS refused this shortcut. Choose another."))
+        #expect(RecorderLine.refusal(.alsoUsedByMacOS, of: optionK, osVersion: sequoia, character: us) == nil)
+        #expect(RecorderLine.refusal(.available, of: optionK, osVersion: sequoia, character: us) == nil)
     }
 
     @Test("a saved shortcut that failed at launch says why, and one that registered says nothing")

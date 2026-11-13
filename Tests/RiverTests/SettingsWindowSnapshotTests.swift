@@ -66,9 +66,9 @@ struct SettingsWindowSnapshotTests {
         let shots: [RecorderShot] = [
             RecorderShot(name: "recording", steps: [{ $0.recorder.start() }]),
             RecorderShot(name: "held", steps: [{ $0.recorder.start() }, held]),
-            RecorderShot(name: "refused-another-app", hooks: Self.hooks(registration: .takenByAnotherApp),
+            RecorderShot(name: "refused-another-app", hooks: Self.hooks { _ in .takenByAnotherApp },
                          steps: [{ $0.recorder.start() }, held, pressSpace]),
-            RecorderShot(name: "refused-fn", steps: [{ $0.recorder.start() }, { model in
+            RecorderShot(name: "refused-fn", hooks: Self.hooks(), steps: [{ $0.recorder.start() }, { model in
                 model.recorder.handle(.modifierChanged(keyCode: 63, isDown: true))
                 model.recorder.handle(.modifierChanged(keyCode: 63, isDown: false))
             }]),
@@ -78,7 +78,7 @@ struct SettingsWindowSnapshotTests {
             RecorderShot(name: "saving-hold", saved: controlOptionSpace, steps: [{ $0.recorder.start() }, held, pressSpace], wait: 0.02),
             RecorderShot(name: "saved", saved: controlOptionSpace),
             RecorderShot(name: "macos-warning", saved: controlCommandSpace,
-                         hooks: Self.hooks(system: [SystemShortcuts.Entry(keyCode: kVK_Space, modifiers: [.control, .command])])),
+                         hooks: Self.hooks { [controlCommandSpace] in $0 == controlCommandSpace ? .alsoUsedByMacOS : .available }),
             RecorderShot(name: "failing", saved: controlOptionSpace, prepare: { $0.apply(dictationRegistration: .takenByAnotherApp) }),
             RecorderShot(name: "busy", prepare: { $0.apply(.recording) }),
         ]
@@ -113,8 +113,11 @@ struct SettingsWindowSnapshotTests {
 
     private static let appearances: [(name: String, appearance: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
 
-    private static func hooks(registration: HotKeyRegistration = .registered, system: [SystemShortcuts.Entry] = []) -> ShortcutRecorderHooks {
-        ShortcutRecorderHooks(pause: { true }, resume: {}, probe: { _ in registration }, save: { _ in }, systemShortcuts: { system })
+    // River's own shortcuts are refused as HotkeyManager refuses them; anything else gets `answer`.
+    private static func hooks(_ answer: @escaping (Shortcut) -> ShortcutAvailability = { _ in .available }) -> ShortcutRecorderHooks {
+        ShortcutRecorderHooks(pause: { true }, resume: {}, check: { shortcut in
+            RiverShortcut.allCases.first { $0.shortcut == shortcut }.map { .usedByRiver($0) } ?? answer(shortcut)
+        }, save: { _ in })
     }
 
     private func snapshotDirectory() throws -> URL {
