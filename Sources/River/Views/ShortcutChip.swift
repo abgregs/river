@@ -96,8 +96,9 @@ struct ShortcutChip: View {
         }
     }
 
-    // Brisk timing (Constants). Reduce Motion keeps the fades, drops the shrink, and closes the
-    // outline in one step once the dot is nearly gone.
+    // Brisk timing (Constants). Reduce Motion keeps the fades and drops the shrink and the
+    // closing outline: the outline closes in one step when the recorder settles at the save's
+    // end, so a new recording, which cancels that settle, can't be closed by the old save.
     private func save() {
         withAnimation(.timingCurve(0.33, 1, 0.68, 1, duration: Constants.recorderSaveDotDuration)
             .delay(Constants.recorderSaveDotDelay)) {
@@ -108,14 +109,10 @@ struct ShortcutChip: View {
             .delay(Constants.recorderSaveOutlineDelay)) {
             ringOpacity = 0
         }
-        if reduceMotion {
-            let close = Constants.recorderSaveOutlineDelay + Constants.recorderSaveOutlineDuration
-            DispatchQueue.main.asyncAfter(deadline: .now() + close) { dotBoxFraction = 0 }
-        } else {
-            withAnimation(.timingCurve(0.33, 1, 0.68, 1, duration: Constants.recorderSaveOutlineDuration)
-                .delay(Constants.recorderSaveOutlineDelay)) {
-                dotBoxFraction = 0
-            }
+        guard !reduceMotion else { return }
+        withAnimation(.timingCurve(0.33, 1, 0.68, 1, duration: Constants.recorderSaveOutlineDuration)
+            .delay(Constants.recorderSaveOutlineDelay)) {
+            dotBoxFraction = 0
         }
     }
 

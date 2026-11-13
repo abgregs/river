@@ -39,6 +39,20 @@ struct ShortcutRecorderModelTests {
         #expect(model.phase == .idle)
     }
 
+    @Test("recording again during a save keeps recording past the save's end")
+    func recordAgainDuringSave() async throws {
+        // The save's end is the recorder's one clock; a new recording cancels it, so the old
+        // save can't close the new outline or end the new recording.
+        let log = HooksLog()
+        let model = ShortcutRecorderModel(hooks: log.hooks)
+        model.start()
+        press(model, kVK_Space, with: [.control, .option])
+        model.start()
+        try await Task.sleep(for: .seconds(Constants.recorderSaveSeconds + 0.1))
+        #expect(model.phase == .recording)
+        model.stop()
+    }
+
     private func waitUntil(_ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(5)
         while !condition(), Date() < deadline {

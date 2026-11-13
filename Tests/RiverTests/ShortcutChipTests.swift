@@ -26,6 +26,13 @@ struct ShortcutChipTests {
         #expect(6 * Constants.recorderPulseScale <= 20 - 2)
     }
 
+    @Test("the recorder settles a save only once its last stage has finished")
+    func saveOutlastsItsStages() {
+        // Settling sets the outline to its end at once; before a stage ends, that would cut it.
+        #expect(Constants.recorderSaveSeconds >= Constants.recorderSaveDotDelay + Constants.recorderSaveDotDuration)
+        #expect(Constants.recorderSaveSeconds >= Constants.recorderSaveOutlineDelay + Constants.recorderSaveOutlineDuration)
+    }
+
     @Test("a shake moves the outline and comes to rest where it started")
     func shakeReturns() {
         // Each refusal shakes once; the outline must end exactly in place.

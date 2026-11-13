@@ -349,7 +349,10 @@ enum Constants {
     static let recorderSaveDotDuration: Double = 0.126
     static let recorderSaveOutlineDelay: Double = 0.077
     static let recorderSaveOutlineDuration: Double = 0.14
-    static let recorderSaveSeconds: Double = 0.25
+    // The save ends with its last stage: the recorder settles then, and under Reduce Motion
+    // the outline closes then in one step.
+    static let recorderSaveSeconds = max(recorderSaveDotDelay + recorderSaveDotDuration,
+                                         recorderSaveOutlineDelay + recorderSaveOutlineDuration)
     // River's shortcuts come back after the recorder once the tap reports every modifier key
     // up; if the tap falls silent, after this long anyway, so they can't stay paused for good.
     static let shortcutResumeDeadlineSeconds: Double = 10
