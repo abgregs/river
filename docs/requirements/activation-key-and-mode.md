@@ -20,7 +20,7 @@ The shortcut is either a **lone modifier** or a **combination**. Every shortcut 
 
 ### Lone modifier
 
-One of 8 modifier keys, watched on the listen-only event tap. A lone modifier keeps its side: left and right share a flag-mask family, so River tells them apart by keycode, not by flag bit. See [../architecture/configuration.md](../architecture/configuration.md).
+One of 8 modifier keys, watched on the listen-only event tap. A lone modifier keeps its side: left and right share a flag-mask family, so the keycode names the key, and the key's own device bit in the event's raw flags (`NX_DEVICE*KEYMASK`) says whether it is down. An event that carries no device bit, as one another app posts can, falls back to the family flag. `ModifierKey` holds this table in code, and the recorder and `HotkeyManager` both read it. **Why:** a latch that flipped on every event stayed inverted after one missed or repeated event; reading the bit corrects itself on the next one. See [../architecture/configuration.md](../architecture/configuration.md).
 
 | Key | Keycode | `CGEventFlags` mask |
 |---|---|---|

@@ -189,6 +189,11 @@ final class HotkeyManager {
         ))
     }
 
+    // A key River doesn't know as a modifier keeps its latch as it is.
+    private static func isDown(_ keyCode: Int, in flags: CGEventFlags) -> Bool? {
+        ModifierKey(rawValue: keyCode)?.isDown(rawFlags: flags.rawValue)
+    }
+
     // The flags of keys a person holds down; Caps Lock's stays set while it is on.
     private static let modifierFlags: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand, .maskSecondaryFn]
 
@@ -199,8 +204,9 @@ final class HotkeyManager {
     }
 
     // internal for testability — pure interpretation of the tap. `.flagsChanged`
-    // for a lone-modifier shortcut toggles the press latch; left/right variants are
-    // disambiguated by keycode, not flag bit (see activation-key-and-mode.md).
+    // for a lone-modifier shortcut moves the press latch to what the key's own bit
+    // says (`ModifierKey`): the keycode names the side, and an event that repeats a
+    // state, or follows a missed one, is no edge (see activation-key-and-mode.md).
     // Hold mode fires on each edge; tap modes act only on the completing (key-up)
     // edge of a tap and delegate start/stop to the tap machine — so holding the
     // key in a tap mode is just one tap. For a combination held in Hold mode, the
@@ -220,13 +226,13 @@ final class HotkeyManager {
             // so the 0006 least-privilege posture is untouched. fn is never the
             // dictation shortcut (spec 0036), so it always cancels.
             if Int(keyCode) == cancelKeyCode {
-                handleCancelKey()
+                handleCancelKey(isDown: Self.isDown(cancelKeyCode, in: flags) ?? isCancelKeyDown)
                 return
             }
             switch shortcut {
             case .modifier(let watchedKeyCode):
                 guard Int(keyCode) == watchedKeyCode else { return }
-                handleModifierEdge()
+                handleModifierEdge(isDown: Self.isDown(watchedKeyCode, in: flags) ?? isKeyDown)
             case .combination(_, let modifiers):
                 // Lifting any of the combination's modifiers ends a Hold recording,
                 // even while the key is still down: the shortcut is no longer held.
@@ -271,8 +277,9 @@ final class HotkeyManager {
         }
     }
 
-    private func handleModifierEdge() {
-        isKeyDown.toggle()
+    private func handleModifierEdge(isDown: Bool) {
+        guard isDown != isKeyDown else { return }
+        isKeyDown = isDown
         if !isKeyDown, isKeyPressSpent {
             isKeyPressSpent = false
             return
@@ -294,11 +301,12 @@ final class HotkeyManager {
         }
     }
 
-    // internal for testability — the cancel modifier toggles its own latch and
-    // fires on the press (key-down) edge only, so one tap of the cancel key is one
-    // cancel. Mode-agnostic: cancel works identically in Hold and both tap modes.
-    private func handleCancelKey() {
-        isCancelKeyDown.toggle()
+    // The cancel modifier keeps its own latch and fires on the press (key-down) edge
+    // only, so one tap of the cancel key is one cancel. Mode-agnostic: cancel works
+    // identically in Hold and both tap modes.
+    private func handleCancelKey(isDown: Bool) {
+        guard isDown != isCancelKeyDown else { return }
+        isCancelKeyDown = isDown
         guard isCancelKeyDown else { return }
         logger.info("Cancel gesture (keycode \(self.cancelKeyCode, privacy: .public))")
         onCancel?()

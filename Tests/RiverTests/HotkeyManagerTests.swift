@@ -58,6 +58,45 @@ struct HotkeyManagerHoldTests {
     }
 
     @MainActor
+    @Test("the watched key's own bit says it lifted, though the other side still holds its family flag")
+    func sideBitEndsHold() {
+        // Right ⌃ released while Left ⌃ is held keeps ⌃'s flag set; only the device bit
+        // (0x2000 right, 0x1 left) says the watched key is up, so the Hold recording stops.
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: HotKeyRegistry(calls: .inert),
+            initialShortcut: .modifier(keyCode: 62)
+        )
+        var deactivates = 0
+        manager.onDeactivate = { deactivates += 1 }
+        let control = CGEventFlags.maskControl.rawValue
+        manager.handle(.flagsChanged(keyCode: 59, flags: CGEventFlags(rawValue: control | 0x1)))
+        manager.handle(.flagsChanged(keyCode: 62, flags: CGEventFlags(rawValue: control | 0x2001)))
+        manager.handle(.flagsChanged(keyCode: 62, flags: CGEventFlags(rawValue: control | 0x1)))
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    @Test("an event that repeats the key's state is no second press")
+    func repeatedStateIsNoEdge() {
+        // A latch that flipped on every event would read a repeated down as the release, and
+        // stay inverted from then on.
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: HotKeyRegistry(calls: .inert),
+            initialShortcut: .modifier(keyCode: 62)
+        )
+        var activates = 0
+        var deactivates = 0
+        manager.onActivate = { activates += 1 }
+        manager.onDeactivate = { deactivates += 1 }
+        manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
+        manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
+        #expect(activates == 1)
+        #expect(deactivates == 0)
+        manager.handle(.flagsChanged(keyCode: 62, flags: []))
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
     @Test(".tapDisabled is a no-op for the manager (capability self-heals)")
     func tapDisabledIsNoOp() {
         let cap = InputMonitoringCapability()
