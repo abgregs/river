@@ -538,6 +538,7 @@ struct HotkeyManagerCombinationTests {
         #expect(hotKeys.registeredIDs.isEmpty)
         hotKeys.publishForTest(.pressed(.dictation))
         manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))
+        manager.handle(.flagsChanged(keyCode: 63, flags: []))
         #expect(activates == 0)
         #expect(cancels == 0)
 
@@ -712,5 +713,90 @@ private final class RegistrationAnswer {
 
     init(_ status: OSStatus) {
         self.status = status
+    }
+}
+
+@Suite("HotkeyManager resume after the recorder")
+@MainActor
+struct HotkeyManagerResumeTests {
+    // The Settings recorder pauses River's shortcuts, hears a shortcut and asks for them back
+    // while its keys may still be down (spec 0036, The recorder). The tap's events here are as
+    // the tap delivers them, so the test needs no real keyboard.
+    private let rightOption = TapEvent.flagsChanged(keyCode: 61, flags: .maskAlternate)
+    private let rightOptionUp = TapEvent.flagsChanged(keyCode: 61, flags: [])
+
+    private func makeManager(
+        _ shortcut: Shortcut = .modifier(keyCode: 61), mode: ActivationMode = .singleTap,
+        deadline: Duration = .seconds(10)
+    ) -> (HotkeyManager, HotKeyRegistry) {
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), initialMode: mode, resumeDeadline: deadline)
+        manager.bindEventStream()
+        manager.setShortcut(shortcut)
+        return (manager, hotKeys)
+    }
+
+    @Test("asked to resume while the key is down, the shortcut comes back on its release, which starts nothing")
+    func resumeWaitsForRelease() {
+        // Recording Right ⌥ alone saves on its release, which the recorder can hear before the
+        // tap's copy arrives. Resumed first, that copy would complete a tap and start a dictation.
+        let (manager, _) = makeManager()
+        var activates = 0
+        manager.onActivate = { activates += 1 }
+        manager.pause()
+        manager.handle(rightOption)
+        manager.resume()
+        #expect(manager.isPaused)
+
+        manager.handle(rightOptionUp)
+        #expect(!manager.isPaused)
+        #expect(activates == 0)
+
+        manager.handle(rightOption)
+        manager.handle(rightOptionUp)
+        #expect(activates == 1)   // the next tap works
+    }
+
+    @Test("a combination registers again only once all its modifiers are up")
+    func combinationWaitsForModifiers() {
+        // Registered while ⌃⌥ are still down, the hot key could fire on the held Space.
+        let controlOptionSpace = Shortcut.combination(keyCode: 49, modifiers: [.control, .option])
+        let (manager, hotKeys) = makeManager(controlOptionSpace, mode: .hold)
+        manager.pause()
+        manager.handle(.flagsChanged(keyCode: 59, flags: .maskControl))
+        manager.handle(.flagsChanged(keyCode: 58, flags: [.maskControl, .maskAlternate]))
+        manager.resume()
+        manager.handle(.flagsChanged(keyCode: 58, flags: .maskControl))
+        #expect(hotKeys.registeredIDs.isEmpty)
+
+        manager.handle(.flagsChanged(keyCode: 59, flags: []))
+        #expect(hotKeys.registeredIDs == [.dictation])
+    }
+
+    @Test("recording again before the keys come up keeps the shortcuts paused")
+    func pauseCancelsPendingResume() {
+        // The user can press Record again during a save; their next keys belong to the recorder.
+        let (manager, _) = makeManager()
+        manager.pause()
+        manager.handle(rightOption)
+        manager.resume()
+        manager.pause()
+        manager.handle(rightOptionUp)
+        #expect(manager.isPaused)
+    }
+
+    @Test("a tap that falls silent can't keep the shortcuts paused")
+    func resumeDeadline() async throws {
+        // A lost key-up would otherwise leave River's shortcuts off until the next modifier press.
+        let (manager, _) = makeManager(deadline: .milliseconds(20))
+        manager.pause()
+        manager.handle(rightOption)
+        manager.resume()
+        let deadline = Date().addingTimeInterval(5)
+        while manager.isPaused, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(!manager.isPaused)
     }
 }

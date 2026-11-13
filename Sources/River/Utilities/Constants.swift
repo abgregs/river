@@ -338,8 +338,7 @@ enum Constants {
     // listens, the dot's halo widens to 2.75× and fades from 55 % over the first 70 % of each
     // 1.6 s. A save (Brisk timing) holds the new shortcut in red, then the dot fades as it
     // shrinks from 56 ms for 126 ms, and the red fades and the outline closes on the keys from
-    // 77 ms for 140 ms. River's shortcuts come back a moment after every key is up, so the
-    // tap's copy of the last key event arrives while they are still paused.
+    // 77 ms for 140 ms.
     // The gap between keys in a shortcut's outline: SF's ⌃ ⌥ ⇧ ⌘ fill their advance, so set
     // edge to edge they read as one cramped mark (on device, 2026-11-12).
     static let recorderKeySpacing: Double = 2
@@ -351,7 +350,9 @@ enum Constants {
     static let recorderSaveOutlineDelay: Double = 0.077
     static let recorderSaveOutlineDuration: Double = 0.14
     static let recorderSaveSeconds: Double = 0.25
-    static let recorderResumeGraceSeconds: Double = 0.15
+    // River's shortcuts come back after the recorder once the tap reports every modifier key
+    // up; if the tap falls silent, after this long anyway, so they can't stay paused for good.
+    static let shortcutResumeDeadlineSeconds: Double = 10
 
     // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
     static let hudMessageCornerRadius: Double = 16

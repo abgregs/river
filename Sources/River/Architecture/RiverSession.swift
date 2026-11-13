@@ -457,6 +457,7 @@ final class RiverSession {
         return true
     }
 
+    /// Brings River's shortcuts back once every modifier key is up (`HotkeyManager.resume`).
     func resumeShortcuts() {
         hotkey.resume()
     }

@@ -15,10 +15,11 @@ struct ShortcutRecorderModelTests {
         model.handle(.keyDown(keyCode: keyCode, modifiers: modifiers, isRepeat: false))
     }
 
-    @Test("recording pauses River's shortcuts, saves what it hears, and resumes them once keys are up")
+    @Test("recording pauses River's shortcuts, saves what it hears, and asks for them back")
     func recordsAndSaves() async throws {
         // While the recorder listens River's own shortcut must reach it, not start a dictation;
-        // afterwards the new shortcut must work without reopening Settings.
+        // afterwards the new shortcut must work without reopening Settings. HotkeyManager holds
+        // the resume until every key is up.
         let log = HooksLog()
         let model = ShortcutRecorderModel(hooks: log.hooks)
         model.start()
@@ -28,13 +29,13 @@ struct ShortcutRecorderModelTests {
 
         press(model, kVK_Space, with: [.control, .option])
         #expect(log.saved == [controlOptionSpace])
+        #expect(log.resumes == 1)
         #expect(model.phase == .saving(controlOptionSpace))
         #expect(model.line == nil)
 
-        // The resume waits for every key to be up and a moment more; under a full parallel run
-        // the main actor can be slow to get to it, so the test waits for it rather than a time.
-        try await waitUntil { log.resumes == 1 && model.phase == .idle }
-        #expect(log.resumes == 1)
+        // Under a full parallel run the main actor can be slow to settle the save, so the test
+        // waits for it rather than a time.
+        try await waitUntil { model.phase == .idle }
         #expect(model.phase == .idle)
     }
 

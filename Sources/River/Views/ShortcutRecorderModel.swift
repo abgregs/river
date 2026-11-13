@@ -9,6 +9,8 @@ import SwiftUI
 struct ShortcutRecorderHooks {
     /// Pauses River's shortcuts; false while a dictation runs, when recording is unavailable.
     var pause: () -> Bool
+    /// Brings River's shortcuts back once every modifier key is up, so the keys just
+    /// recorded never reach them.
     var resume: () -> Void
     var probe: (Shortcut) -> HotKeyRegistration
     var save: (Shortcut) -> Void
@@ -22,8 +24,9 @@ struct ShortcutRecorderHooks {
 
 /// The dictation shortcut's recorder (spec 0036, The recorder). While it records, it takes the
 /// window's key presses, feeds them to `ShortcutRecorder`, and checks and saves what it hears;
-/// River's shortcuts are paused meanwhile and come back once every key is up. Esc, Cancel, a
-/// click anywhere but the button, or the window losing key stops it, keeping the saved shortcut.
+/// River's shortcuts are paused meanwhile, and HotkeyManager brings them back once every key is
+/// up. Esc, Cancel, a click anywhere but the button, or the window losing key stops it, keeping
+/// the saved shortcut.
 @MainActor
 @Observable
 final class ShortcutRecorderModel {
@@ -56,8 +59,6 @@ final class ShortcutRecorderModel {
     @ObservationIgnored private var monitor: Any?
     @ObservationIgnored private var resignObserver: NSObjectProtocol?
     @ObservationIgnored private weak var window: NSWindow?
-    @ObservationIgnored private var isPaused = false
-    @ObservationIgnored private var resumeTask: Task<Void, Never>?
     @ObservationIgnored private var settleTask: Task<Void, Never>?
 
     init(hooks: ShortcutRecorderHooks) {
@@ -76,12 +77,9 @@ final class ShortcutRecorderModel {
     }
 
     func start() {
-        guard !isRecording else { return }
-        resumeTask?.cancel()
-        if !isPaused {
-            guard hooks.pause() else { return }
-            isPaused = true
-        }
+        // Pausing again during a save keeps River's shortcuts paused if their resume is still
+        // waiting for a key to come up.
+        guard !isRecording, hooks.pause() else { return }
         settleTask?.cancel()
         recorder = ShortcutRecorder()
         held = []
@@ -151,27 +149,7 @@ final class ShortcutRecorderModel {
         held = []
         tried = nil
         line = nil
-        resumeWhenKeysUp()
-    }
-
-    // River's shortcuts come back once no modifier is held and a moment after, so the tap's own
-    // copy of the last key event arrives while they are still paused and the latches restart
-    // from up (`HotkeyManager.resume`). A modifier held for ten seconds stops the wait.
-    private func resumeWhenKeysUp() {
-        guard isPaused else { return }
-        resumeTask?.cancel()
-        resumeTask = Task { @MainActor [weak self] in
-            let held: NSEvent.ModifierFlags = [.control, .option, .shift, .command, .function]
-            let deadline = Date().addingTimeInterval(10)
-            while !NSEvent.modifierFlags.intersection(held).isEmpty, Date() < deadline {
-                try? await Task.sleep(for: .milliseconds(50))
-                if Task.isCancelled { return }
-            }
-            try? await Task.sleep(for: .seconds(Constants.recorderResumeGraceSeconds))
-            guard !Task.isCancelled, let self, self.isPaused, !self.isRecording else { return }
-            self.isPaused = false
-            self.hooks.resume()
-        }
+        hooks.resume()
     }
 
     private func installMonitor() {

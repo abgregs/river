@@ -59,6 +59,7 @@ struct RiverSessionTests {
 Some methods are `internal` (not `private`) specifically so tests can exercise them without going through real OS APIs:
 
 - `HotkeyManager.handle(_:)` / `bindEventStream()` — interpretation and Combine binding seams, exercised by feeding synthetic `TapEvent`s
+- `HotkeyManager(resumeDeadline:)` — how long a resume waits for the tap's key-up before giving up, shortened so a test sees a silent tap release the shortcuts without waiting 10 s
 - `InputMonitoringCapability.decode(_:)` — pure `CGEvent` → `TapEvent` decoder, `nonisolated` so the C tap callback can call it without crossing an actor boundary
 - `InputMonitoringCapability.publishForTest(_:)` — pushes a synthetic `TapEvent` into the stream, bypassing the real tap (which requires an Input Monitoring grant on the running process)
 - `InputMonitoringCapability.tapThread` — read-only, so `InputMonitoringLifecycleTests` can hold the tap thread and see it end once the capability is freed

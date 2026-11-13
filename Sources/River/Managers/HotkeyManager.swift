@@ -51,21 +51,30 @@ final class HotkeyManager {
     var dictationRegistrations: AnyPublisher<HotKeyRegistration?, Never> { registrationSubject.eraseToAnyPublisher() }
     /// River's shortcuts are paused while the Settings recorder listens (spec 0036, The
     /// recorder): the hot key is unregistered, so the recorder sees its keys, and the tap's
-    /// events are ignored.
+    /// events change nothing.
     private(set) var isPaused = false
+    // `resume` was asked for while a modifier was down: the shortcuts come back on the tap's
+    // own release of the last one, so that release reaches no latch.
+    private var isResumePending = false
+    // Whether any modifier is down, as the tap's last event said; followed even while paused.
+    private var isModifierHeld = false
+    private let resumeDeadline: Duration
+    private var resumeDeadlineTask: Task<Void, Never>?
 
     init(
         inputMonitoring: InputMonitoringCapability,
         hotKeys: HotKeyRegistry,
         initialShortcut: Shortcut = Constants.defaultDictationShortcut,
         initialMode: ActivationMode = Constants.defaultActivationMode,
-        cancelKeyCode: Int = Constants.cancelKeyCode
+        cancelKeyCode: Int = Constants.cancelKeyCode,
+        resumeDeadline: Duration = .seconds(Constants.shortcutResumeDeadlineSeconds)
     ) {
         self.inputMonitoring = inputMonitoring
         self.hotKeys = hotKeys
         self.shortcut = initialShortcut
         self.mode = initialMode
         self.cancelKeyCode = cancelKeyCode
+        self.resumeDeadline = resumeDeadline
         self.tapMachine = TapStateMachine(mode: initialMode, windowMs: Constants.doubleTapWindowMs)
     }
 
@@ -77,6 +86,7 @@ final class HotkeyManager {
 
     func stop() async {
         cancellables.removeAll()
+        cancelPendingResume()
         hotKeys.unregister(.dictation)
         await inputMonitoring.stopTap()
         resetLatches()
@@ -100,24 +110,47 @@ final class HotkeyManager {
         if !cancellables.isEmpty, !isPaused { registerCombination() }
     }
 
-    /// Pauses River's shortcuts for the Settings recorder. Call `resume` only once no key
-    /// is down: the press latches restart from up.
+    /// Pauses River's shortcuts for the Settings recorder. Pausing again while a resume
+    /// waits for a key to come up keeps them paused.
     func pause() {
+        cancelPendingResume()
         guard !isPaused else { return }
         isPaused = true
         hotKeys.unregister(.dictation)
         logger.info("Shortcuts paused for the recorder")
     }
 
-    /// Restores River's shortcuts. Registering again also retries a combination that
-    /// failed, so recording the same shortcut once another app lets go of it fixes it.
+    /// Restores River's shortcuts once every modifier key is up, as the tap reports them: at
+    /// once if none is down, else on the tap's release of the last one, which reaches no
+    /// latch, so the keys of the shortcut just recorded never start or stop a dictation. A
+    /// tap that falls silent can't keep them paused: they come back after `resumeDeadline`.
+    /// Registering again also retries a combination that failed, so recording the same
+    /// shortcut once another app lets go of it fixes it.
     func resume() {
-        guard isPaused else { return }
+        guard isPaused, !isResumePending else { return }
+        guard isModifierHeld else { return finishResume() }
+        isResumePending = true
+        resumeDeadlineTask = Task { @MainActor [weak self, resumeDeadline] in
+            try? await Task.sleep(for: resumeDeadline)
+            guard let self, !Task.isCancelled, self.isResumePending else { return }
+            self.logger.info("No key-up from the tap; resuming shortcuts anyway")
+            self.finishResume()
+        }
+    }
+
+    private func finishResume() {
+        cancelPendingResume()
         isPaused = false
         resetLatches()
         isCancelKeyDown = false
         if !cancellables.isEmpty { registerCombination() }
         logger.info("Shortcuts resumed")
+    }
+
+    private func cancelPendingResume() {
+        isResumePending = false
+        resumeDeadlineTask?.cancel()
+        resumeDeadlineTask = nil
     }
 
     /// Whether macOS would take `candidate` as River's hot key. A lone modifier needs no
@@ -156,6 +189,9 @@ final class HotkeyManager {
         ))
     }
 
+    // The flags of keys a person holds down; Caps Lock's stays set while it is on.
+    private static let modifierFlags: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand, .maskSecondaryFn]
+
     private func resetLatches() {
         isKeyDown = false
         isKeyPressSpent = false
@@ -170,7 +206,13 @@ final class HotkeyManager {
     // key in a tap mode is just one tap. For a combination held in Hold mode, the
     // tap reports its modifiers lifting.
     func handle(_ event: TapEvent) {
-        guard !isPaused else { return }
+        if case .flagsChanged(_, let flags) = event {
+            isModifierHeld = !flags.isDisjoint(with: Self.modifierFlags)
+        }
+        guard !isPaused else {
+            if isResumePending, !isModifierHeld { finishResume() }
+            return
+        }
         switch event {
         case .flagsChanged(let keyCode, let flags):
             // The cancel modifier (planning 0017) is interpreted off the same
