@@ -59,10 +59,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = UpdaterManager()
 
     private(set) lazy var settingsWindow: SettingsWindowController = {
-        SettingsWindowController(appState: appState, capabilities: capabilities, updater: updater) { [weak self] model in
+        SettingsWindowController(appState: appState, capabilities: capabilities, updater: updater,
+                                 shortcutHooks: shortcutHooks) { [weak self] model in
             self?.session.selectModel(model)
         }
     }()
+
+    // The Settings recorder's reach (planning 0036, The recorder): River's shortcuts through the
+    // session, never past it, and the setting through the store.
+    private var shortcutHooks: ShortcutRecorderHooks {
+        ShortcutRecorderHooks(
+            pause: { [weak self] in self?.session.pauseShortcuts() ?? false },
+            resume: { [weak self] in self?.session.resumeShortcuts() },
+            probe: { [weak self] in self?.session.probe($0) ?? .registered },
+            save: { [weak self] in self?.settings.setValue($0, for: Settings.dictationShortcut) },
+            systemShortcuts: SystemShortcuts.enabled
+        )
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("Application did finish launching")

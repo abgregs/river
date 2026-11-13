@@ -45,6 +45,15 @@ struct ShortcutTests {
         #expect(Shortcut(rawValue: raw) == nil)
     }
 
+    @Test("Carbon bits read back as the same modifiers, and the fn bit is not one")
+    func carbonFlagsReadBack() {
+        // macOS's own shortcut list reports Carbon bits, and its F-keys and arrows carry the fn
+        // bit; reading it as a modifier would miss that ⌘F5 is taken.
+        let all: ShortcutModifiers = [.control, .option, .shift, .command]
+        #expect(ShortcutModifiers(carbonFlags: Int(all.carbonFlags)) == all)
+        #expect(ShortcutModifiers(carbonFlags: cmdKey | 0x20000) == .command)
+    }
+
     @Test("modifiers map to Carbon's hot key bits and to the tap's device-independent flags")
     func modifierMappings() {
         // Carbon bits are what `RegisterEventHotKey` matches; the tap flags are how a

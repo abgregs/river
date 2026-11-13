@@ -43,9 +43,16 @@ final class HotkeyManager {
     // key so a cancel-key edge never disturbs the activation latch (and vice versa).
     private var isCancelKeyDown = false
     private var cancellables = Set<AnyCancellable>()
+    private let registrationSubject = CurrentValueSubject<HotKeyRegistration?, Never>(nil)
 
     /// What macOS said to the combination's registration; nil for a lone modifier.
-    private(set) var dictationRegistration: HotKeyRegistration?
+    var dictationRegistration: HotKeyRegistration? { registrationSubject.value }
+    /// The same, as it changes, for the Settings window's "Not working" line.
+    var dictationRegistrations: AnyPublisher<HotKeyRegistration?, Never> { registrationSubject.eraseToAnyPublisher() }
+    /// River's shortcuts are paused while the Settings recorder listens (spec 0036, The
+    /// recorder): the hot key is unregistered, so the recorder sees its keys, and the tap's
+    /// events are ignored.
+    private(set) var isPaused = false
 
     init(
         inputMonitoring: InputMonitoringCapability,
@@ -85,12 +92,39 @@ final class HotkeyManager {
         guard shortcut != newShortcut else { return }
         logger.info("Dictation shortcut changed: \(self.shortcut.rawValue, privacy: .public) -> \(newShortcut.rawValue, privacy: .public)")
         hotKeys.unregister(.dictation)
-        dictationRegistration = nil
+        registrationSubject.send(nil)
         shortcut = newShortcut
         resetLatches()
-        // Registered at once only while running; before `start` there is nothing to
-        // deliver its events to, and `start` registers it.
+        // Registered at once only while running and not paused; before `start` there is
+        // nothing to deliver its events to, and `start` or `resume` registers it.
+        if !cancellables.isEmpty, !isPaused { registerCombination() }
+    }
+
+    /// Pauses River's shortcuts for the Settings recorder. Call `resume` only once no key
+    /// is down: the press latches restart from up.
+    func pause() {
+        guard !isPaused else { return }
+        isPaused = true
+        hotKeys.unregister(.dictation)
+        logger.info("Shortcuts paused for the recorder")
+    }
+
+    /// Restores River's shortcuts. Registering again also retries a combination that
+    /// failed, so recording the same shortcut once another app lets go of it fixes it.
+    func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        resetLatches()
+        isCancelKeyDown = false
         if !cancellables.isEmpty { registerCombination() }
+        logger.info("Shortcuts resumed")
+    }
+
+    /// Whether macOS would take `candidate` as River's hot key. A lone modifier needs no
+    /// registration.
+    func probe(_ candidate: Shortcut) -> HotKeyRegistration {
+        guard case .combination(let keyCode, let modifiers) = candidate else { return .registered }
+        return hotKeys.probe(keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags)
     }
 
     /// Live-apply for the activation mode. Resets the press latch and hands the
@@ -117,9 +151,9 @@ final class HotkeyManager {
 
     private func registerCombination() {
         guard case .combination(let keyCode, let modifiers) = shortcut else { return }
-        dictationRegistration = hotKeys.register(
+        registrationSubject.send(hotKeys.register(
             .dictation, keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags
-        )
+        ))
     }
 
     private func resetLatches() {
@@ -136,6 +170,7 @@ final class HotkeyManager {
     // key in a tap mode is just one tap. For a combination held in Hold mode, the
     // tap reports its modifiers lifting.
     func handle(_ event: TapEvent) {
+        guard !isPaused else { return }
         switch event {
         case .flagsChanged(let keyCode, let flags):
             // The cancel modifier (planning 0017) is interpreted off the same
@@ -165,6 +200,7 @@ final class HotkeyManager {
 
     // internal for testability — pure interpretation of a River hot key.
     func handle(_ event: HotKeyEvent) {
+        guard !isPaused else { return }
         switch (shortcut, event) {
         case (.combination, .pressed(.dictation)):
             // Hold starts on the press. The tap modes wait for the release, so

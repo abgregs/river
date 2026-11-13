@@ -325,3 +325,23 @@ private final class ManualToastScheduler {
         action?()
     }
 }
+
+@Suite("AppState dictation shortcut")
+@MainActor
+struct AppStateDictationShortcutTests {
+    @Test("a dictation shortcut that failed to register is failing until it registers")
+    func registrationFailure() {
+        // The Settings window's badge and "Not working" line read this. A lone modifier has
+        // no registration and never fails this way.
+        let state = AppState()
+        #expect(!state.isDictationShortcutFailing)
+        state.apply(dictationRegistration: .takenByAnotherApp)
+        #expect(state.isDictationShortcutFailing)
+        state.apply(dictationRegistration: .refused(-9868))
+        #expect(state.isDictationShortcutFailing)
+        state.apply(dictationRegistration: .registered)
+        #expect(!state.isDictationShortcutFailing)
+        state.apply(dictationRegistration: nil)
+        #expect(!state.isDictationShortcutFailing)
+    }
+}

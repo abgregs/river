@@ -523,6 +523,71 @@ struct HotkeyManagerCombinationTests {
     }
 
     @MainActor
+    @Test("paused, River's shortcut does nothing and its hot key is let go; resumed, both are back")
+    func pauseAndResume() {
+        // The Settings recorder must hear River's own shortcut pressed again, and a press while
+        // it listens must not start a dictation or cancel one (spec 0036, The recorder).
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var activates = 0
+        var cancels = 0
+        manager.onActivate = { activates += 1 }
+        manager.onCancel = { cancels += 1 }
+        #expect(hotKeys.registeredIDs == [.dictation])
+
+        manager.pause()
+        #expect(hotKeys.registeredIDs.isEmpty)
+        hotKeys.publishForTest(.pressed(.dictation))
+        manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))
+        #expect(activates == 0)
+        #expect(cancels == 0)
+
+        manager.resume()
+        #expect(hotKeys.registeredIDs == [.dictation])
+        hotKeys.publishForTest(.pressed(.dictation))
+        #expect(activates == 1)
+    }
+
+    @MainActor
+    @Test("a shortcut saved while paused registers on resume, not before")
+    func savedWhilePausedRegistersOnResume() {
+        // Registering it at once would take its keys from the recorder still listening.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        manager.pause()
+        manager.setShortcut(.combination(keyCode: 9, modifiers: [.control, .option]))
+        #expect(hotKeys.registeredIDs.isEmpty)
+        manager.resume()
+        #expect(hotKeys.registeredIDs == [.dictation])
+    }
+
+    @MainActor
+    @Test("resuming registers again, so a shortcut another app let go of starts working")
+    func resumeRetriesRegistration() {
+        // Recording the same shortcut again is how the user fixes "Not working". The setting
+        // doesn't change, so only the resume can retry the registration.
+        let answer = RegistrationAnswer(OSStatus(eventHotKeyExistsErr))
+        let hotKeys = HotKeyRegistry(calls: HotKeyRegistry.Calls(
+            installHandler: { _ in noErr }, register: { _, _, _ in (answer.status, nil) }, unregister: { _ in }))
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), initialMode: .hold)
+        manager.bindEventStream()
+        manager.setShortcut(combination)
+        #expect(manager.dictationRegistration == .takenByAnotherApp)
+
+        answer.status = noErr
+        manager.pause()
+        manager.resume()
+        #expect(manager.dictationRegistration == .registered)
+    }
+
+    @MainActor
+    @Test("a lone modifier needs no registration to be saved")
+    func probeLoneModifier() {
+        // The tap watches a lone modifier, so macOS has nothing to refuse.
+        let (manager, _) = makeManager(mode: .hold)
+        #expect(manager.probe(.modifier(keyCode: 61)) == .registered)
+    }
+
+    @MainActor
     @Test("fn cancels whatever the dictation shortcut is")
     func fnAlwaysCancels() {
         // fn is never the dictation shortcut (spec 0036), so its press is always the
@@ -638,5 +703,14 @@ struct HotkeyManagerDiscardTests {
         )
         manager.bindEventStream()
         return (manager, hotKeys)
+    }
+}
+
+@MainActor
+private final class RegistrationAnswer {
+    var status: OSStatus
+
+    init(_ status: OSStatus) {
+        self.status = status
     }
 }

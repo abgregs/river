@@ -85,6 +85,17 @@ struct ShortcutModifiers: OptionSet, Hashable, Sendable {
         self = modifiers
     }
 
+    /// Reads Carbon modifier bits, as macOS's own shortcut list reports them. Other bits,
+    /// such as the fn bit F-keys and arrows carry, are not modifiers of a combination.
+    init(carbonFlags: Int) {
+        var modifiers: ShortcutModifiers = []
+        if carbonFlags & controlKey != 0 { modifiers.insert(.control) }
+        if carbonFlags & optionKey != 0 { modifiers.insert(.option) }
+        if carbonFlags & shiftKey != 0 { modifiers.insert(.shift) }
+        if carbonFlags & cmdKey != 0 { modifiers.insert(.command) }
+        self = modifiers
+    }
+
     /// The modifier mask `RegisterEventHotKey` takes.
     var carbonFlags: UInt32 {
         var flags = 0

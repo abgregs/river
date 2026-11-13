@@ -80,6 +80,16 @@ struct PaletteTests {
         #expect(contrast(red, bar) >= 3)
     }
 
+    // The recorder's dot and red outline carry "recording", so each needs 3:1 on the Settings
+    // window's tint in its appearance (color.md, Status colors; 5.55:1 and 5.62:1).
+    @Test("the recording red holds 3:1 on the Settings window's tint in each appearance",
+          arguments: [(NSAppearance.Name.aqua, 0xF4F5F7 as UInt32), (.darkAqua, 0x101215)])
+    func recordingContrastInSettings(appearance: NSAppearance.Name, tint: UInt32) throws {
+        #expect(try resolvedHex(Palette.windowTint, in: appearance) == tint)
+        let red = channels(NSColor(srgbHex: try resolvedHex(Palette.recording, in: appearance)))
+        #expect(contrast(red, channels(NSColor(srgbHex: tint))) >= 3)
+    }
+
     private func channels(_ color: NSColor) -> [Double] {
         let srgb = color.usingColorSpace(.sRGB)!
         return [srgb.redComponent, srgb.greenComponent, srgb.blueComponent]

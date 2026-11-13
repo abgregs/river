@@ -79,10 +79,11 @@ There is no path that tears down the event tap mid-cycle. See [../architecture/r
 
 ## Settings UI
 
-Until the shortcut recorder lands in the settings panel ([0036](../planning/0036_settings-and-shortcuts.md)), the Activation section of Settings contains:
+The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-shortcuts.md)) contains:
 
-1. **Activation Key picker** — dropdown with the 8 lone modifiers above, as "Dictation shortcut" in the Settings window's Shortcuts section, until PR 8's recorder replaces it ([0036](../planning/0036_settings-and-shortcuts.md)). It writes `dictationShortcut`. A combination can be set only by the recorder.
-2. **Activation Mode picker** — "Start by", a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description and the cancel line under it.
+1. **Dictation shortcut** — the shortcut in its outline and a Record button. Recording takes a lone modifier or a combination, refuses what cannot work or what River already uses, and writes `dictationShortcut` ([0036](../planning/0036_settings-and-shortcuts.md), The recorder).
+2. **Start by** — a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description under it.
+3. **Cancel recording** — the keys that cancel a recording (fn, and Esc from PR 9), shown, not editable.
 
 Warnings inform and never block: the user knows their keyboard better than the app does. No shortcut and mode pair carries a warning.
 
