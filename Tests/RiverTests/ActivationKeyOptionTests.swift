@@ -3,11 +3,11 @@ import Testing
 
 @Suite("ActivationKeyOption")
 struct ActivationKeyOptionTests {
-    @Test("table lists the 9 supported keys, no duplicate keycodes, includes the default")
+    @Test("table lists the 8 supported keys, no duplicate keycodes, includes the default")
     func tableComplete() {
-        #expect(ActivationKeyOption.all.count == 9)
+        #expect(ActivationKeyOption.all.count == 8)
         let codes = Set(ActivationKeyOption.all.map(\.keyCode))
-        #expect(codes.count == 9)
+        #expect(codes.count == 8)
         #expect(codes.contains(Constants.defaultActivationKeyCode))  // 61, Right Option
     }
 
@@ -18,19 +18,12 @@ struct ActivationKeyOptionTests {
         // it would hand the user a key that cannot work in any mode.
         #expect(!ActivationKeyOption.all.contains { $0.keyCode == 57 })
     }
-}
 
-@Suite("Settings cancel line")
-struct SettingsCancelLineTests {
-    // fn is the cancel gesture, so with fn as the activation key the line must not promise it
-    // (planning 0036, Cancel line): the menu item is the way left until Esc lands in PR 9.
-    @Test("the cancel line names fn, unless fn alone starts dictation")
-    func cancelLineFollowsTheShortcut() {
-        #expect(ActivationKeyOption.cancelLine(for: .modifier(keyCode: 61)).contains("fn"))
-        #expect(ActivationKeyOption.cancelLine(for: .combination(keyCode: 49, modifiers: [.control, .option])).contains("fn"))
-        let fnLine = ActivationKeyOption.cancelLine(for: .modifier(keyCode: Constants.cancelKeyCode))
-        #expect(!fnLine.contains("fn"))
-        #expect(fnLine.contains("menu"))
+    @Test("fn is not a dictation key")
+    func fnExcluded() {
+        // Why: fn cancels a recording (spec 0036). As the dictation key its press would
+        // have to start and stop instead, leaving a recording with no cancel key.
+        #expect(!ActivationKeyOption.all.contains { $0.keyCode == Constants.cancelKeyCode })
     }
 }
 

@@ -167,23 +167,6 @@ struct HotkeyManagerCancelTests {
     }
 
     @MainActor
-    @Test("cancel is disabled when it would collide with the activation key")
-    func cancelDisabledWhenEqualsActivationKey() {
-        // If the cancel keycode equals the watched key, that key already means
-        // start/stop; the gesture disables so it isn't ambiguous. Watched == cancel
-        // == 62 → the event drives activation (Hold), never onCancel.
-        let manager = makeManager(mode: .hold, cancelKeyCode: 62)
-        var activates = 0
-        var cancels = 0
-        manager.onActivate = { activates += 1 }
-        manager.onCancel = { cancels += 1 }
-
-        manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
-        #expect(cancels == 0)
-        #expect(activates == 1)   // treated as an activation, not a cancel
-    }
-
-    @MainActor
     @Test("Hold: cancelling mid-hold leaves the press latch intact")
     func holdCancelPreservesPressLatch() {
         // Planning 0017. Hold tracks the PHYSICAL key: during a cancel the activation
@@ -540,20 +523,21 @@ struct HotkeyManagerCombinationTests {
     }
 
     @MainActor
-    @Test("fn cancel stays on for a combination and is off only when fn is the dictation key")
-    func fnCancelFollowsDictationKey() {
-        // fn is the cancel key; it only stands down when it is also the dictation key,
-        // where its press already means start or stop.
+    @Test("fn cancels whatever the dictation shortcut is")
+    func fnAlwaysCancels() {
+        // fn is never the dictation shortcut (spec 0036), so its press is always the
+        // cancel gesture, under a combination and under a lone modifier alike.
         let (manager, hotKeys) = makeManager(mode: .hold)
         var cancels = 0
         manager.onCancel = { cancels += 1 }
         hotKeys.publishForTest(.pressed(.dictation))
         manager.handle(.flagsChanged(keyCode: 63, flags: heldFlags.union(.maskSecondaryFn)))
+        manager.handle(.flagsChanged(keyCode: 63, flags: heldFlags))
         #expect(cancels == 1)
 
-        manager.setShortcut(.modifier(keyCode: 63))
+        manager.setShortcut(.modifier(keyCode: 61))
         manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))
-        #expect(cancels == 1)
+        #expect(cancels == 2)
     }
 
     // Started through `bindEventStream`, which a test can call, and `setShortcut`,

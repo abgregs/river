@@ -9,8 +9,9 @@ struct ActivationKeyOption: Identifiable, Equatable {
     let label: String
     var id: Int { keyCode }
 
-    /// The 9 supported modifier keys, in picker order. Caps Lock is not one: River's
-    /// tap sees one event per Caps Lock press and none on release.
+    /// The 8 supported modifier keys, in picker order. Caps Lock is not one: River's
+    /// tap sees one event per Caps Lock press and none on release. Nor is fn: it
+    /// cancels a recording (spec 0036).
     static let all: [ActivationKeyOption] = [
         .init(keyCode: 62, label: "Right Control"),
         .init(keyCode: 59, label: "Left Control"),
@@ -20,15 +21,5 @@ struct ActivationKeyOption: Identifiable, Equatable {
         .init(keyCode: 55, label: "Left Command"),
         .init(keyCode: 60, label: "Right Shift"),
         .init(keyCode: 56, label: "Left Shift"),
-        .init(keyCode: 63, label: "Function (Fn)"),
     ]
-
-    /// The sentence after the Start by description: how to cancel a recording with this
-    /// dictation shortcut (planning 0036, Cancel line). fn alone as the shortcut turns the
-    /// fn cancel gesture off, as `HotkeyManager` does. Esc joins the line with PR 9.
-    static func cancelLine(for shortcut: Shortcut) -> String {
-        shortcut == .modifier(keyCode: Constants.cancelKeyCode)
-            ? "Cancel a recording from River’s menu in the menu bar."
-            : "Cancel a recording with fn."
-    }
 }

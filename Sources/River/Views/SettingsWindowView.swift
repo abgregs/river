@@ -188,8 +188,7 @@ private struct ShortcutsPane: View {
             // The cancel sentence never breaks across lines (planning 0036, Cancel line).
             SettingsRow(label: "Start by",
                         description: Text("\(activationMode.description) ")
-                            + Text(ActivationKeyOption.cancelLine(for: dictationShortcut)
-                                .replacingOccurrences(of: " ", with: "\u{00A0}"))) {
+                            + Text("Cancel a recording with fn.".replacingOccurrences(of: " ", with: "\u{00A0}"))) {
                 RiverSegmentedChoice(title: "Start by",
                                      options: ActivationMode.allCases.map { ($0, $0.label) },
                                      selection: $activationMode)

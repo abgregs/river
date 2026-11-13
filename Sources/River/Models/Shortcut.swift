@@ -17,7 +17,8 @@ enum Shortcut: Hashable, Sendable {
 
     /// The keycodes a lone modifier may use: the ones `ActivationKeyOption` lists.
     /// Caps Lock (57) is not among them: River's tap sees one event per Caps Lock
-    /// press and none on release, so no mode can work on it.
+    /// press and none on release, so no mode can work on it. Nor is fn (63): it
+    /// cancels a recording.
     static var loneModifierKeyCodes: Set<Int> { Set(ActivationKeyOption.all.map(\.keyCode)) }
 
     // Every modifier keycode, Caps Lock included. None of them is the key of a

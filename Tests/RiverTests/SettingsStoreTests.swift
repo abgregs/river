@@ -179,6 +179,7 @@ struct SettingsStoreTests {
     @MainActor
     @Test("a saved key that is no longer a dictation key is dropped and the default applies", arguments: [
         57 as Any,          // Caps Lock: removed, no mode works on it
+        63 as Any,          // fn: removed, it cancels a recording
         49 as Any,          // never a supported key
         "garbage" as Any,   // unreadable
     ])

@@ -27,7 +27,7 @@
 | General | Check for updates automatically | toggle, release builds only | Sparkle's `automaticallyChecksForUpdates` | on | 7 |
 | Permissions | Microphone · Input Monitoring · Accessibility | "Granted", or an "Open System Settings…" button | none (the capabilities' status) | | 7 |
 
-- **Cancel line:** "Cancel a recording with fn or Esc." follows the Start by description, in the same text (maintainer, 2026-11-09; it was the Shortcuts footer). When fn is the dictation shortcut, it reads "Cancel a recording with Esc."
+- **Cancel line:** "Cancel a recording with fn or Esc." follows the Start by description, in the same text (maintainer, 2026-11-09; it was the Shortcuts footer).
 - **Start by** keeps today's three modes under shorter labels, each with today's one-line description, worded for a shortcut ("Hold the shortcut while speaking; release to finish.").
 - **Dictation** shows the microphone switch's description from [0033](0033_warm-microphone-pre-roll.md) ("What the user is told"). The switch is turned around from PR #79's "Only use the microphone while dictating" (maintainer, 2026-11-09): on by default and named for its on state. `micOnlyWhileDictating` never shipped in a release, so the new key replaces it with no migration.
 - **Model** (maintainer, 2026-11-09, settings panel study round 13):
@@ -88,7 +88,7 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
   - A combination in macOS's own list (`CopySymbolicHotKeys`, enabled entries) is saved with a warning: "macOS also uses this shortcut. Both will run." Inform, don't block.
   - A refusal at registration, such as macOS 15.0 refusing an ⌥-only combination, is shown in the same place.
   - A saved shortcut that fails at launch shows "Not working: another app uses this shortcut." on its row.
-- **Fn as the dictation shortcut** turns the fn cancel off, as today, and the cancel line says so; Esc and the menu item still cancel.
+- **fn is not a dictation shortcut** (maintainer, 2026-11-12). It cancels a recording, so the recorder refuses it as a shortcut River already uses ("Cancel recording uses fn. Choose another."), and a saved fn falls back to the default, as Caps Lock does. **Why:** as the dictation key its press would start and stop dictation, so it could not also cancel, and the Settings window had to explain the exception.
 - **A River combination pressed during a lone-modifier hold** (Right ⌥ as the Hold key, then ⌃⌥V) discards the recording that hold started, with no cue, and the combination's action runs.
 - **Mode warnings.** PR 8 checked what River's tap sees for Caps Lock: one event per press and none on release, so Hold never stops and a tap mode needs two presses. Caps Lock is no longer a dictation key, and a saved one migrates to the default. No other recorded key is unreliable in a mode, so the Caps Lock + Hold warning goes and no mode warning remains.
 - **Changes apply** as today for the dictation shortcut and mode ([../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md), "Live apply"). The other shortcuts apply at once.

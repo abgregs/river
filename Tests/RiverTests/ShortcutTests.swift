@@ -7,7 +7,6 @@ import Testing
 struct ShortcutTests {
     @Test("a shortcut survives the round trip through its stored string", arguments: [
         Shortcut.modifier(keyCode: 61),
-        .modifier(keyCode: 63),
         .combination(keyCode: 49, modifiers: [.control, .option]),
         .combination(keyCode: 9, modifiers: [.control, .option, .shift, .command]),
     ])
@@ -30,6 +29,7 @@ struct ShortcutTests {
     @Test("values that are not a dictation shortcut read as nothing", arguments: [
         "",                 // cleared; the dictation shortcut falls back to its default
         "mod:57",           // Caps Lock: no mode works on it
+        "mod:63",           // fn: it cancels a recording
         "mod:49",           // not a modifier
         "key:49:",          // a key with no modifier
         "key:58:ctrl",      // a modifier as the key

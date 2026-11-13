@@ -140,10 +140,9 @@ final class HotkeyManager {
         case .flagsChanged(let keyCode, let flags):
             // The cancel modifier (planning 0017) is interpreted off the same
             // already-watched `.flagsChanged` stream — no second tap, no mask change,
-            // so the 0006 least-privilege posture is untouched. It's disabled when it
-            // is the dictation key (that key already means stop); the menu item
-            // remains the fallback.
-            if Int(keyCode) == cancelKeyCode, shortcut != .modifier(keyCode: cancelKeyCode) {
+            // so the 0006 least-privilege posture is untouched. fn is never the
+            // dictation shortcut (spec 0036), so it always cancels.
+            if Int(keyCode) == cancelKeyCode {
                 handleCancelKey()
                 return
             }
