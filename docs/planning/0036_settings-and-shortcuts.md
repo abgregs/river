@@ -93,7 +93,7 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
 - **Conflicts:**
   - A shortcut River already uses is refused, naming the row that has it: "Cancel recording uses fn. Choose another."
   - A combination another app holds exclusively is refused: "Another app uses this shortcut. Choose another."
-  - A combination in macOS's own list (`CopySymbolicHotKeys`, enabled entries) is saved with a warning: "macOS also uses this shortcut. Both will run." Inform, don't block.
+  - A combination in macOS's own list (`CopySymbolicHotKeys`, enabled entries) is saved with a warning: "macOS also uses this shortcut. Both will run." Inform, don't block. In practice macOS takes its own enabled shortcuts before the Settings window sees the key press (⌘Space opened Spotlight and the recorder heard nothing, on device 2026-11-13), so recording can't capture one. The warning shows when the Shortcuts pane appears and macOS's list holds the saved shortcut, as after the user assigns it to a macOS shortcut in System Settings.
   - A refusal at registration is shown in the same place: "macOS 15.0 needs ⌃ or ⌘ in this shortcut. Choose another." for an ⌥-only combination on 15.0 or 15.1 (the Mac's own version), otherwise "macOS refused this shortcut. Choose another." The recorder asks macOS by registering the combination and releasing it at once, before it saves.
   - A key with no modifier is refused: "Add a modifier: ⌃, ⌥, ⇧ or ⌘." Delete on the dictation row: "The dictation shortcut can't be cleared."
   - A saved shortcut that fails at launch shows "Not working: another app uses this shortcut." on its row, or "Not working: macOS refused this shortcut.".
