@@ -6,17 +6,20 @@ import SwiftUI
 /// Owns the Settings window (planning 0036, The panel): one native window, built on first use
 /// and kept for the session, so it reopens where the user left it and on the section shown
 /// last. macOS draws its frame, corner, shadow and window buttons; minimise and zoom are dimmed,
-/// as a settings window's should be. It opens on Permissions while one is missing, grows for
-/// the Model section, and rechecks the permissions each time it comes forward, since the user
-/// grants them in System Settings and comes back.
+/// as a settings window's should be. It opens on Permissions while one is missing, then on
+/// Shortcuts while the dictation shortcut fails to register, grows for the Model section, and
+/// rechecks the permissions each time it comes forward, since the user grants them in System
+/// Settings and comes back.
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let model: SettingsWindowModel
     private var window: NSWindow?
     private var subscriptions = Set<AnyCancellable>()
 
-    init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager, selectModel: @escaping (String) -> Void) {
-        model = SettingsWindowModel(appState: appState, capabilities: capabilities, updater: updater, selectModel: selectModel)
+    init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
+         shortcutHooks: ShortcutRecorderHooks, selectModel: @escaping (String) -> Void) {
+        model = SettingsWindowModel(appState: appState, capabilities: capabilities, updater: updater,
+                                    shortcutHooks: shortcutHooks, selectModel: selectModel)
     }
 
     /// Follows the permissions for the rail's badge. Idempotent.
@@ -33,7 +36,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// "Settings…": shows the window, or brings it forward, and makes River the active app so
     /// the window can take key presses.
     func show() {
-        model.section = SettingsSection.opening(lastShown: model.section, permissionMissing: model.permissionMissing)
+        model.section = SettingsSection.opening(lastShown: model.section, permissionMissing: model.permissionMissing,
+                                                shortcutFailing: model.appState.isDictationShortcutFailing)
         let window = self.window ?? makeWindow()
         resize(window, for: model.section, animate: false)
         NSApp.activate(ignoringOtherApps: true)

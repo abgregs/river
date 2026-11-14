@@ -88,7 +88,8 @@ struct RiverSwitchStyle: ToggleStyle {
     }
 }
 
-/// A button in River's bezel: a faint ink plate with a hairline, darker on hover and press.
+/// A button in River's bezel: a faint ink plate with a hairline, darker on hover and press,
+/// dimmed when unavailable.
 struct RiverBezelButtonStyle: ButtonStyle {
     var height: Double = 22
     var fontSize: Double = 13
@@ -102,11 +103,12 @@ struct RiverBezelButtonStyle: ButtonStyle {
         let height: Double
         let fontSize: Double
         @Environment(\.colorScheme) private var colorScheme
+        @Environment(\.isEnabled) private var isEnabled
         @State private var isHovered = false
 
         var body: some View {
             let ink = SettingsInk(colorScheme)
-            let fill = configuration.isPressed ? 0.18 : isHovered ? 0.12 : 0.08
+            let fill = !isEnabled ? 0.08 : configuration.isPressed ? 0.18 : isHovered ? 0.12 : 0.08
             configuration.label
                 .font(.system(size: fontSize))
                 .lineLimit(1)
@@ -115,6 +117,7 @@ struct RiverBezelButtonStyle: ButtonStyle {
                 .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ink.opacity(fill)))
                 .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(ink.opacity(0.16), lineWidth: 0.5))
                 .contentShape(Rectangle())
+                .opacity(isEnabled ? 1 : 0.4)
                 .onHover { isHovered = $0 }
         }
     }

@@ -334,6 +334,29 @@ enum Constants {
     static let settingsRailWidth: Double = 176
     static let settingsTitleBarHeight: Double = 28
 
+    // The shortcut recorder (planning 0036; shortcut recorder study, rounds 4 to 8). While it
+    // listens, the dot's halo widens to 2.75× and fades from 55 % over the first 70 % of each
+    // 1.6 s. A save (Brisk timing) holds the new shortcut in red, then the dot fades as it
+    // shrinks from 56 ms for 126 ms, and the red fades and the outline closes on the keys from
+    // 77 ms for 140 ms.
+    // The gap between keys in a shortcut's outline: SF's ⌃ ⌥ ⇧ ⌘ fill their advance, so set
+    // edge to edge they read as one cramped mark (on device, 2026-11-12).
+    static let recorderKeySpacing: Double = 2
+    static let recorderPulsePeriod: Double = 1.6
+    static let recorderPulseScale: Double = 2.75
+    static let recorderPulseOpacity: Double = 0.55
+    static let recorderSaveDotDelay: Double = 0.056
+    static let recorderSaveDotDuration: Double = 0.126
+    static let recorderSaveOutlineDelay: Double = 0.077
+    static let recorderSaveOutlineDuration: Double = 0.14
+    // The save ends with its last stage: the recorder settles then, and under Reduce Motion
+    // the outline closes then in one step.
+    static let recorderSaveSeconds = max(recorderSaveDotDelay + recorderSaveDotDuration,
+                                         recorderSaveOutlineDelay + recorderSaveOutlineDuration)
+    // River's shortcuts come back after the recorder once the tap reports every modifier key
+    // up; if the tap falls silent, after this long anyway, so they can't stay paused for good.
+    static let shortcutResumeDeadlineSeconds: Double = 10
+
     // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
     static let hudMessageCornerRadius: Double = 16
     static let hudMessagePadding: Double = 12

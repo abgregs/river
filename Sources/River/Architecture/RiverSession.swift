@@ -90,6 +90,8 @@ final class RiverSession {
     var hasLastTranscript: Bool { lastTranscript != nil }
     // The streaming transcript of the current recording, for the transcript panel.
     var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
+    // What macOS said to the dictation combination's registration, for Settings' "Not working".
+    var dictationRegistration: AnyPublisher<HotKeyRegistration?, Never> { hotkey.dictationRegistrations }
 
     init(
         accessibility: AccessibilityCapability,
@@ -444,6 +446,26 @@ final class RiverSession {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    /// The Settings recorder's pause (spec 0036, The recorder): River's shortcuts stop while
+    /// it listens, so it sees the keys they would take. Refused unless idle, since a dictation
+    /// needs its shortcut to stop. Returns whether the shortcuts are paused.
+    func pauseShortcuts() -> Bool {
+        guard currentState == .idle else { return false }
+        hotkey.pause()
+        return true
+    }
+
+    /// Brings River's shortcuts back once every modifier key is up (`HotkeyManager.resume`).
+    func resumeShortcuts() {
+        hotkey.resume()
+    }
+
+    /// Whether `shortcut` can be the dictation shortcut, and if not, why
+    /// (`HotkeyManager.availability(of:)`).
+    func availability(of shortcut: Shortcut) -> ShortcutAvailability {
+        hotkey.availability(of: shortcut)
     }
 
     /// The Model section's Select and Try Again (planning 0036): makes `name` the model River

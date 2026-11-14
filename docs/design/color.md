@@ -4,7 +4,7 @@ The roles River's colors play, what the one accent means, and how a new surface 
 
 ## The system in one sentence
 
-Charcoal and ink carry everything, the mark included; one turquoise accent means **on**: a control you have switched on or are acting on. The one other hue is the menu bar's recording dot (below).
+Charcoal and ink carry everything, the mark included; one turquoise accent means **on**: a control you have switched on or are acting on. The one other hue is akane, River recording (below).
 
 ## Tokens
 
@@ -19,7 +19,7 @@ Charcoal and ink carry everything, the mark included; one turquoise accent means
 | `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces |
 | `accent` | dynamic | — | Resolves to the light or dark value per appearance; the tint of the Settings and onboarding windows |
 | `onAccent` | dynamic | — | Text on an accent fill: white on the light value, charcoal on the dark |
-| `akane` / `akaneOnDark` | `#B13546` / `#DD6871` | 51.8% 0.159 17 / 66% 0.147 17 | The menu bar's recording dot on a light and on a dark bar (`recording` resolves between them); see Status colors |
+| `akane` / `akaneOnDark` | `#B13546` / `#DD6871` | 51.8% 0.159 17 / 66% 0.147 17 | River recording: the menu bar's dot on a light and on a dark bar, and the Settings recorder's outline and dot (`recording` resolves between them); see Status colors |
 
 ## What the accent means: on
 
@@ -89,7 +89,12 @@ Glass's veil, the light its ripples catch, and the shade on their far side are `
 
 ## Status colors
 
-One: while River records a dictation (`.recording`), the menu bar's Listening glyph carries a dot in **akaneiro** (茜色), a muted madder red, the convention for a device that is recording (maintainer, 2026-11-04). In ready mode the microphone stays open while River is idle ([../planning/0033_warm-microphone-pre-roll.md](../planning/0033_warm-microphone-pre-roll.md)) and macOS shows its own indicator; River's red marks the dictation. It is `Palette.recording`: `akane` `#B13546` on a light bar, and `akaneOnDark` `#DD6871` (the same OKLCH hue, 17°, lifted to lightness 0.66) on a dark one. Modelled on the bar's grounds, the dot needs 3:1: `#B13546` measures 3.05:1 on a mid-gray `#B8B8B8` and 4.72:1 on `#E3E3E3`; `#DD6871` measures 3.36:1 on `#3A3B3D` and 4.99:1 on `#1E1E20`. A bar tinted mid-gray by a dark wallpaper defeats any red, and white icons barely reach 3:1 there; the dot's shape and the menu's "Recording..." carry the state, so color is never the only cue. Transcribing's dot is the bar's text color at 55 % (`menuBarMutedDotOpacity`), the least that holds 3:1 on the same modelled grounds (3.08:1 on `#B8B8B8`, 3.82:1 on `#3A3B3D`). Not yet measured on device. Otherwise error toasts are plain prose and the menu bar warning is a template symbol. When a feature genuinely needs one, use the macOS system colors, which adapt to appearance and Increase Contrast: red for errors and destructive actions, orange for warnings. Success gets no color; the typed text is the confirmation. Never system teal or cyan: teal sits at hue 217, 21° from the accent's 196, close enough to read as River's own color.
+One: while River records a dictation (`.recording`), the menu bar's Listening glyph carries a dot in **akaneiro** (茜色), a muted madder red, the convention for a device that is recording (maintainer, 2026-11-04). In ready mode the microphone stays open while River is idle ([../planning/0033_warm-microphone-pre-roll.md](../planning/0033_warm-microphone-pre-roll.md)) and macOS shows its own indicator; River's red marks the dictation. It is `Palette.recording`: `akane` `#B13546` on a light bar, and `akaneOnDark` `#DD6871` (the same OKLCH hue, 17°, lifted to lightness 0.66) on a dark one. Modelled on the bar's grounds, the dot needs 3:1: `#B13546` measures 3.05:1 on a mid-gray `#B8B8B8` and 4.72:1 on `#E3E3E3`; `#DD6871` measures 3.36:1 on `#3A3B3D` and 4.99:1 on `#1E1E20`. A bar tinted mid-gray by a dark wallpaper defeats any red, and white icons barely reach 3:1 there; the dot's shape and the menu's "Recording..." carry the state, so color is never the only cue. Transcribing's dot is the bar's text color at 55 % (`menuBarMutedDotOpacity`), the least that holds 3:1 on the same modelled grounds (3.08:1 on `#B8B8B8`, 3.82:1 on `#3A3B3D`). Not yet measured on device.
+
+Since 2026-11-12 akane also marks the Settings recorder while it records a shortcut: the outline around the keys and the pulsing dot inside it (maintainer, shortcut recorder study, rounds 2 to 8). It means River is recording, your voice in the menu bar or a shortcut in Settings, and the two never show at once, since recording a shortcut is unavailable during a dictation. On the Settings window's tints it measures 5.55:1 (`#B13546` on `mist`) and 5.62:1 (`#DD6871` on `deepCharcoal`), past the 3:1 a graphic needs (`PaletteTests`). The Record button reading Cancel and the line under the row carry the state too.
+**Why:** revised 2026-11-12. Akane was the menu bar's dot and nothing else; the recorder needed to show it is listening, and River's recording red already says that.
+
+Otherwise error toasts are plain prose and the menu bar warning is a template symbol. When a feature genuinely needs one, use the macOS system colors, which adapt to appearance and Increase Contrast: red for errors and destructive actions, orange for warnings. Success gets no color; the typed text is the confirmation. Never system teal or cyan: teal sits at hue 217, 21° from the accent's 196, close enough to read as River's own color.
 
 ## Adding a color
 
@@ -99,7 +104,7 @@ Only when two things must be told apart at a glance and shape, text, or position
 
 | Surface | Color |
 |---|---|
-| Settings window | Tint only: switches that are on, the selected sidebar row, one primary button per pane. Neutral section headers and icons |
+| Settings window | Monochrome controls, strengths of ink ([../planning/0036_settings-and-shortcuts.md](../planning/0036_settings-and-shortcuts.md)); the system accent only in its menus, the focus ring and selected text; akane while the recorder records |
 | Snippets | Platform selection; no per-snippet color coding |
 | Streaming text in the panel | The HUD's text color (`ink` or `charcoal`). A candidate under the earlier rule, open since the panel went monochrome (2026-11-02): words still being recognized in the accent (your voice, live), turning the text color once committed |
 | History | Neutral; platform selection |

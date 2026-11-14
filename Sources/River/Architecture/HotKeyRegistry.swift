@@ -8,6 +8,8 @@ struct HotKeyID: Hashable, Sendable {
     let rawValue: UInt32
 
     static let dictation = HotKeyID(rawValue: 1)
+    // The recorder's question to macOS, registered and released at once.
+    static let probe = HotKeyID(rawValue: 0xFFFF)
 }
 
 /// A registered hot key went down or came up. A release arrives with the
@@ -123,6 +125,16 @@ final class HotKeyRegistry {
             registered[id] = Registered(keyCode: keyCode, modifiers: modifiers, ref: ref)
         }
         logger.info("Hot key \(id.rawValue, privacy: .public) (keycode \(keyCode, privacy: .public), modifiers \(modifiers, privacy: .public)): \(String(describing: result), privacy: .public)")
+        return result
+    }
+
+    /// Whether macOS would take `keyCode` plus `modifiers` as an exclusive hot key now:
+    /// registered and released at once, so the Settings recorder can refuse a combination
+    /// before saving it (spec 0036, Conflicts). Ask while River's own hot keys are
+    /// unregistered, or River's own registration reads as another app's.
+    func probe(keyCode: UInt32, modifiers: UInt32) -> HotKeyRegistration {
+        let result = register(.probe, keyCode: keyCode, modifiers: modifiers)
+        unregister(.probe)
         return result
     }
 

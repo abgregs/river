@@ -15,10 +15,11 @@ enum Shortcut: Hashable, Sendable {
     case modifier(keyCode: Int)
     case combination(keyCode: Int, modifiers: ShortcutModifiers)
 
-    /// The keycodes a lone modifier may use: the ones `ActivationKeyOption` lists.
+    /// The keycodes a lone modifier may use: the `ModifierKey`s that can be alone.
     /// Caps Lock (57) is not among them: River's tap sees one event per Caps Lock
-    /// press and none on release, so no mode can work on it.
-    static var loneModifierKeyCodes: Set<Int> { Set(ActivationKeyOption.all.map(\.keyCode)) }
+    /// press and none on release, so no mode can work on it. Nor is fn (63): it
+    /// cancels a recording.
+    static let loneModifierKeyCodes = Set(ModifierKey.allCases.filter(\.canBeAlone).map(\.keyCode))
 
     // Every modifier keycode, Caps Lock included. None of them is the key of a
     // combination: the tap watches them, and a hot key needs a non-modifier key.
@@ -81,6 +82,17 @@ struct ShortcutModifiers: OptionSet, Hashable, Sendable {
             guard let match = Self.named.first(where: { $0.1 == name }) else { return nil }
             modifiers.insert(match.0)
         }
+        self = modifiers
+    }
+
+    /// Reads Carbon modifier bits, as macOS's own shortcut list reports them. Other bits,
+    /// such as the fn bit F-keys and arrows carry, are not modifiers of a combination.
+    init(carbonFlags: Int) {
+        var modifiers: ShortcutModifiers = []
+        if carbonFlags & controlKey != 0 { modifiers.insert(.control) }
+        if carbonFlags & optionKey != 0 { modifiers.insert(.option) }
+        if carbonFlags & shiftKey != 0 { modifiers.insert(.shift) }
+        if carbonFlags & cmdKey != 0 { modifiers.insert(.command) }
         self = modifiers
     }
 

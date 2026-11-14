@@ -20,7 +20,7 @@ The shortcut is either a **lone modifier** or a **combination**. Every shortcut 
 
 ### Lone modifier
 
-One of 9 modifier keys, watched on the listen-only event tap. A lone modifier keeps its side: left and right share a flag-mask family, so River tells them apart by keycode, not by flag bit. See [../architecture/configuration.md](../architecture/configuration.md).
+One of 8 modifier keys, watched on the listen-only event tap. A lone modifier keeps its side: left and right share a flag-mask family, so the keycode names the key, and the key's own device bit in the event's raw flags (`NX_DEVICE*KEYMASK`) says whether it is down. An event that carries no device bit, as one another app posts can, falls back to the family flag. `ModifierKey` holds this table in code, and the recorder and `HotkeyManager` both read it. **Why:** a latch that flipped on every event stayed inverted after one missed or repeated event; reading the bit corrects itself on the next one. See [../architecture/configuration.md](../architecture/configuration.md).
 
 | Key | Keycode | `CGEventFlags` mask |
 |---|---|---|
@@ -32,11 +32,12 @@ One of 9 modifier keys, watched on the listen-only event tap. A lone modifier ke
 | Left Command | 55 | `.maskCommand` |
 | Right Shift | 60 | `.maskShift` |
 | Left Shift | 56 | `.maskShift` |
-| Function (Fn) | 63 | `.maskSecondaryFn` |
 
 Right Option is the default because it's present on every Mac keyboard (including MacBook and the compact Magic Keyboard, neither of which has a Right Control) and rarely pressed during typing, so Hold mode doesn't fire on capitalization or common shortcuts.
 
 Caps Lock is not a dictation key. **Why:** River's tap sees one event for each Caps Lock press and none on release (measured 2026-11-06), so Hold never sees the release and a tap mode would need two presses per tap. See [supported-keys-and-limitations.md](supported-keys-and-limitations.md).
+
+fn is not a dictation key either (maintainer, 2026-11-12). **Why:** fn cancels a recording ([../planning/0017_cancel-recording.md](../planning/0017_cancel-recording.md)). As the dictation key its press would start and stop dictation instead, so a recording would have no cancel key, and the Settings window would have to explain the exception for a choice few would make.
 
 ### Combination
 
@@ -60,7 +61,7 @@ Declared as typed keys on the `Settings` namespace (backed by `UserDefaults.stan
 
 A shortcut is stored as one string so `@AppStorage` can bind it: `mod:61` for a lone modifier, `key:49:ctrl,opt` for a combination. An empty string means cleared; the dictation shortcut cannot be cleared, so a cleared or unreadable value reads as the default.
 
-**Migration.** Before v0.3.0 the key was `activationKeyCode`, an `Int`. At launch, a saved `activationKeyCode` that is one of the 9 lone modifiers becomes that `dictationShortcut`, unless one is already saved; any other value is dropped. The old key is then removed.
+**Migration.** Before v0.3.0 the key was `activationKeyCode`, an `Int`. At launch, a saved `activationKeyCode` that is one of the 8 lone modifiers becomes that `dictationShortcut`, unless one is already saved; any other value is dropped. The old key is then removed.
 
 The double-tap detection window is **not** a user setting — it's a fixed internal `Constants.doubleTapWindowMs` (400 ms). The user shouldn't have to tune it, so there is no control for it. See [../architecture/configuration.md](../architecture/configuration.md).
 
@@ -78,12 +79,13 @@ There is no path that tears down the event tap mid-cycle. See [../architecture/r
 
 ## Settings UI
 
-Until the shortcut recorder lands in the settings panel ([0036](../planning/0036_settings-and-shortcuts.md)), the Activation section of Settings contains:
+The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-shortcuts.md)) contains:
 
-1. **Activation Key picker** — dropdown with the 9 lone modifiers above, as "Dictation shortcut" in the Settings window's Shortcuts section, until PR 8's recorder replaces it ([0036](../planning/0036_settings-and-shortcuts.md)). It writes `dictationShortcut`. A combination can be set only by the recorder.
-2. **Activation Mode picker** — "Start by", a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description and the cancel line under it.
+1. **Dictate** — the dictation shortcut in its outline and a Record button. Recording takes a lone modifier or a combination, refuses what cannot work or what River already uses, and writes `dictationShortcut` ([0036](../planning/0036_settings-and-shortcuts.md), The recorder).
+2. **Start by** — a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description under it.
+3. **Cancel recording** — the keys that cancel a recording (fn, and Esc from PR 9), shown, not editable.
 
-Warnings inform and never block: the user knows their keyboard better than the app does. No shortcut and mode pair carries a warning today. A planned one: Fn may conflict with the system Globe key on newer Macs.
+Warnings inform and never block: the user knows their keyboard better than the app does. No shortcut and mode pair carries a warning.
 
 ## Related
 

@@ -49,6 +49,21 @@ struct HotKeyRegistryTests {
     }
 
     @MainActor
+    @Test("a probe asks macOS and lets go at once, whatever it answers")
+    func probeLeavesNothingRegistered() {
+        // The recorder probes before it saves; a probe left registered would take its keystroke
+        // from every app until River quits.
+        let log = CallLog(status: noErr)
+        let registry = HotKeyRegistry(calls: log.calls)
+        #expect(registry.probe(keyCode: 49, modifiers: UInt32(controlKey | optionKey)) == .registered)
+        #expect(registry.registeredIDs.isEmpty)
+        #expect(log.unregisterCount == 1)
+
+        let taken = CallLog(status: OSStatus(eventHotKeyExistsErr))
+        #expect(HotKeyRegistry(calls: taken.calls).probe(keyCode: 49, modifiers: 0) == .takenByAnotherApp)
+    }
+
+    @MainActor
     @Test("a handler that cannot be installed refuses the registration")
     func handlerFailureRefuses() {
         // Without the handler a registered hot key would swallow its keystroke and

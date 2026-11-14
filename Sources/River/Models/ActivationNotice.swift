@@ -7,11 +7,13 @@ import Foundation
 /// `RiverSession` emits these on its `notices` channel; the menu bar and the
 /// recording HUD (planning 0002) display them.
 enum ActivationNotice {
-    static func keyChanged(to shortcut: Shortcut) -> String {
-        let label = switch shortcut {
-        case .modifier(let code): ActivationKeyOption.all.first { $0.keyCode == code }?.label ?? "the new key"
-        case .combination: "the new shortcut"
-        }
+    /// Names the shortcut as VoiceOver does, "Right Option" or "Control Option Space";
+    /// `character` reads letter keys from the keyboard layout, as `ShortcutText` does.
+    static func keyChanged(
+        to shortcut: Shortcut, character: ShortcutText.KeyCharacter = ShortcutText.layoutCharacter
+    ) -> String {
+        let spoken = ShortcutText.spoken(shortcut, character: character)
+        let label = spoken.isEmpty ? "the new key" : spoken
         return "Activation key changed to \(label). Press it to stop the current recording."
     }
 

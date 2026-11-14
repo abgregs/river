@@ -29,9 +29,11 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     }
 
     /// The section the window opens on: Permissions while any permission is missing, since
-    /// River can't dictate until it's granted; otherwise the section shown last, as macOS
+    /// River can't dictate until it's granted; then Shortcuts while the dictation shortcut
+    /// fails to register, since it does nothing; otherwise the section shown last, as macOS
     /// settings windows reopen on their last pane.
-    static func opening(lastShown: SettingsSection, permissionMissing: Bool) -> SettingsSection {
-        permissionMissing ? .permissions : lastShown
+    static func opening(lastShown: SettingsSection, permissionMissing: Bool, shortcutFailing: Bool) -> SettingsSection {
+        if permissionMissing { return .permissions }
+        return shortcutFailing ? .shortcuts : lastShown
     }
 }

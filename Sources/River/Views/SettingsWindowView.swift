@@ -14,12 +14,15 @@ final class SettingsWindowModel {
     @ObservationIgnored let capabilities: [any Capability]
     @ObservationIgnored let updater: UpdaterManager
     @ObservationIgnored let selectModel: (String) -> Void
+    @ObservationIgnored let recorder: ShortcutRecorderModel
 
-    init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager, selectModel: @escaping (String) -> Void) {
+    init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
+         shortcutHooks: ShortcutRecorderHooks, selectModel: @escaping (String) -> Void) {
         self.appState = appState
         self.capabilities = capabilities
         self.updater = updater
         self.selectModel = selectModel
+        recorder = ShortcutRecorderModel(hooks: shortcutHooks)
     }
 }
 
@@ -60,7 +63,7 @@ struct SettingsWindowView: View {
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 10)
             switch model.section {
-            case .shortcuts: ShortcutsPane()
+            case .shortcuts: ShortcutsPane(appState: model.appState, recorder: model.recorder)
             case .dictation: DictationPane()
             case .model: ModelSectionView(appState: model.appState, selectModel: model.selectModel)
             case .general: GeneralPane(updater: model.updater)
@@ -81,8 +84,7 @@ private struct SettingsRail: View {
         let ink = SettingsInk(colorScheme)
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(SettingsSection.allCases.enumerated()), id: \.element) { index, section in
-                RailItem(section: section, isCurrent: model.section == section,
-                         showsBadge: section == .permissions && model.permissionMissing) {
+                RailItem(section: section, isCurrent: model.section == section, badge: badge(for: section)) {
                     model.section = section
                 }
                 .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
@@ -111,6 +113,16 @@ private struct SettingsRail: View {
         .padding(.bottom, 14)
     }
 
+    // Permissions while one is missing; Shortcuts while the dictation shortcut fails to
+    // register, so it does nothing (planning 0036, Conflicts).
+    private func badge(for section: SettingsSection) -> String? {
+        switch section {
+        case .permissions where model.permissionMissing: "A permission is missing"
+        case .shortcuts where model.appState.isDictationShortcutFailing: "A shortcut is not working"
+        default: nil
+        }
+    }
+
     static func showAbout() {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
@@ -133,7 +145,8 @@ private struct SettingsRail: View {
 private struct RailItem: View {
     let section: SettingsSection
     let isCurrent: Bool
-    let showsBadge: Bool
+    /// The badge's spoken meaning; nil for no badge.
+    let badge: String?
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
@@ -150,10 +163,10 @@ private struct RailItem: View {
                     .fontWeight(isCurrent ? .medium : .regular)
                     .foregroundStyle(isCurrent ? ink.color : ink.opacity(0.86))
                 Spacer(minLength: 0)
-                if showsBadge {
+                if let badge {
                     Image(systemName: "exclamationmark.circle.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel("A permission is missing")
+                        .accessibilityLabel(badge)
                 }
             }
             .padding(.horizontal, 8)
@@ -171,30 +184,114 @@ private struct RailItem: View {
 // MARK: - Sections
 
 private struct ShortcutsPane: View {
+    let appState: AppState
+    let recorder: ShortcutRecorderModel
     @AppStorage(Settings.dictationShortcut.name)
     private var dictationShortcut: Shortcut = Settings.dictationShortcut.defaultValue
     @AppStorage(Settings.activationMode.name)
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Lone modifiers only until PR 8's recorder (planning 0036, Interim rows).
-            SettingsRow(label: "Dictation shortcut", divider: false) {
-                RiverPopUp(title: "Dictation shortcut",
-                           options: ActivationKeyOption.all.map { (Shortcut.modifier(keyCode: $0.keyCode), $0.label) },
-                           selection: $dictationShortcut)
-            }
-            // The cancel sentence never breaks across lines (planning 0036, Cancel line).
-            SettingsRow(label: "Start by",
-                        description: Text("\(activationMode.description) ")
-                            + Text(ActivationKeyOption.cancelLine(for: dictationShortcut)
-                                .replacingOccurrences(of: " ", with: "\u{00A0}"))) {
+            DictationShortcutRow(recorder: recorder, saved: dictationShortcut, appState: appState)
+            SettingsRow(label: "Start by", description: Text(activationMode.description)) {
                 RiverSegmentedChoice(title: "Start by",
                                      options: ActivationMode.allCases.map { ($0, $0.label) },
                                      selection: $activationMode)
             }
+            // River's other shortcuts, from the list the recorder refuses (planning 0036, Cancel
+            // recording). They are fixed, so a row has no Record button, and an empty button
+            // column keeps the keys in line with the other rows'. Esc joins fn with PR 9.
+            ForEach(RiverShortcut.allCases, id: \.self) { river in
+                SettingsRow(label: river.label) {
+                    HStack(spacing: 8) {
+                        ShortcutChip(keys: ShortcutText.keys(river.shortcut))
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(ShortcutText.spoken(river.shortcut))
+                        Color.clear.frame(width: DictationShortcutRow.buttonWidth, height: 1)
+                    }
+                }
+            }
         }
+        .onAppear { recorder.refresh(saved: dictationShortcut) }
+        .onDisappear { recorder.stop() }
+    }
+}
+
+/// The dictation shortcut and its Record button (planning 0036, The recorder). The line under
+/// the row says how to record and why a shortcut was refused while recording; otherwise that
+/// the shortcut is unavailable during a dictation, does nothing, or is one macOS also uses.
+private struct DictationShortcutRow: View {
+    static let buttonWidth: Double = 70
+
+    let recorder: ShortcutRecorderModel
+    let saved: Shortcut
+    let appState: AppState
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shakes = 0.0
+
+    var body: some View {
+        let isBusy = appState.state != .idle
+        SettingsRow(label: "Dictate", description: line(isBusy: isBusy).map(text), divider: false) {
+            HStack(spacing: 8) {
+                chip
+                    .modifier(RefusalShake(animatableData: shakes))
+                    .onChange(of: recorder.refusals) { _, count in
+                        withAnimation(reduceMotion ? nil : .timingCurve(0.3, 0, 0.3, 1, duration: 0.32)) { shakes = Double(count) }
+                    }
+                Button(action: recorder.toggle) {
+                    Text(recorder.isRecording ? "Cancel" : "Record")
+                        .frame(minWidth: Self.buttonWidth - 20)
+                }
+                .buttonStyle(RiverBezelButtonStyle())
+                .disabled(isBusy)
+                .help(isBusy ? RecorderLine.busy.text : "")
+                .accessibilityLabel(recorder.isRecording ? "Cancel recording the dictation shortcut" : "Record the dictation shortcut")
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { recorder.buttonFrame = proxy.frame(in: .global) }
+                            .onChange(of: proxy.frame(in: .global)) { _, frame in recorder.buttonFrame = frame }
+                    }
+                }
+            }
+        }
+    }
+
+    // One chip in every phase: a save animates from the recording outline it already shows.
+    // A chip per phase would be a new view at each change, starting at its end state.
+    private var chip: some View {
+        let shown: (keys: ShortcutText.Keys, look: ShortcutChip.Look, label: String) = switch recorder.phase {
+        case .recording: (recorder.tried ?? ShortcutText.keys(recorder.held), .recording, "Recording")
+        case .saving(let shortcut): (ShortcutText.keys(shortcut), .saving, ShortcutText.spoken(shortcut))
+        case .idle: (ShortcutText.keys(saved), .saved, ShortcutText.spoken(saved))
+        }
+        return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil, startedAt: recorder.startedAt)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(shown.label)
+    }
+
+    private func line(isBusy: Bool) -> RecorderLine? {
+        if recorder.isRecording { return recorder.line }
+        if isBusy { return .busy }
+        if let registration = appState.dictationRegistration, let failure = RecorderLine.notWorking(registration) {
+            return failure
+        }
+        return recorder.isSystemShortcut ? .macOSAlsoUses : nil
+    }
+
+    // A refusal, a warning and a failure are full ink, each with its own symbol, so they differ
+    // without color; a hint stays at the description's strength.
+    private func text(_ line: RecorderLine) -> Text {
+        let symbol: String? = switch line.kind {
+        case .hint: nil
+        case .refusal: "exclamationmark.circle"
+        case .warning: "info.circle"
+        case .failure: "exclamationmark.triangle"
+        }
+        guard let symbol else { return Text(line.text) }
+        return (Text(Image(systemName: symbol)) + Text(" ") + Text(line.text)).foregroundColor(SettingsInk(colorScheme).color)
     }
 }
 

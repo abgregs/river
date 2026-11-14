@@ -7,7 +7,6 @@ import Testing
 struct ShortcutTests {
     @Test("a shortcut survives the round trip through its stored string", arguments: [
         Shortcut.modifier(keyCode: 61),
-        .modifier(keyCode: 63),
         .combination(keyCode: 49, modifiers: [.control, .option]),
         .combination(keyCode: 9, modifiers: [.control, .option, .shift, .command]),
     ])
@@ -30,6 +29,7 @@ struct ShortcutTests {
     @Test("values that are not a dictation shortcut read as nothing", arguments: [
         "",                 // cleared; the dictation shortcut falls back to its default
         "mod:57",           // Caps Lock: no mode works on it
+        "mod:63",           // fn: it cancels a recording
         "mod:49",           // not a modifier
         "key:49:",          // a key with no modifier
         "key:58:ctrl",      // a modifier as the key
@@ -43,6 +43,15 @@ struct ShortcutTests {
         // Anything unreadable must fall back to the default rather than register a
         // hot key macOS refuses or watch a key that can never work.
         #expect(Shortcut(rawValue: raw) == nil)
+    }
+
+    @Test("Carbon bits read back as the same modifiers, and the fn bit is not one")
+    func carbonFlagsReadBack() {
+        // macOS's own shortcut list reports Carbon bits, and its F-keys and arrows carry the fn
+        // bit; reading it as a modifier would miss that ⌘F5 is taken.
+        let all: ShortcutModifiers = [.control, .option, .shift, .command]
+        #expect(ShortcutModifiers(carbonFlags: Int(all.carbonFlags)) == all)
+        #expect(ShortcutModifiers(carbonFlags: cmdKey | 0x20000) == .command)
     }
 
     @Test("modifiers map to Carbon's hot key bits and to the tap's device-independent flags")

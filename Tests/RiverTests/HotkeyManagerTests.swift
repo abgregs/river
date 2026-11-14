@@ -58,6 +58,45 @@ struct HotkeyManagerHoldTests {
     }
 
     @MainActor
+    @Test("the watched key's own bit says it lifted, though the other side still holds its family flag")
+    func sideBitEndsHold() {
+        // Right ⌃ released while Left ⌃ is held keeps ⌃'s flag set; only the device bit
+        // (0x2000 right, 0x1 left) says the watched key is up, so the Hold recording stops.
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: HotKeyRegistry(calls: .inert),
+            initialShortcut: .modifier(keyCode: 62)
+        )
+        var deactivates = 0
+        manager.onDeactivate = { deactivates += 1 }
+        let control = CGEventFlags.maskControl.rawValue
+        manager.handle(.flagsChanged(keyCode: 59, flags: CGEventFlags(rawValue: control | 0x1)))
+        manager.handle(.flagsChanged(keyCode: 62, flags: CGEventFlags(rawValue: control | 0x2001)))
+        manager.handle(.flagsChanged(keyCode: 62, flags: CGEventFlags(rawValue: control | 0x1)))
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
+    @Test("an event that repeats the key's state is no second press")
+    func repeatedStateIsNoEdge() {
+        // A latch that flipped on every event would read a repeated down as the release, and
+        // stay inverted from then on.
+        let manager = HotkeyManager(
+            inputMonitoring: InputMonitoringCapability(), hotKeys: HotKeyRegistry(calls: .inert),
+            initialShortcut: .modifier(keyCode: 62)
+        )
+        var activates = 0
+        var deactivates = 0
+        manager.onActivate = { activates += 1 }
+        manager.onDeactivate = { deactivates += 1 }
+        manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
+        manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
+        #expect(activates == 1)
+        #expect(deactivates == 0)
+        manager.handle(.flagsChanged(keyCode: 62, flags: []))
+        #expect(deactivates == 1)
+    }
+
+    @MainActor
     @Test(".tapDisabled is a no-op for the manager (capability self-heals)")
     func tapDisabledIsNoOp() {
         let cap = InputMonitoringCapability()
@@ -164,23 +203,6 @@ struct HotkeyManagerCancelTests {
         // The watched key still starts a recording normally afterward.
         manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
         #expect(activates == 1)
-    }
-
-    @MainActor
-    @Test("cancel is disabled when it would collide with the activation key")
-    func cancelDisabledWhenEqualsActivationKey() {
-        // If the cancel keycode equals the watched key, that key already means
-        // start/stop; the gesture disables so it isn't ambiguous. Watched == cancel
-        // == 62 → the event drives activation (Hold), never onCancel.
-        let manager = makeManager(mode: .hold, cancelKeyCode: 62)
-        var activates = 0
-        var cancels = 0
-        manager.onActivate = { activates += 1 }
-        manager.onCancel = { cancels += 1 }
-
-        manager.handle(.flagsChanged(keyCode: 62, flags: .maskControl))
-        #expect(cancels == 0)
-        #expect(activates == 1)   // treated as an activation, not a cancel
     }
 
     @MainActor
@@ -540,20 +562,79 @@ struct HotkeyManagerCombinationTests {
     }
 
     @MainActor
-    @Test("fn cancel stays on for a combination and is off only when fn is the dictation key")
-    func fnCancelFollowsDictationKey() {
-        // fn is the cancel key; it only stands down when it is also the dictation key,
-        // where its press already means start or stop.
+    @Test("paused, River's shortcut does nothing and its hot key is let go; resumed, both are back")
+    func pauseAndResume() {
+        // The Settings recorder must hear River's own shortcut pressed again, and a press while
+        // it listens must not start a dictation or cancel one (spec 0036, The recorder).
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        var activates = 0
+        var cancels = 0
+        manager.onActivate = { activates += 1 }
+        manager.onCancel = { cancels += 1 }
+        #expect(hotKeys.registeredIDs == [.dictation])
+
+        manager.pause()
+        #expect(hotKeys.registeredIDs.isEmpty)
+        hotKeys.publishForTest(.pressed(.dictation))
+        manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))
+        manager.handle(.flagsChanged(keyCode: 63, flags: []))
+        #expect(activates == 0)
+        #expect(cancels == 0)
+
+        manager.resume()
+        #expect(hotKeys.registeredIDs == [.dictation])
+        hotKeys.publishForTest(.pressed(.dictation))
+        #expect(activates == 1)
+    }
+
+    @MainActor
+    @Test("a shortcut saved while paused registers on resume, not before")
+    func savedWhilePausedRegistersOnResume() {
+        // Registering it at once would take its keys from the recorder still listening.
+        let (manager, hotKeys) = makeManager(mode: .hold)
+        manager.pause()
+        manager.setShortcut(.combination(keyCode: 9, modifiers: [.control, .option]))
+        #expect(hotKeys.registeredIDs.isEmpty)
+        manager.resume()
+        #expect(hotKeys.registeredIDs == [.dictation])
+    }
+
+    @MainActor
+    @Test("resuming registers again, so a shortcut another app let go of starts working")
+    func resumeRetriesRegistration() {
+        // Recording the same shortcut again is how the user fixes "Not working". The setting
+        // doesn't change, so only the resume can retry the registration.
+        let answer = RegistrationAnswer(OSStatus(eventHotKeyExistsErr))
+        let hotKeys = HotKeyRegistry(calls: HotKeyRegistry.Calls(
+            installHandler: { _ in noErr }, register: { _, _, _ in (answer.status, nil) }, unregister: { _ in }))
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), initialMode: .hold)
+        manager.bindEventStream()
+        manager.setShortcut(combination)
+        #expect(manager.dictationRegistration == .takenByAnotherApp)
+
+        answer.status = noErr
+        manager.pause()
+        manager.resume()
+        #expect(manager.dictationRegistration == .registered)
+    }
+
+    @MainActor
+    @Test("fn cancels whatever the dictation shortcut is")
+    func fnAlwaysCancels() {
+        // fn is never the dictation shortcut (spec 0036), so its press is always the
+        // cancel gesture, under a combination and under a lone modifier alike.
         let (manager, hotKeys) = makeManager(mode: .hold)
         var cancels = 0
         manager.onCancel = { cancels += 1 }
         hotKeys.publishForTest(.pressed(.dictation))
         manager.handle(.flagsChanged(keyCode: 63, flags: heldFlags.union(.maskSecondaryFn)))
+        manager.handle(.flagsChanged(keyCode: 63, flags: heldFlags))
         #expect(cancels == 1)
 
-        manager.setShortcut(.modifier(keyCode: 63))
+        manager.setShortcut(.modifier(keyCode: 61))
         manager.handle(.flagsChanged(keyCode: 63, flags: .maskSecondaryFn))
-        #expect(cancels == 1)
+        #expect(cancels == 2)
     }
 
     // Started through `bindEventStream`, which a test can call, and `setShortcut`,
@@ -655,4 +736,173 @@ struct HotkeyManagerDiscardTests {
         manager.bindEventStream()
         return (manager, hotKeys)
     }
+}
+
+@MainActor
+private final class RegistrationAnswer {
+    var status: OSStatus
+
+    init(_ status: OSStatus) {
+        self.status = status
+    }
+}
+
+@Suite("HotkeyManager resume after the recorder")
+@MainActor
+struct HotkeyManagerResumeTests {
+    // The Settings recorder pauses River's shortcuts, hears a shortcut and asks for them back
+    // while its keys may still be down (spec 0036, The recorder). The tap's events here are as
+    // the tap delivers them, so the test needs no real keyboard.
+    private let rightOption = TapEvent.flagsChanged(keyCode: 61, flags: .maskAlternate)
+    private let rightOptionUp = TapEvent.flagsChanged(keyCode: 61, flags: [])
+
+    private func makeManager(
+        _ shortcut: Shortcut = .modifier(keyCode: 61), mode: ActivationMode = .singleTap,
+        deadline: Duration = .seconds(10)
+    ) -> (HotkeyManager, HotKeyRegistry) {
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), initialMode: mode, resumeDeadline: deadline)
+        manager.bindEventStream()
+        manager.setShortcut(shortcut)
+        return (manager, hotKeys)
+    }
+
+    @Test("asked to resume while the key is down, the shortcut comes back on its release, which starts nothing")
+    func resumeWaitsForRelease() {
+        // Recording Right ⌥ alone saves on its release, which the recorder can hear before the
+        // tap's copy arrives. Resumed first, that copy would complete a tap and start a dictation.
+        let (manager, _) = makeManager()
+        var activates = 0
+        manager.onActivate = { activates += 1 }
+        manager.pause()
+        manager.handle(rightOption)
+        manager.resume()
+        #expect(manager.isPaused)
+
+        manager.handle(rightOptionUp)
+        #expect(!manager.isPaused)
+        #expect(activates == 0)
+
+        manager.handle(rightOption)
+        manager.handle(rightOptionUp)
+        #expect(activates == 1)   // the next tap works
+    }
+
+    @Test("a combination registers again only once all its modifiers are up")
+    func combinationWaitsForModifiers() {
+        // Registered while ⌃⌥ are still down, the hot key could fire on the held Space.
+        let controlOptionSpace = Shortcut.combination(keyCode: 49, modifiers: [.control, .option])
+        let (manager, hotKeys) = makeManager(controlOptionSpace, mode: .hold)
+        manager.pause()
+        manager.handle(.flagsChanged(keyCode: 59, flags: .maskControl))
+        manager.handle(.flagsChanged(keyCode: 58, flags: [.maskControl, .maskAlternate]))
+        manager.resume()
+        manager.handle(.flagsChanged(keyCode: 58, flags: .maskControl))
+        #expect(hotKeys.registeredIDs.isEmpty)
+
+        manager.handle(.flagsChanged(keyCode: 59, flags: []))
+        #expect(hotKeys.registeredIDs == [.dictation])
+    }
+
+    @Test("recording again before the keys come up keeps the shortcuts paused")
+    func pauseCancelsPendingResume() {
+        // The user can press Record again during a save; their next keys belong to the recorder.
+        let (manager, _) = makeManager()
+        manager.pause()
+        manager.handle(rightOption)
+        manager.resume()
+        manager.pause()
+        manager.handle(rightOptionUp)
+        #expect(manager.isPaused)
+    }
+
+    @Test("a tap that falls silent can't keep the shortcuts paused")
+    func resumeDeadline() async throws {
+        // A lost key-up would otherwise leave River's shortcuts off until the next modifier press.
+        let (manager, _) = makeManager(deadline: .milliseconds(20))
+        manager.pause()
+        manager.handle(rightOption)
+        manager.resume()
+        let deadline = Date().addingTimeInterval(5)
+        while manager.isPaused, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(!manager.isPaused)
+    }
+}
+
+@Suite("HotkeyManager availability")
+@MainActor
+struct HotkeyManagerAvailabilityTests {
+    // What the Settings recorder asks before it saves (spec 0036, Conflicts). macOS's answer and
+    // its own shortcut list are injected, so no test registers a real hot key.
+    private let controlOptionSpace = Shortcut.combination(keyCode: 49, modifiers: [.control, .option])
+
+    private func makeManager(
+        registering status: OSStatus = noErr, system: [SystemShortcuts.Entry] = [], probes: ProbeLog? = nil
+    ) -> HotkeyManager {
+        let hotKeys = HotKeyRegistry(calls: HotKeyRegistry.Calls(
+            installHandler: { _ in noErr },
+            register: { _, _, _ in probes?.count += 1; return (status, nil) },
+            unregister: { _ in }))
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), systemShortcuts: { system })
+        manager.bindEventStream()
+        return manager
+    }
+
+    @Test("fn is refused as River's cancel key before macOS is asked")
+    func fnIsRiversOwn() {
+        // fn as the dictation key would leave a recording with no cancel key (spec 0036).
+        let probes = ProbeLog()
+        let manager = makeManager(probes: probes)
+        #expect(manager.availability(of: .modifier(keyCode: 63)) == .usedByRiver(.cancelRecording))
+        #expect(probes.count == 0)
+    }
+
+    @Test("a lone modifier needs no registration")
+    func loneModifierFree() {
+        // The tap watches a lone modifier, so macOS has nothing to refuse.
+        let probes = ProbeLog()
+        let manager = makeManager(registering: OSStatus(eventHotKeyExistsErr), probes: probes)
+        #expect(manager.availability(of: .modifier(keyCode: 58)) == .available)
+        #expect(probes.count == 0)
+    }
+
+    @Test("a combination another app holds, or macOS won't take, is refused with its reason")
+    func registrationRefusals() {
+        // Saving it would leave a dictation shortcut that does nothing (spec 0036, AC 6).
+        #expect(makeManager(registering: OSStatus(eventHotKeyExistsErr)).availability(of: controlOptionSpace) == .takenByAnotherApp)
+        #expect(makeManager(registering: -9868).availability(of: controlOptionSpace) == .refusedByMacOS)
+    }
+
+    @Test("a combination on macOS's own list is available with the warning")
+    func systemShortcutWarns() {
+        // Inform, don't block: both run, and the user decides (spec 0036, Conflicts).
+        let manager = makeManager(system: [SystemShortcuts.Entry(keyCode: 49, modifiers: [.control, .option])])
+        #expect(manager.availability(of: controlOptionSpace) == .alsoUsedByMacOS)
+        #expect(manager.availability(of: .combination(keyCode: 49, modifiers: .command)) == .available)
+    }
+
+    @Test("River's own registration of the saved combination is not read as another app's")
+    func ownRegistrationAnswers() {
+        // While River holds ⌃⌥Space, a probe of it fails as taken, though nothing else has it;
+        // the Settings pane asks about the saved shortcut while River's shortcuts run.
+        let probes = ProbeLog()
+        let manager = makeManager(probes: probes)
+        manager.setShortcut(controlOptionSpace)
+        let registered = probes.count
+        #expect(manager.availability(of: controlOptionSpace) == .available)
+        #expect(probes.count == registered)
+
+        manager.pause()   // the hot key let go, so macOS is asked again
+        #expect(manager.availability(of: controlOptionSpace) == .available)
+        #expect(probes.count == registered + 1)
+    }
+}
+
+@MainActor
+private final class ProbeLog {
+    var count = 0
 }

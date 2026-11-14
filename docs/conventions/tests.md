@@ -59,6 +59,8 @@ struct RiverSessionTests {
 Some methods are `internal` (not `private`) specifically so tests can exercise them without going through real OS APIs:
 
 - `HotkeyManager.handle(_:)` / `bindEventStream()` — interpretation and Combine binding seams, exercised by feeding synthetic `TapEvent`s
+- `HotkeyManager(systemShortcuts:)` — macOS's own shortcut list injected, so availability tests need no `CopySymbolicHotKeys` read
+- `HotkeyManager(resumeDeadline:)` — how long a resume waits for the tap's key-up before giving up, shortened so a test sees a silent tap release the shortcuts without waiting 10 s
 - `InputMonitoringCapability.decode(_:)` — pure `CGEvent` → `TapEvent` decoder, `nonisolated` so the C tap callback can call it without crossing an actor boundary
 - `InputMonitoringCapability.publishForTest(_:)` — pushes a synthetic `TapEvent` into the stream, bypassing the real tap (which requires an Input Monitoring grant on the running process)
 - `InputMonitoringCapability.tapThread` — read-only, so `InputMonitoringLifecycleTests` can hold the tap thread and see it end once the capability is freed
@@ -99,8 +101,12 @@ Some methods are `internal` (not `private`) specifically so tests can exercise t
 - `KawaIndicatorVoice(makeEngine:)` — the live panel's feed (a level reading in, the frame's engine out: loudness, a fresh engine per cycle, the advance, the ripple log), seeded by tests; the snapshot harness draws through it and `KawaMarkPanelFace`, so a held frame is fed and drawn the way the app does it
 - `GlassRenderer.arguments(...)` / `packed(_:)` — the Glass shader's interface as named values, tested against `KawaGlass.metal`'s own signature without a GPU, so a swapped or missing argument fails a test instead of rendering wrong
 - `MenuBarGlyphImages.withDot(_:muted:)` — the runtime drawing of Listening and Transcribing (the red dot, the muted one), rendered under each appearance so the dot's colors and the mark's are checked without a menu bar
-- `ActivationKeyOption.all` — the pure lone-modifier table, tested so a dropped key, or Caps Lock coming back, is a failing test, not silent drift (mirrors `MenuBarPresentation`)
+- `ModifierKey` — the pure modifier-key table and its down-or-up rule, tested so a dropped key, Caps Lock or fn coming back as a lone key, or a side misread from the device bits is a failing test, not silent drift (mirrors `MenuBarPresentation`)
 - `HotKeyRegistry(calls:)` / `publishForTest(_:)` — the Carbon register, unregister and handler calls are injected (`.inert` accepts everything), so tests check typed refusals and drive hot key presses and releases without registering a real hot key; mirrors `InputMonitoringCapability.publishForTest`
+- `ShortcutRecorderModel.handle(_:)` and `ShortcutRecorderHooks` — one key event as the window's monitor delivers it, and the session's reach (pause, resume, check, save) as closures, so tests and the Settings snapshots drive the recorder with no key press and no session
+- `ShortcutText`'s injected `character` — what a key types on the keyboard layout, replaced by the US layout so tests read the same on any Mac
+- `SystemShortcuts.entries(from:)` — the pure read of `CopySymbolicHotKeys`' dictionaries
+- `AppState.apply(dictationRegistration:)` — drives a failing dictation shortcut's badge and line without another app holding it
 - `TranscriptionManager.evaluateDictionaryPrompt(wavPath:)` — internal seam for the **A/B eval harness** (`DictionaryEvalTests`): decodes one fixed clip with and without the dictionary prompt, bypassing the empty-fallback, so a recorded clip shows whether the prompt biases or degenerates. The harness is **env-gated** (`.enabled(if: RIVER_AB_WAV)`) so the normal suite skips it; it loads the real model and writes its result to `ab-result.txt`. Used to confirm `small.en` biases where `base.en` empties (`requirements/custom-dictionary.md`)
 - `TranscriptionManager.loadAudioSamples(fromPath:)` — internal seam for the **transcription eval harness** (`TranscriptionEvalTests`, planning 0022): wraps WhisperKit's `AudioProcessor.loadAudioAsFloatArray` so WhisperKit stays a single import boundary and the test target need not depend on it. Not used in production (live capture supplies samples directly)
 

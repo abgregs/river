@@ -1,6 +1,6 @@
 # Requirement: Supported Keys and Limitations
 
-The dictation shortcut is a lone modifier (9 keys) or a combination, as listed in [activation-key-and-mode.md](activation-key-and-mode.md). This doc covers per-key behavior, known limitations, and which choices are refused, warned about, or accepted with caveats.
+The dictation shortcut is a lone modifier (8 keys) or a combination, as listed in [activation-key-and-mode.md](activation-key-and-mode.md). This doc covers per-key behavior, known limitations, and which choices are refused, warned about, or accepted with caveats.
 
 ## Lone modifiers
 
@@ -24,16 +24,12 @@ Reliable. Cmd held alone is unusual in typical typing, so misfire risk is low. C
 
 Reliable. Caveat: macOS accessibility features (Sticky Keys, Slow Keys) interact with Shift. Users with those enabled should test before committing to Shift.
 
-### Function (Fn) — keycode 63
+### Function (Fn) — keycode 63, the cancel key, not a dictation key
 
-The Fn key may not produce `flagsChanged` events on all Apple keyboards. Behavior depends on:
+Fn cancels a recording ([0017](../planning/0017_cancel-recording.md)), so it is not offered as the dictation key (maintainer, 2026-11-12). The recorder refuses it as a key River already uses ("Cancel recording uses fn. Choose another."), and a saved Fn is dropped by the migration in favor of the default, as Caps Lock is. As the cancel key it keeps its hardware caveats:
 
-- **MacBook built-in keyboards**: Fn often does fire `flagsChanged`, but on newer Macs Fn is also the Globe key and is bound to system features (Dictation, emoji picker, language switching). Holding Fn alone may trigger one of those system features before the app sees it.
-- **External Apple keyboards**: Magic Keyboards typically expose Fn as `flagsChanged`. Some third-party keyboards do not.
-
-Fn is also the cancel key ([0017](../planning/0017_cancel-recording.md)). When Fn is the dictation key, the fn cancel is off, because its press already means start or stop; the menu item still cancels.
-
-A planned Settings warning will alert the user when Fn is selected. The key is included because some users specifically want it; it is the user's responsibility to verify it works on their hardware.
+- **MacBook built-in keyboards**: Fn often does fire `flagsChanged`, but on newer Macs Fn is also the Globe key and is bound to system features (Dictation, emoji picker, language switching), which may run on the same press.
+- **External keyboards**: Magic Keyboards typically expose Fn as `flagsChanged`. Some third-party keyboards do not.
 
 ### Lone modifiers in Hold mode
 
@@ -55,9 +51,9 @@ A combination is a non-modifier key with one or more of ⌃ ⌥ ⇧ ⌘, held by
 
 ## What is refused and what is warned
 
-Only what cannot work is refused: Caps Lock, a key with no modifier, and a combination macOS will not register. Everything else is selectable in every mode. No shortcut and mode pair carries a warning today; a planned one covers Fn.
+Refused: what cannot work (Caps Lock, a key with no modifier, a combination macOS will not register) and what River already uses (Fn, which cancels a recording). Everything else is selectable in every mode, and no shortcut and mode pair carries a warning.
 
-The principle: **inform, don't block.** The user knows their hardware better than the app does.
+The principle: **inform, don't block**, except for River's own keys. The user knows their hardware better than the app does, but a key River already uses would do two things at once. **Why:** revised 2026-11-12 (maintainer). Fn as the dictation key turned its cancel off, which the Settings window had to explain, for a choice few would make once any key can be recorded.
 
 ## Macroscopic macOS limitations
 
