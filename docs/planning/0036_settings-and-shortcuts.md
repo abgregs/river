@@ -10,12 +10,13 @@
 - **It opens from "Settings…" in the menu bar menu** (⌘, while the menu is open, as today). One panel at a time; choosing "Settings…" again brings it forward.
 - **It makes River the active app while it is open**, as "Settings…" does today. Unlike the indicator's panel, it can become key, so the recorder receives key presses. **Why:** the recorder probe saw every key once the panel was key in an active app; a panel that leaves its app inactive was not tested, and settings need no such thing ([../research/shortcut-recorder.md](../research/shortcut-recorder.md), §2).
 - Labels are sentence case and name what the user controls. A toggle describes its on state.
+- A shortcut row is named for the action its keys perform, in the imperative: Dictate, Paste last transcription, Cancel recording (maintainer, 2026-11-13). **Why:** the rows read as one list of actions in one tense.
 
 ## Every setting
 
 | Section | Label | Control | Key | Default | PR |
 |---|---|---|---|---|---|
-| Shortcuts | Dictation shortcut | recorder | `dictationShortcut` (new; migrates `activationKeyCode`) | Right ⌥ | 8 |
+| Shortcuts | Dictate | recorder | `dictationShortcut` (new; migrates `activationKeyCode`) | Right ⌥ | 8 |
 | Shortcuts | Start by | Hold / Tap / Double-tap | `activationMode` | Hold | 7 |
 | Shortcuts | Paste last transcription | recorder, clearable | `pasteLastShortcut` (new) | ⌃⌥V | 9 |
 | Shortcuts | Copy last transcription | recorder, clearable | `copyLastShortcut` (new) | none | 9 |

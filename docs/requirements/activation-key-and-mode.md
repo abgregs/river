@@ -81,7 +81,7 @@ There is no path that tears down the event tap mid-cycle. See [../architecture/r
 
 The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-shortcuts.md)) contains:
 
-1. **Dictation shortcut** — the shortcut in its outline and a Record button. Recording takes a lone modifier or a combination, refuses what cannot work or what River already uses, and writes `dictationShortcut` ([0036](../planning/0036_settings-and-shortcuts.md), The recorder).
+1. **Dictate** — the dictation shortcut in its outline and a Record button. Recording takes a lone modifier or a combination, refuses what cannot work or what River already uses, and writes `dictationShortcut` ([0036](../planning/0036_settings-and-shortcuts.md), The recorder).
 2. **Start by** — a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description under it.
 3. **Cancel recording** — the keys that cancel a recording (fn, and Esc from PR 9), shown, not editable.
 

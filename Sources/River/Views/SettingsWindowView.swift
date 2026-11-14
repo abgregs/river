@@ -233,7 +233,7 @@ private struct DictationShortcutRow: View {
 
     var body: some View {
         let isBusy = appState.state != .idle
-        SettingsRow(label: "Dictation shortcut", description: line(isBusy: isBusy).map(text), divider: false) {
+        SettingsRow(label: "Dictate", description: line(isBusy: isBusy).map(text), divider: false) {
             HStack(spacing: 8) {
                 chip
                     .modifier(RefusalShake(animatableData: shakes))
