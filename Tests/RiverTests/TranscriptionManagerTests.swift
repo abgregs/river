@@ -518,6 +518,212 @@ struct TranscriptionManagerTokenizerCheckTests {
     }
 }
 
+/// A temporary download base laid out as WhisperKit and its Hub leave one, so the
+/// downloaded check and Delete run against fixture files, never the user's models.
+@MainActor
+private struct ModelFixture {
+    let base: URL
+
+    init() throws {
+        base = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("river-models-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    }
+
+    func remove() { try? FileManager.default.removeItem(at: base) }
+
+    func modelFolder(_ name: String) -> URL { TranscriptionManager.modelFolder(downloadBase: base, modelName: name) }
+    var records: URL { base.appendingPathComponent("models/argmaxinc/whisperkit-coreml/.cache/huggingface/download") }
+    var tokenizer: URL { base.appendingPathComponent("models/openai/whisper-small.en") }
+
+    // Every file the repo ships for a model, each `bytes` long, and its download records.
+    func writeModel(_ name: String, prefill: Bool = false, bytes: Int = 1) throws {
+        let models = ["MelSpectrogram", "AudioEncoder", "TextDecoder"] + (prefill ? ["TextDecoderContextPrefill"] : [])
+        let files = ["config.json", "generation_config.json"] + models.flatMap { model in
+            ["coremldata.bin", "metadata.json", "model.mil", "weights/weight.bin", "analytics/coremldata.bin"]
+                .map { "\(model).mlmodelc/\($0)" }
+        }
+        for file in files {
+            try write(modelFolder(name).appendingPathComponent(file), bytes: bytes)
+            try write(records.appendingPathComponent("\(name)/\(file).metadata"), bytes: 1)
+        }
+    }
+
+    func writeTokenizer() throws {
+        try write(tokenizer.appendingPathComponent("tokenizer.json"), bytes: 1)
+    }
+
+    func write(_ file: URL, bytes: Int) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(count: bytes).write(to: file)
+    }
+
+    func removeFile(_ path: String, of name: String) throws {
+        try FileManager.default.removeItem(at: modelFolder(name).appendingPathComponent(path))
+    }
+
+    func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
+}
+
+@Suite("TranscriptionManager downloaded check")
+struct TranscriptionManagerDownloadedCheckTests {
+    // planning 0026 finding 3, 0038: a cut-off download used to read as downloaded because
+    // one file was there. "Downloaded", the Delete offer and the warm-launch load all rely on
+    // the check, so a model reads as downloaded only with every file it needs.
+
+    private static let model = "openai_whisper-small.en"
+
+    @MainActor
+    @Test("a complete model folder reads as downloaded")
+    func completeFolderIsCached() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.model)
+        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.model))
+    }
+
+    @MainActor
+    @Test("a folder missing any one file reads as not downloaded", arguments: [
+        "config.json",
+        "generation_config.json",
+        "MelSpectrogram.mlmodelc/weights/weight.bin",
+        "AudioEncoder.mlmodelc/coremldata.bin",
+        "TextDecoder.mlmodelc/model.mil",
+        "TextDecoder.mlmodelc/analytics/coremldata.bin",
+    ])
+    func partialFolderIsNotCached(missing: String) throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.model)
+        try fixture.removeFile(missing, of: Self.model)
+        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.model))
+    }
+
+    @MainActor
+    @Test("the leftovers of a cut-off download, the AudioEncoder alone, read as not downloaded")
+    func audioEncoderAloneIsNotCached() throws {
+        // The old check's false positive: a 1.3 MB base.en folder seen on device (2026-08-14).
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.write(fixture.modelFolder(Self.model).appendingPathComponent("AudioEncoder.mlmodelc/coremldata.bin"), bytes: 1)
+        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.model))
+    }
+
+    @MainActor
+    @Test("a prefill model's folder must be complete too, since WhisperKit loads it when it is there")
+    func partialPrefillIsNotCached() throws {
+        let model = "openai_whisper-large-v3-v20240930_turbo"
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(model, prefill: true)
+        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: model))
+        try fixture.removeFile("TextDecoderContextPrefill.mlmodelc/weights/weight.bin", of: model)
+        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: model))
+    }
+}
+
+@Suite("TranscriptionManager delete model")
+struct TranscriptionManagerDeleteModelTests {
+    // planning 0038: Delete frees a model's space, and must never take the files of the
+    // model River transcribes with or of one loading beside it, which would break dictation
+    // or a load mid-read. Every test deletes from a temporary folder.
+
+    private static let inUse = "openai_whisper-small.en"
+    private static let other = "openai_whisper-base.en"
+
+    @MainActor
+    @Test("deleting a downloaded model removes its folder and records, and it reads as not downloaded")
+    func deleteRemovesFolderAndRecords() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.other)
+        let manager = TranscriptionManager(modelName: Self.inUse)
+        try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+        #expect(!fixture.exists(fixture.modelFolder(Self.other)))
+        #expect(!fixture.exists(fixture.records.appendingPathComponent(Self.other)))
+        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.other))
+    }
+
+    @MainActor
+    @Test("a delete leaves the model in use, other models and the shared tokenizer folders")
+    func deleteLeavesEverythingElse() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.inUse)
+        try fixture.writeModel(Self.other)
+        try fixture.writeModel("distil-whisper_distil-large-v3")
+        try fixture.writeTokenizer()
+        let manager = TranscriptionManager(modelName: Self.inUse)
+        try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
+        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: "distil-whisper_distil-large-v3"))
+        #expect(fixture.exists(fixture.records.appendingPathComponent(Self.inUse)))
+        #expect(fixture.exists(fixture.tokenizer.appendingPathComponent("tokenizer.json")))
+    }
+
+    @MainActor
+    @Test("the model in use is refused, whatever its load state", arguments: [ModelLoadState.ready, .loading, .downloading, .failed])
+    func modelInUseIsRefused(state: ModelLoadState) throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.inUse)
+        let manager = TranscriptionManager(modelName: Self.inUse)
+        manager.setModelLoadStateForTesting(state)
+        #expect(throws: ModelDeletionError.inUse) {
+            try manager.deleteModel(named: Self.inUse, downloadBase: fixture.base)
+        }
+        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
+    }
+
+    @MainActor
+    @Test("the model loading beside the one in use is refused, ready or failed", arguments: [false, true])
+    func modelLoadingBesideIsRefused(fails: Bool) async throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.other)
+        let manager = TranscriptionManager(modelName: Self.inUse)
+        manager.setModelLoadStateForTesting(.ready)
+        manager.skipLoadForTesting = true
+        manager.stageFailsForTesting = fails
+        await manager.switchModel(to: Self.other)
+        #expect(manager.currentModelSwitch?.target == Self.other)
+        #expect(throws: ModelDeletionError.loading) {
+            try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+        }
+        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.other))
+    }
+
+    @MainActor
+    @Test("a name outside the catalogue is refused, so a delete can only take a model's own folder")
+    func unknownNameIsRefused() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeTokenizer()
+        let manager = TranscriptionManager(modelName: Self.inUse)
+        #expect(throws: ModelDeletionError.notInCatalogue) {
+            try manager.deleteModel(named: "../../openai", downloadBase: fixture.base)
+        }
+        #expect(fixture.exists(fixture.tokenizer.appendingPathComponent("tokenizer.json")))
+    }
+
+    @MainActor
+    @Test("what a delete frees is measured on disk: the model's folder and its records")
+    func freedSpaceIsMeasured() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Self.other, bytes: 100_000)
+        let freed = TranscriptionManager.diskUsage(downloadBase: fixture.base, modelName: Self.other)
+        // 17 files of 100 kB, plus 17 one-byte records, each taking at least a block.
+        #expect(freed >= 17 * 100_000)
+        #expect(freed == TranscriptionManager.diskUsage(of: fixture.modelFolder(Self.other))! + TranscriptionManager.diskUsage(of: fixture.records.appendingPathComponent(Self.other))!)
+        let before = try #require(TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: fixture.base)))
+        let manager = TranscriptionManager(modelName: Self.inUse)
+        try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+        let after = TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: fixture.base)) ?? 0
+        #expect(before - after == freed)
+    }
+}
+
 /// Manual offline-load check (planning 0004 follow-up) — env-gated like the eval
 /// harness, because it needs a model River has already downloaded. A cached model
 /// must load with no network: warm launches used to ask Hugging Face for the file

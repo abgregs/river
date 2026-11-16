@@ -14,14 +14,17 @@ final class SettingsWindowModel {
     @ObservationIgnored let capabilities: [any Capability]
     @ObservationIgnored let updater: UpdaterManager
     @ObservationIgnored let selectModel: (String) -> Void
+    @ObservationIgnored let deleteModel: (String) throws -> Void
     @ObservationIgnored let recorder: ShortcutRecorderModel
 
     init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
-         shortcutHooks: ShortcutRecorderHooks, selectModel: @escaping (String) -> Void) {
+         shortcutHooks: ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
+         deleteModel: @escaping (String) throws -> Void) {
         self.appState = appState
         self.capabilities = capabilities
         self.updater = updater
         self.selectModel = selectModel
+        self.deleteModel = deleteModel
         recorder = ShortcutRecorderModel(hooks: shortcutHooks)
     }
 }
@@ -65,7 +68,7 @@ struct SettingsWindowView: View {
             switch model.section {
             case .shortcuts: ShortcutsPane(appState: model.appState, recorder: model.recorder)
             case .dictation: DictationPane()
-            case .model: ModelSectionView(appState: model.appState, selectModel: model.selectModel)
+            case .model: ModelSectionView(appState: model.appState, selectModel: model.selectModel, deleteModel: model.deleteModel)
             case .general: GeneralPane(updater: model.updater)
             case .permissions: PermissionsPane(capabilities: model.capabilities)
             }

@@ -89,6 +89,22 @@ enum TranscriptionError: Error, LocalizedError {
     }
 }
 
+/// Why `TranscriptionManager.deleteModel` refused (planning 0038). The Model section offers
+/// Delete only where none applies; a refusal means the state changed after the offer.
+enum ModelDeletionError: Error, LocalizedError {
+    case inUse
+    case loading
+    case notInCatalogue
+
+    var errorDescription: String? {
+        switch self {
+        case .inUse: "River is using this model."
+        case .loading: "River is loading this model. Try again once it has finished."
+        case .notInCatalogue: "River doesn’t list this model."
+        }
+    }
+}
+
 @MainActor
 final class TranscriptionManager {
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "transcribe")
@@ -107,6 +123,11 @@ final class TranscriptionManager {
     private var staged: WhisperKit?
     private var stagedTask: Task<WhisperKit, Error>?
     private var stageGeneration = 0
+
+    // How many load tasks are reading each model's files. A choice that supersedes a load
+    // cancels it, but cancellation is cooperative and the Core ML load runs on, so
+    // `deleteModel` asks this as well as the selection.
+    private var modelsLoading: [String: Int] = [:]
 
     // The one record of the model in use, its load state and the model loading beside it.
     // Every change sends a whole value, so no reader sees a half-made switch. Initialized from
@@ -160,21 +181,34 @@ final class TranscriptionManager {
     }
 
     // Where WhisperKit puts a model's CoreML files:
-    // {base}/models/argmaxinc/whisperkit-coreml/{name}/. Pure (no I/O).
-    private static func modelFolder(downloadBase: URL, modelName: String) -> URL {
+    // {base}/models/argmaxinc/whisperkit-coreml/{name}/. Pure (no I/O). Internal so the
+    // Model section can show a model's folder in Finder.
+    static func modelFolder(downloadBase: URL, modelName: String) -> URL {
         downloadBase.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(modelName)", isDirectory: true)
     }
 
-    // internal for testability — checks whether the model's CoreML files are
-    // already on disk. Used at init time to set the correct initial load state
-    // (downloading vs. loading) without an async call, and by `loadModel` to load a
-    // cached model offline. Checks for `AudioEncoder` which WhisperKit requires
-    // before `loadModels()` can proceed.
+    // The files each compiled Core ML model in a WhisperKit model folder holds, as
+    // `argmaxinc/whisperkit-coreml` ships them.
+    private static let compiledModelFiles = [
+        "coremldata.bin", "metadata.json", "model.mil", "weights/weight.bin", "analytics/coremldata.bin",
+    ]
+
+    // internal for testability — whether the model's full file set is on disk (planning
+    // 0026, finding 3; 0038). Used at init time to set the initial load state (downloading
+    // vs. loading) without an async call, by `loadModel` to load a cached model offline, and
+    // by the Model section for "Downloaded" and Delete. The Hub downloads each file beside
+    // the folder and moves it in only once it is whole, so a cut-off download shows as
+    // missing files, never as a short one: checking that every file is present is enough.
+    // The three models WhisperKit requires must be complete, and the prefill model too when
+    // its folder exists, since WhisperKit then loads it.
     static func isModelCached(downloadBase: URL, modelName: String) -> Bool {
         let dir = modelFolder(downloadBase: downloadBase, modelName: modelName)
         let fm = FileManager.default
-        return fm.fileExists(atPath: dir.appendingPathComponent("AudioEncoder.mlmodelc").path)
-            || fm.fileExists(atPath: dir.appendingPathComponent("AudioEncoder.mlpackage").path)
+        func exists(_ path: String) -> Bool { fm.fileExists(atPath: dir.appendingPathComponent(path).path) }
+        func complete(_ model: String) -> Bool { compiledModelFiles.allSatisfy { exists("\(model).mlmodelc/\($0)") } }
+        return exists("config.json") && exists("generation_config.json")
+            && ["MelSpectrogram", "AudioEncoder", "TextDecoder"].allSatisfy(complete)
+            && (!exists("TextDecoderContextPrefill.mlmodelc") || complete("TextDecoderContextPrefill"))
     }
 
     // internal for testability — throws `.unusableTokenizerConfig` when a folder
@@ -201,6 +235,58 @@ final class TranscriptionManager {
             && !namesTokenizerClass(folder.appendingPathComponent("tokenizer_config.json")) {
             throw TranscriptionError.unusableTokenizerConfig(folderName: folder.lastPathComponent)
         }
+    }
+
+    /// The folder every model's files live in: what the Model section names and shows in Finder.
+    static func modelsFolder(downloadBase: URL) -> URL {
+        downloadBase.appendingPathComponent("models", isDirectory: true)
+    }
+
+    // The Hub's download records for a model: a `.metadata` file per downloaded file, and a
+    // cut-off file's `.incomplete` part, which a later download resumes from.
+    private static func downloadRecordsFolder(downloadBase: URL, modelName: String) -> URL {
+        downloadBase.appendingPathComponent("models/argmaxinc/whisperkit-coreml/.cache/huggingface/download/\(modelName)", isDirectory: true)
+    }
+
+    /// The space `url` takes on disk, as Finder counts it: the blocks allocated to every file
+    /// under it, in bytes. `nil` when nothing is there.
+    static func diskUsage(of url: URL) -> Int64? {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return nil }
+        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .isRegularFileKey]
+        func size(_ file: URL) -> Int64 {
+            guard let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { return 0 }
+            return Int64(values.totalFileAllocatedSize ?? 0)
+        }
+        guard let files = fm.enumerator(at: url, includingPropertiesForKeys: keys) else { return size(url) }
+        return files.reduce(size(url)) { total, file in total + ((file as? URL).map(size) ?? 0) }
+    }
+
+    /// What deleting `modelName` frees: its folder and its download records.
+    static func diskUsage(downloadBase: URL, modelName: String) -> Int64 {
+        [modelFolder(downloadBase: downloadBase, modelName: modelName),
+         downloadRecordsFolder(downloadBase: downloadBase, modelName: modelName)]
+            .compactMap(diskUsage(of:)).reduce(0, +)
+    }
+
+    /// Deletes a downloaded model's folder and its download records (planning 0038), so its
+    /// space is freed and choosing it again downloads it. The tokenizer folders under
+    /// `models/openai` stay: they are small and shared between models. Refuses the model in
+    /// use, the one loading beside it, and any model a load is still reading, so a delete
+    /// never races a load of the same model. `downloadBase` is a parameter so tests delete
+    /// from a temporary folder.
+    func deleteModel(named name: String, downloadBase: URL) throws {
+        guard Constants.curatedModels.contains(where: { $0.name == name }) else { throw ModelDeletionError.notInCatalogue }
+        let selection = currentSelection
+        guard name != selection.inUse else { throw ModelDeletionError.inUse }
+        guard name != selection.next?.target, modelsLoading[name] == nil else { throw ModelDeletionError.loading }
+        let fm = FileManager.default
+        for folder in [Self.modelFolder(downloadBase: downloadBase, modelName: name),
+                       Self.downloadRecordsFolder(downloadBase: downloadBase, modelName: name)]
+        where fm.fileExists(atPath: folder.path) {
+            try fm.removeItem(at: folder)
+        }
+        logger.info("Deleted model \(name, privacy: .public)")
     }
 
     // swift-transformers reads the key as `tokenizerClass` or `tokenizer_class` and
@@ -233,15 +319,13 @@ final class TranscriptionManager {
         let downloadBase = Self.modelDownloadBase()
         let modelName = self.modelName
 
-        let task = Task<WhisperKit, Error> { [weak self, logger] in
-            try await Self.makeWhisperKit(modelName: modelName, downloadBase: downloadBase, logger: logger) { state in
-                // Generation-guarded like the completion paths: a superseded load finishing
-                // its download must not mislabel the *newer* switch's published state (e.g.
-                // flip "Downloading model…" to "Preparing model…" while another model's
-                // download is what the user is actually waiting on).
-                if let self, self.loadGeneration == generation {
-                    self.emitLoadState(state)
-                }
+        let task = makeLoadTask(modelName: modelName, downloadBase: downloadBase) { [weak self] state in
+            // Generation-guarded like the completion paths: a superseded load finishing
+            // its download must not mislabel the *newer* switch's published state (e.g.
+            // flip "Downloading model…" to "Preparing model…" while another model's
+            // download is what the user is actually waiting on).
+            if let self, self.loadGeneration == generation {
+                self.emitLoadState(state)
             }
         }
         loadTask = task
@@ -263,6 +347,22 @@ final class TranscriptionManager {
         }
     }
 
+    // A load of `modelName`, counted in `modelsLoading` from now until it ends, cancelled or not.
+    private func makeLoadTask(
+        modelName: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
+    ) -> Task<WhisperKit, Error> {
+        modelsLoading[modelName, default: 0] += 1
+        return Task { [weak self, logger] in
+            defer {
+                if let self {
+                    self.modelsLoading[modelName, default: 1] -= 1
+                    if self.modelsLoading[modelName] == 0 { self.modelsLoading[modelName] = nil }
+                }
+            }
+            return try await Self.makeWhisperKit(modelName: modelName, downloadBase: downloadBase, logger: logger, phase: phase)
+        }
+    }
+
     // Downloads the model if it is not cached, then loads it. `phase` hears `.downloading` when
     // a cached folder won't load and the download path takes over, and `.loading` once the
     // files are on disk. Shared by the model in use and a staged switch.
@@ -277,9 +377,9 @@ final class TranscriptionManager {
         // A cached model loads straight from its folder with downloading off: no
         // network, so a warm launch is quick and works offline. WhisperKit's
         // download path asks Hugging Face for the file list first, even when every
-        // file is on disk (planning 0004 follow-up). The cache check trusts one
-        // file, so a partial download can pass it (planning 0026); if the folder
-        // won't load, fall through and let the download path complete it.
+        // file is on disk (planning 0004 follow-up). A partial download fails the
+        // cache check (planning 0026) and takes the download path, which completes
+        // it; if a complete-looking folder still won't load, fall through to it too.
         if isModelCached(downloadBase: downloadBase, modelName: modelName) {
             do {
                 let folder = modelFolder(downloadBase: downloadBase, modelName: modelName)
@@ -417,11 +517,9 @@ final class TranscriptionManager {
             update { $0.next = ModelSwitch(target: target, phase: stageFailsForTesting ? .failed : .ready) }
             return
         }
-        let task = Task<WhisperKit, Error> { [weak self, logger] in
-            try await Self.makeWhisperKit(modelName: target, downloadBase: downloadBase, logger: logger) { state in
-                guard let self, self.stageGeneration == generation else { return }
-                self.update { $0.next = ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing) }
-            }
+        let task = makeLoadTask(modelName: target, downloadBase: downloadBase) { [weak self] state in
+            guard let self, self.stageGeneration == generation else { return }
+            self.update { $0.next = ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing) }
         }
         stagedTask = task
         do {

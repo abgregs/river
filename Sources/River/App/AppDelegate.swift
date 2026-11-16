@@ -59,10 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = UpdaterManager()
 
     private(set) lazy var settingsWindow: SettingsWindowController = {
-        SettingsWindowController(appState: appState, capabilities: capabilities, updater: updater,
-                                 shortcutHooks: shortcutHooks) { [weak self] model in
-            self?.session.selectModel(model)
-        }
+        SettingsWindowController(
+            appState: appState, capabilities: capabilities, updater: updater, shortcutHooks: shortcutHooks,
+            selectModel: { [weak self] model in self?.session.selectModel(model) },
+            deleteModel: { [weak self] model in try self?.session.deleteModel(model) }
+        )
     }()
 
     // The Settings recorder's reach (planning 0036, The recorder): River's shortcuts through the

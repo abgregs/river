@@ -96,6 +96,14 @@ enum ModelCatalogue {
         return .selectable(downloaded: isDownloaded)
     }
 
+    /// Whether a row's menu offers Delete… (planning 0038): only a downloaded model River is
+    /// neither using nor loading. The model in use, one downloading, preparing or Waiting, and
+    /// a failed one (in use or beside it) are left alone, and `TranscriptionManager` refuses
+    /// them too.
+    static func offersDelete(_ status: RowStatus) -> Bool {
+        status == .selectable(downloaded: true)
+    }
+
     private static func distinct(_ values: [String]) -> [String] {
         values.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
     }
@@ -103,5 +111,10 @@ enum ModelCatalogue {
     /// "487 MB", "1.6 GB": decimal units, as the download sizes are.
     static func formattedSize(megabytes: Int) -> String {
         megabytes >= 1000 ? String(format: "%.1f GB", Double(megabytes) / 1000) : "\(megabytes) MB"
+    }
+
+    /// A size measured on disk, in the same units, as Finder shows it.
+    static func formattedSize(bytes: Int64) -> String {
+        formattedSize(megabytes: Int((Double(bytes) / 1_000_000).rounded()))
     }
 }

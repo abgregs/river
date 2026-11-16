@@ -478,6 +478,12 @@ final class RiverSession {
         Task { @MainActor in await transcription.switchModel(to: name) }
     }
 
+    /// The Model section's Delete model (planning 0038): deletes a downloaded model's files.
+    /// `TranscriptionManager` refuses the model in use and one loading beside it.
+    func deleteModel(_ name: String) throws {
+        try transcription.deleteModel(named: name, downloadBase: TranscriptionManager.modelDownloadBase())
+    }
+
     // The ready microphone (planning 0033, decision 5): the capture unit runs between
     // recordings only while a dictation is possible. The inputs are combined here and
     // the pure rule decides; `AudioCaptureManager` owns the unit and applies a change

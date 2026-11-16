@@ -27,7 +27,8 @@ struct SettingsWindowSnapshotTests {
         transcription.skipLoadForTesting = true
         appState.bind(transcription: transcription)
         let model = SettingsWindowModel(appState: appState, capabilities: [microphone, inputMonitoring, accessibility],
-                                        updater: UpdaterManager(), shortcutHooks: .inert, selectModel: { _ in })
+                                        updater: UpdaterManager(), shortcutHooks: .inert, selectModel: { _ in },
+                                        deleteModel: { _ in })
         model.permissionMissing = true
         // Each section, then the Model section with a choice waiting for a dictation to end,
         // and with a switch that failed.
@@ -48,6 +49,28 @@ struct SettingsWindowSnapshotTests {
             for appearance in Self.appearances {
                 try write(model, size: size, appearance: appearance, to: directory.appendingPathComponent("settings-\(shot)-\(appearance.name).png"))
             }
+        }
+        // The Model section alone, with the pointer over a row: its ⋯ menu button and the
+        // models folder line (planning 0038). The menu and the confirmation are windows of
+        // their own, which this harness does not draw.
+        appState.apply(modelSelection: ModelSelection(inUse: Constants.defaultModel, inUseState: .ready, next: nil))
+        let section = ModelSectionView(appState: appState, selectModel: { _ in }, deleteModel: { _ in },
+                                       hoveredRow: "openai_whisper-base.en")
+        let size = CGSize(width: Constants.settingsModelWindowSize.width - Constants.settingsRailWidth, height: 490)
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
+                                  backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: appearance)
+            let host = NSHostingView(rootView: section.font(.system(size: 13)).padding(.horizontal, 24).padding(.vertical, 10)
+                .background(Color(nsColor: Palette.windowTint)))
+            host.frame = NSRect(origin: .zero, size: size)
+            window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let data = try #require(rep.representation(using: .png, properties: [:]))
+            try data.write(to: directory.appendingPathComponent("settings-model-row-menu-\(name).png"))
         }
     }
 
@@ -93,7 +116,7 @@ struct SettingsWindowSnapshotTests {
                 let appState = AppState()
                 shot.prepare(appState)
                 let model = SettingsWindowModel(appState: appState, capabilities: [], updater: UpdaterManager(),
-                                                shortcutHooks: shot.hooks, selectModel: { _ in })
+                                                shortcutHooks: shot.hooks, selectModel: { _ in }, deleteModel: { _ in })
                 try write(model, size: Constants.settingsWindowSize, appearance: appearance, steps: shot.steps, wait: shot.wait,
                           to: directory.appendingPathComponent("settings-shortcuts-\(shot.name)-\(appearance.name).png"))
                 model.recorder.stop()
