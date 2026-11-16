@@ -50,8 +50,7 @@ final class AppState {
     /// part of another River shortcut (spec 0036). Not a cancel: no cue plays.
     private(set) var lastRecordingWasDiscarded = false
     /// What macOS said to each combination River holds: a refusal is the Settings window's
-    /// "Not working" line on that row and its sidebar badge. A lone modifier, or a cleared
-    /// shortcut, has none.
+    /// "Not working" line on that row and its sidebar badge. A lone modifier has none.
     private(set) var shortcutRegistrations: [RiverShortcut: HotKeyRegistration] = [:]
     // Set by the session's `discards` signal, which arrives just before that
     // recording's `.idle`; consumed as the state leaves `.recording`.

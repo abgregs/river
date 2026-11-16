@@ -61,7 +61,7 @@ final class HotkeyManager {
     // key so a cancel-key edge never disturbs the activation latch (and vice versa).
     private var isCancelKeyDown = false
     private var cancellables = Set<AnyCancellable>()
-    // Paste last's and Copy last's shortcuts; absent when cleared.
+    // Paste last's and Copy last's shortcuts, as the session sets them from Settings.
     private var actionShortcuts: [RiverShortcut: Shortcut] = [:]
     // Esc is held while a recording runs (`setRecording`).
     private var isRecordingArmed = false
@@ -75,7 +75,7 @@ final class HotkeyManager {
     /// What macOS said to the dictation combination's registration; nil for a lone modifier.
     var dictationRegistration: HotKeyRegistration? { registrationsSubject.value[.dictate] }
     /// What macOS said to each combination River holds, as it changes, for the Settings
-    /// window's "Not working" lines. A shortcut that is a lone modifier, or cleared, is absent.
+    /// window's "Not working" lines. A shortcut that is a lone modifier is absent.
     var registrations: AnyPublisher<[RiverShortcut: HotKeyRegistration], Never> { registrationsSubject.eraseToAnyPublisher() }
     /// River's shortcuts are paused while the Settings recorder listens (spec 0036, The
     /// recorder): the hot key is unregistered, so the recorder sees its keys, and the tap's
