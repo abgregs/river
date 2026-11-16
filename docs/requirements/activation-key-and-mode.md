@@ -58,6 +58,8 @@ Declared as typed keys on the `Settings` namespace (backed by `UserDefaults.stan
 |---|---|---|
 | `Settings.dictationShortcut` | `Shortcut` | Right Option (`mod:61`) |
 | `Settings.activationMode` | `ActivationMode` | `.hold` |
+| `Settings.pasteLastShortcut` | `Shortcut` (a combination) | ⌃⌥V (`key:9:ctrl,opt`) |
+| `Settings.copyLastShortcut` | `Shortcut` (a combination) | ⌃⌥C (`key:8:ctrl,opt`) |
 
 A shortcut is stored as one string so `@AppStorage` can bind it: `mod:61` for a lone modifier, `key:49:ctrl,opt` for a combination. No shortcut can be cleared, so an unreadable value reads as the default.
 
@@ -74,6 +76,8 @@ See [../architecture/settings-store.md](../architecture/settings-store.md) for t
 - **Idle** → `HotkeyManager` swaps the shortcut or mode **in place**: a lone modifier is a keycode refilter while the one event tap keeps running (no rebuild, preserving the [threading invariant](../architecture/threading-invariant.md)); a combination moves its hot key registration.
 - **Recording in a tap mode** → the change applies **live** and the recording continues. The new shortcut or mode immediately becomes the stop gesture, and the session posts a notice confirming the user can use it to stop the current recording. No audio is lost, because nothing tears down the running tap.
 - **Recording in Hold mode, or processing** → the change is deferred and applied when the cycle returns to `.idle`. Hold defers because the user is physically holding the old shortcut, whose release must still stop the recording.
+
+Paste last's and Copy last's shortcuts apply at once, in any state: each change moves only that row's hot key, and neither drives a recording.
 
 There is no path that tears down the event tap mid-cycle. See [../architecture/river-session.md](../architecture/river-session.md).
 
