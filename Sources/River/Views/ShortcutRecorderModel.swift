@@ -12,10 +12,11 @@ struct ShortcutRecorderHooks {
     /// Brings River's shortcuts back once every modifier key is up, so the keys just
     /// recorded never reach them.
     var resume: () -> Void
-    /// Whether a shortcut can be the dictation shortcut, and if not, why
-    /// (`HotkeyManager.availability(of:)`).
+    /// Whether a shortcut can be this row's, and if not, why
+    /// (`HotkeyManager.availability(of:for:)`).
     var check: (Shortcut) -> ShortcutAvailability
-    var save: (Shortcut) -> Void
+    /// Saves this row's shortcut; nil clears it.
+    var save: (Shortcut?) -> Void
 
     /// Accepts every shortcut and reaches nothing.
     static let inert = ShortcutRecorderHooks(
@@ -23,11 +24,12 @@ struct ShortcutRecorderHooks {
     )
 }
 
-/// The dictation shortcut's recorder (spec 0036, The recorder). While it records, it takes the
+/// One shortcut row's recorder (spec 0036, The recorder). While it records, it takes the
 /// window's key presses, feeds them to `ShortcutRecorder`, and checks and saves what it hears;
 /// River's shortcuts are paused meanwhile, and HotkeyManager brings them back once every key is
 /// up. Esc, Cancel, a click anywhere but the button, or the window losing key stops it, keeping
-/// the saved shortcut.
+/// the saved shortcut. The row decides the rest: whether a lone modifier can be its shortcut,
+/// and whether Delete clears it.
 @MainActor
 @Observable
 final class ShortcutRecorderModel {
@@ -55,6 +57,8 @@ final class ShortcutRecorderModel {
     /// The Record button's frame in the window, top-left origin: a click outside it stops.
     @ObservationIgnored var buttonFrame: CGRect = .zero
 
+    /// The row this recorder serves.
+    let row: RiverShortcut
     @ObservationIgnored private let hooks: ShortcutRecorderHooks
     @ObservationIgnored private var recorder = ShortcutRecorder()
     @ObservationIgnored private var monitor: Any?
@@ -62,16 +66,20 @@ final class ShortcutRecorderModel {
     @ObservationIgnored private weak var window: NSWindow?
     @ObservationIgnored private var settleTask: Task<Void, Never>?
 
-    init(hooks: ShortcutRecorderHooks) {
+    init(row: RiverShortcut = .dictate, hooks: ShortcutRecorderHooks) {
+        self.row = row
         self.hooks = hooks
     }
 
     var isRecording: Bool { phase == .recording }
 
     /// Checks the saved shortcut against macOS's own list, for the line that stays while true.
-    func refresh(saved: Shortcut) {
-        isSystemShortcut = hooks.check(saved) == .alsoUsedByMacOS
+    func refresh(saved: Shortcut?) {
+        isSystemShortcut = saved.map { hooks.check($0) == .alsoUsedByMacOS } ?? false
     }
+
+    // How to record on this row: a cleared row's line says Delete clears.
+    private var hint: RecorderLine { row.isClearable ? .recordingClearable : .recordingDictation }
 
     func toggle() {
         isRecording ? stop() : start()
@@ -85,7 +93,7 @@ final class ShortcutRecorderModel {
         recorder = ShortcutRecorder()
         held = []
         tried = nil
-        line = .recordingDictation
+        line = hint
         startedAt = Date()
         phase = .recording
         window = NSApplication.shared.keyWindow
@@ -107,15 +115,18 @@ final class ShortcutRecorderModel {
             held = recorder.held
             if !held.isEmpty, tried != nil {
                 tried = nil
-                line = .recordingDictation
+                line = hint
             }
         case .stop:
             stop()
         case .clear:
-            refuse(.cannotClear, tried: nil)
+            row.isClearable ? clear() : refuse(.cannotClear, tried: nil)
         case .bareKey(let keyCode):
             refuse(.needsModifier, tried: ShortcutText.Keys(keys: [ShortcutText.keyName(keyCode)]))
         case .candidate(let shortcut):
+            if case .modifier = shortcut, !row.allowsLoneModifier {
+                return refuse(.needsKey, tried: ShortcutText.keys(shortcut))
+            }
             let availability = hooks.check(shortcut)
             if let refusal = RecorderLine.refusal(availability, of: shortcut) {
                 refuse(refusal, tried: ShortcutText.keys(shortcut))
@@ -144,6 +155,15 @@ final class ShortcutRecorderModel {
             guard !Task.isCancelled, let self, case .saving = self.phase else { return }
             self.phase = .idle
         }
+    }
+
+    // Delete on a row that can be empty: saved as cleared, and recording stops.
+    private func clear() {
+        finish()
+        hooks.save(nil)
+        isSystemShortcut = false
+        phase = .idle
+        AccessibilityNotification.Announcement("\(row.label) cleared").post()
     }
 
     private func finish() {

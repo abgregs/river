@@ -90,8 +90,8 @@ final class RiverSession {
     var hasLastTranscript: Bool { lastTranscript != nil }
     // The streaming transcript of the current recording, for the transcript panel.
     var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
-    // What macOS said to the dictation combination's registration, for Settings' "Not working".
-    var dictationRegistration: AnyPublisher<HotKeyRegistration?, Never> { hotkey.dictationRegistrations }
+    // What macOS said to each combination River holds, for Settings' "Not working" lines.
+    var shortcutRegistrations: AnyPublisher<[RiverShortcut: HotKeyRegistration], Never> { hotkey.registrations }
 
     init(
         accessibility: AccessibilityCapability,
@@ -162,7 +162,16 @@ final class RiverSession {
         }
         hotkey.onCancel = { [weak self] in self?.handleCancel() }
         hotkey.onDiscard = { [weak self] in self?.handleDiscard() }
+        hotkey.onPasteLast = { [weak self] in self?.pasteLastTranscript() }
+        hotkey.onCopyLast = { [weak self] in self?.copyLastTranscript() }
         hotkey.isRecording = { [weak self] in self?.currentState == .recording }
+        // Esc cancels only while a recording runs; between recordings it belongs to the app
+        // in front (spec 0036).
+        stateSubject
+            .map { $0 == .recording }
+            .removeDuplicates()
+            .sink { [weak self] recording in self?.hotkey.setRecording(recording) }
+            .store(in: &cancellables)
         // The capture watchdog ends a recording whose audio stopped arriving, through the
         // same path as a key release; `stopRecording` reports the shortfall from there.
         audio.onCaptureGapExceeded = { [weak self] in
@@ -422,6 +431,13 @@ final class RiverSession {
                 }
             }
             .store(in: &cancellables)
+        // Paste last's and Copy last's shortcuts apply at once (spec 0036, Changes apply).
+        settings.publisher(for: Settings.pasteLastShortcut)
+            .sink { [weak self] value in self?.hotkey.setShortcut(value.shortcut, for: .pasteLast) }
+            .store(in: &cancellables)
+        settings.publisher(for: Settings.copyLastShortcut)
+            .sink { [weak self] value in self?.hotkey.setShortcut(value.shortcut, for: .copyLast) }
+            .store(in: &cancellables)
         settings.publisher(for: Settings.activationMode)
             .sink { [weak self] newMode in
                 self?.reconfigureHotkey(notice: ActivationNotice.modeChanged(to: newMode)) { [weak self] in
@@ -462,10 +478,30 @@ final class RiverSession {
         hotkey.resume()
     }
 
-    /// Whether `shortcut` can be the dictation shortcut, and if not, why
-    /// (`HotkeyManager.availability(of:)`).
-    func availability(of shortcut: Shortcut) -> ShortcutAvailability {
-        hotkey.availability(of: shortcut)
+    /// Whether `shortcut` can be `row`'s shortcut, and if not, why
+    /// (`HotkeyManager.availability(of:for:)`).
+    func availability(of shortcut: Shortcut, for row: RiverShortcut) -> ShortcutAvailability {
+        hotkey.availability(of: shortcut, for: row)
+    }
+
+    /// Paste last transcription's shortcut (spec 0036): types the last transcription again at
+    /// the cursor through the same insertion path, so the clipboard is never touched. Does
+    /// nothing with no transcription yet, or while a dictation is recording or processing.
+    func pasteLastTranscript() {
+        guard currentState == .idle, let text = lastTranscript else {
+            logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
+            return
+        }
+        logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.textInsertion.insertText(text)
+            } catch {
+                self.logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+                self.errorSubject.send(.textInsertion(underlying: error))
+            }
+        }
     }
 
     /// The Model section's Select and Try Again (planning 0036): makes `name` the model River

@@ -1,6 +1,6 @@
 # Settings and shortcuts (0036)
 
-**Status: PR 7 merged ([#92](https://github.com/abgregs/river/pull/92)) and PR 8's shortcut engine merged ([#90](https://github.com/abgregs/river/pull/90)); PR 8's recorder built (2026-11-12); PRs 9 and 10 not started.** Every setting River offers in `v0.3.0`, how the settings panel groups and labels them, and how River registers and records its shortcuts. Agreed with the maintainer on 2026-11-04 and 2026-11-05. PRs 7 to 10 of the `v0.3.0` plan ([current-focus.md](current-focus.md)) build it. The panel's visual design (layout, icons, size) is PR 7's design rounds, not this spec. The live text and microphone decisions are in [0034](0034_live-text-and-microphone-settings.md). The mechanism rests on [../research/shortcut-registration.md](../research/shortcut-registration.md) and [../research/shortcut-recorder.md](../research/shortcut-recorder.md).
+**Status: PR 7 merged ([#92](https://github.com/abgregs/river/pull/92)) and PR 8's shortcut engine merged ([#90](https://github.com/abgregs/river/pull/90)); PR 8's recorder merged ([#93](https://github.com/abgregs/river/pull/93)); PR 9 built (2026-11-15); PR 10 not started.** Every setting River offers in `v0.3.0`, how the settings panel groups and labels them, and how River registers and records its shortcuts. Agreed with the maintainer on 2026-11-04 and 2026-11-05. PRs 7 to 10 of the `v0.3.0` plan ([current-focus.md](current-focus.md)) build it. The panel's visual design (layout, icons, size) is PR 7's design rounds, not this spec. The live text and microphone decisions are in [0034](0034_live-text-and-microphone-settings.md). The mechanism rests on [../research/shortcut-registration.md](../research/shortcut-registration.md) and [../research/shortcut-recorder.md](../research/shortcut-recorder.md).
 
 ## The panel
 
@@ -19,7 +19,7 @@
 | Shortcuts | Dictate | recorder | `dictationShortcut` (new; migrates `activationKeyCode`) | Right ⌥ | 8 |
 | Shortcuts | Start by | Hold / Tap / Double-tap | `activationMode` | Hold | 7 |
 | Shortcuts | Paste last transcription | recorder, clearable | `pasteLastShortcut` (new) | ⌃⌥V | 9 |
-| Shortcuts | Copy last transcription | recorder, clearable | `copyLastShortcut` (new) | none | 9 |
+| Shortcuts | Copy last transcription | recorder, clearable | `copyLastShortcut` (new) | ⌃⌥C (maintainer, 2026-11-15) | 9 |
 | Shortcuts | Show or hide live text | recorder, clearable | `liveTextShortcut` (new) | ⌃⌥L | 10 |
 | Dictation | Play sounds when dictation starts and stops | toggle | `playFeedbackSounds` | off | 7 |
 | Dictation | Keep the microphone ready | toggle | `keepMicrophoneReady` (new; replaces `micOnlyWhileDictating`, inverted) | on | 7 |

@@ -116,3 +116,31 @@ struct ShortcutModifiers: OptionSet, Hashable, Sendable {
         return flags
     }
 }
+
+/// A shortcut its row can leave empty (spec 0036): stored as one string, empty when cleared,
+/// so `@AppStorage` binds it, and a cleared row stays apart from one never set, which takes its
+/// default. Only a combination: these shortcuts are hot keys.
+enum ClearableShortcut: Hashable, Sendable, RawRepresentable {
+    case cleared
+    case set(Shortcut)
+
+    init?(rawValue: String) {
+        if rawValue.isEmpty {
+            self = .cleared
+            return
+        }
+        guard let shortcut = Shortcut(rawValue: rawValue), case .combination = shortcut else { return nil }
+        self = .set(shortcut)
+    }
+
+    var rawValue: String {
+        switch self {
+        case .cleared: ""
+        case .set(let shortcut): shortcut.rawValue
+        }
+    }
+
+    var shortcut: Shortcut? {
+        if case .set(let shortcut) = self { shortcut } else { nil }
+    }
+}

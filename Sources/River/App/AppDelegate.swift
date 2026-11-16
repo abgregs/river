@@ -60,21 +60,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private(set) lazy var settingsWindow: SettingsWindowController = {
         SettingsWindowController(
-            appState: appState, capabilities: capabilities, updater: updater, shortcutHooks: shortcutHooks,
+            appState: appState, capabilities: capabilities, updater: updater,
+            shortcutHooks: { [unowned self] row in self.shortcutHooks(for: row) },
             selectModel: { [weak self] model in self?.session.selectModel(model) },
             deleteModel: { [weak self] model in try self?.session.deleteModel(model) }
         )
     }()
 
-    // The Settings recorder's reach (planning 0036, The recorder): River's shortcuts through the
-    // session, never past it, and the setting through the store.
-    private var shortcutHooks: ShortcutRecorderHooks {
+    // A row's recorder reach (planning 0036, The recorder): River's shortcuts through the
+    // session, never past it, and the row's setting through the store.
+    private func shortcutHooks(for row: RiverShortcut) -> ShortcutRecorderHooks {
         ShortcutRecorderHooks(
             pause: { [weak self] in self?.session.pauseShortcuts() ?? false },
             resume: { [weak self] in self?.session.resumeShortcuts() },
-            check: { [weak self] in self?.session.availability(of: $0) ?? .available },
-            save: { [weak self] in self?.settings.setValue($0, for: Settings.dictationShortcut) }
+            check: { [weak self] in self?.session.availability(of: $0, for: row) ?? .available },
+            save: { [weak self] shortcut in self?.save(shortcut, for: row) }
         )
+    }
+
+    private func save(_ shortcut: Shortcut?, for row: RiverShortcut) {
+        switch row {
+        case .dictate: if let shortcut { settings.setValue(shortcut, for: Settings.dictationShortcut) }
+        case .pasteLast: settings.setValue(shortcut.map(ClearableShortcut.set) ?? .cleared, for: Settings.pasteLastShortcut)
+        case .copyLast: settings.setValue(shortcut.map(ClearableShortcut.set) ?? .cleared, for: Settings.copyLastShortcut)
+        case .cancelRecording: break
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

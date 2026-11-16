@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 import os
 
-/// `HotkeyManager`'s answer to "can this be the dictation shortcut?" (spec 0036, Conflicts).
+/// `HotkeyManager`'s answer to "can this shortcut take this row?" (spec 0036, Conflicts).
 /// The recorder words each one; no copy lives here.
 enum ShortcutAvailability: Equatable {
     case available
@@ -15,11 +15,13 @@ enum ShortcutAvailability: Equatable {
     case refusedByMacOS
 }
 
-/// Interprets the dictation shortcut against the activation mode. A lone modifier
-/// is read from the typed `TapEvent` stream of `InputMonitoringCapability`; a
-/// combination is an exclusive hot key read from `HotKeyRegistry`. Hold mode is
-/// inline (press activates, release deactivates); the two tap modes route each
-/// completed tap through `TapStateMachine`.
+/// Interprets River's shortcuts (spec 0036). The dictation shortcut runs against the
+/// activation mode: a lone modifier is read from the typed `TapEvent` stream of
+/// `InputMonitoringCapability`, a combination is an exclusive hot key read from
+/// `HotKeyRegistry`; Hold mode is inline (press activates, release deactivates), and the two
+/// tap modes route each completed tap through `TapStateMachine`. Paste last and Copy last are
+/// hot keys too, and a recording is cancelled by fn on the tap or by Esc, a hot key held only
+/// while a recording runs.
 @MainActor
 final class HotkeyManager {
     private let inputMonitoring: InputMonitoringCapability
@@ -35,6 +37,10 @@ final class HotkeyManager {
     /// Hold mode: the user is running a shortcut, not dictating, so the recording
     /// is thrown away with no cue (spec 0036). Guarded to `.recording` like cancel.
     var onDiscard: (() -> Void)?
+    /// Paste last transcription's shortcut, once every modifier is up.
+    var onPasteLast: (() -> Void)?
+    /// Copy last transcription's shortcut.
+    var onCopyLast: (() -> Void)?
     /// Whether a recording is live, read on each completed tap in the tap modes.
     /// `RiverSession` answers from its own state, the only "recording" there is.
     var isRecording: () -> Bool = { false }
@@ -55,12 +61,22 @@ final class HotkeyManager {
     // key so a cancel-key edge never disturbs the activation latch (and vice versa).
     private var isCancelKeyDown = false
     private var cancellables = Set<AnyCancellable>()
-    private let registrationSubject = CurrentValueSubject<HotKeyRegistration?, Never>(nil)
+    // Paste last's and Copy last's shortcuts; absent when cleared.
+    private var actionShortcuts: [RiverShortcut: Shortcut] = [:]
+    // Esc is held while a recording runs (`setRecording`).
+    private var isRecordingArmed = false
+    // Paste last was pressed while a modifier was down: it fires on the tap's release of the
+    // last one, or after `pasteTimeout`.
+    private var isPastePending = false
+    private var pasteDeadlineTask: Task<Void, Never>?
+    private let pasteTimeout: Duration
+    private let registrationsSubject = CurrentValueSubject<[RiverShortcut: HotKeyRegistration], Never>([:])
 
-    /// What macOS said to the combination's registration; nil for a lone modifier.
-    var dictationRegistration: HotKeyRegistration? { registrationSubject.value }
-    /// The same, as it changes, for the Settings window's "Not working" line.
-    var dictationRegistrations: AnyPublisher<HotKeyRegistration?, Never> { registrationSubject.eraseToAnyPublisher() }
+    /// What macOS said to the dictation combination's registration; nil for a lone modifier.
+    var dictationRegistration: HotKeyRegistration? { registrationsSubject.value[.dictate] }
+    /// What macOS said to each combination River holds, as it changes, for the Settings
+    /// window's "Not working" lines. A shortcut that is a lone modifier, or cleared, is absent.
+    var registrations: AnyPublisher<[RiverShortcut: HotKeyRegistration], Never> { registrationsSubject.eraseToAnyPublisher() }
     /// River's shortcuts are paused while the Settings recorder listens (spec 0036, The
     /// recorder): the hot key is unregistered, so the recorder sees its keys, and the tap's
     /// events change nothing.
@@ -81,6 +97,7 @@ final class HotkeyManager {
         initialMode: ActivationMode = Constants.defaultActivationMode,
         cancelKeyCode: Int = Constants.cancelKeyCode,
         resumeDeadline: Duration = .seconds(Constants.shortcutResumeDeadlineSeconds),
+        pasteTimeout: Duration = .seconds(Constants.pasteKeyUpTimeoutSeconds),
         systemShortcuts: @escaping () -> [SystemShortcuts.Entry] = SystemShortcuts.enabled
     ) {
         self.inputMonitoring = inputMonitoring
@@ -89,20 +106,22 @@ final class HotkeyManager {
         self.mode = initialMode
         self.cancelKeyCode = cancelKeyCode
         self.resumeDeadline = resumeDeadline
+        self.pasteTimeout = pasteTimeout
         self.systemShortcuts = systemShortcuts
         self.tapMachine = TapStateMachine(mode: initialMode, windowMs: Constants.doubleTapWindowMs)
     }
 
     func start() async {
         bindEventStream()
-        registerCombination()
+        registerAll()
         await inputMonitoring.startTap()
     }
 
     func stop() async {
         cancellables.removeAll()
         cancelPendingResume()
-        hotKeys.unregister(.dictation)
+        cancelPendingPaste()
+        unregisterAll()
         await inputMonitoring.stopTap()
         resetLatches()
         isCancelKeyDown = false
@@ -116,13 +135,25 @@ final class HotkeyManager {
     func setShortcut(_ newShortcut: Shortcut) {
         guard shortcut != newShortcut else { return }
         logger.info("Dictation shortcut changed: \(self.shortcut.rawValue, privacy: .public) -> \(newShortcut.rawValue, privacy: .public)")
-        hotKeys.unregister(.dictation)
-        registrationSubject.send(nil)
         shortcut = newShortcut
         resetLatches()
-        // Registered at once only while running and not paused; before `start` there is
-        // nothing to deliver its events to, and `start` or `resume` registers it.
-        if !cancellables.isEmpty, !isPaused { registerCombination() }
+        register(.dictate)
+    }
+
+    /// Live-apply for Paste last's or Copy last's shortcut, nil when cleared. Applies at once.
+    func setShortcut(_ newShortcut: Shortcut?, for action: RiverShortcut) {
+        guard action == .pasteLast || action == .copyLast, actionShortcuts[action] != newShortcut else { return }
+        logger.info("\(action.label, privacy: .public) shortcut changed to \(newShortcut?.rawValue ?? "none", privacy: .public)")
+        actionShortcuts[action] = newShortcut
+        register(action)
+    }
+
+    /// Holds Esc as a cancel key while a recording runs, and lets the app in front have it
+    /// between recordings (spec 0036).
+    func setRecording(_ recording: Bool) {
+        guard isRecordingArmed != recording else { return }
+        isRecordingArmed = recording
+        register(.cancelRecording)
     }
 
     /// Pauses River's shortcuts for the Settings recorder. Pausing again while a resume
@@ -131,7 +162,8 @@ final class HotkeyManager {
         cancelPendingResume()
         guard !isPaused else { return }
         isPaused = true
-        hotKeys.unregister(.dictation)
+        cancelPendingPaste()
+        unregisterAll()
         logger.info("Shortcuts paused for the recorder")
     }
 
@@ -158,7 +190,7 @@ final class HotkeyManager {
         isPaused = false
         resetLatches()
         isCancelKeyDown = false
-        if !cancellables.isEmpty { registerCombination() }
+        registerAll()
         logger.info("Shortcuts resumed")
     }
 
@@ -168,14 +200,14 @@ final class HotkeyManager {
         resumeDeadlineTask = nil
     }
 
-    /// Whether `candidate` can be the dictation shortcut, and if not, why (spec 0036,
-    /// Conflicts): River's own shortcuts first, then whether macOS will register a
-    /// combination, then macOS's own list.
-    func availability(of candidate: Shortcut) -> ShortcutAvailability {
-        if let owner = RiverShortcut.allCases.first(where: { $0.shortcut == candidate }) {
+    /// Whether `candidate` can be `row`'s shortcut, and if not, why (spec 0036, Conflicts):
+    /// River's other shortcuts first, then whether macOS will register a combination, then
+    /// macOS's own list.
+    func availability(of candidate: Shortcut, for row: RiverShortcut = .dictate) -> ShortcutAvailability {
+        if let owner = ownShortcuts().first(where: { $0.owner != row && $0.shortcut == candidate })?.owner {
             return .usedByRiver(owner)
         }
-        switch registration(of: candidate) {
+        switch registration(of: candidate, for: row) {
         case .registered: break
         case .takenByAnotherApp: return .takenByAnotherApp
         case .refused: return .refusedByMacOS
@@ -183,13 +215,28 @@ final class HotkeyManager {
         return SystemShortcuts.contains(candidate, in: systemShortcuts()) ? .alsoUsedByMacOS : .available
     }
 
-    // A lone modifier needs no registration: the tap watches it. While River holds the
-    // combination itself, its own registration answers, since a probe would find River's hot
-    // key and read it as another app's.
-    private func registration(of candidate: Shortcut) -> HotKeyRegistration {
+    // Every shortcut River has now, under the row that owns it.
+    private func ownShortcuts() -> [(owner: RiverShortcut, shortcut: Shortcut)] {
+        [(.dictate, shortcut), (.cancelRecording, .modifier(keyCode: cancelKeyCode))]
+            + RiverShortcut.cancelKeys.dropFirst().map { (.cancelRecording, $0) }
+            + [RiverShortcut.pasteLast, .copyLast].compactMap { row in actionShortcuts[row].map { (row, $0) } }
+    }
+
+    // A lone modifier needs no registration: the tap watches it. While River holds the row's
+    // own combination, its own registration answers, since a probe would find River's hot key
+    // and read it as another app's.
+    private func registration(of candidate: Shortcut, for row: RiverShortcut) -> HotKeyRegistration {
         guard case .combination(let keyCode, let modifiers) = candidate else { return .registered }
-        if !isPaused, candidate == shortcut, let own = registrationSubject.value { return own }
+        if !isPaused, candidate == currentShortcut(of: row), let own = registrationsSubject.value[row] { return own }
         return hotKeys.probe(keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags)
+    }
+
+    private func currentShortcut(of row: RiverShortcut) -> Shortcut? {
+        switch row {
+        case .dictate: shortcut
+        case .pasteLast, .copyLast: actionShortcuts[row]
+        case .cancelRecording: nil
+        }
     }
 
     /// Live-apply for the activation mode. Resets the press latch and hands the
@@ -214,11 +261,41 @@ final class HotkeyManager {
             .store(in: &cancellables)
     }
 
-    private func registerCombination() {
-        guard case .combination(let keyCode, let modifiers) = shortcut else { return }
-        registrationSubject.send(hotKeys.register(
-            .dictation, keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags
-        ))
+    private static func hotKeyID(of row: RiverShortcut) -> HotKeyID {
+        switch row {
+        case .dictate: .dictation
+        case .pasteLast: .pasteLast
+        case .copyLast: .copyLast
+        case .cancelRecording: .cancelRecording
+        }
+    }
+
+    // Moves `row`'s hot key to the keys it has now. Registered only while running and not
+    // paused: before `start` there is nothing to deliver its events to, and `start` or
+    // `resume` registers it. Esc only while a recording runs.
+    private func register(_ row: RiverShortcut) {
+        let id = Self.hotKeyID(of: row)
+        hotKeys.unregister(id)
+        var registrations = registrationsSubject.value
+        registrations[row] = nil
+        let keys: Shortcut? = row == .cancelRecording ? (isRecordingArmed ? RiverShortcut.cancelKeys.last : nil)
+            : currentShortcut(of: row)
+        if !cancellables.isEmpty, !isPaused, case .combination(let keyCode, let modifiers) = keys {
+            let result = hotKeys.register(id, keyCode: UInt32(keyCode), modifiers: modifiers.carbonFlags)
+            if row != .cancelRecording { registrations[row] = result }
+            if result != .registered {
+                logger.error("\(row.label, privacy: .public) hot key not registered: \(String(describing: result), privacy: .public)")
+            }
+        }
+        if registrations != registrationsSubject.value { registrationsSubject.send(registrations) }
+    }
+
+    private func registerAll() {
+        for row in RiverShortcut.allCases { register(row) }
+    }
+
+    private func unregisterAll() {
+        for row in RiverShortcut.allCases { hotKeys.unregister(Self.hotKeyID(of: row)) }
     }
 
     // A key River doesn't know as a modifier keeps its latch as it is.
@@ -251,6 +328,7 @@ final class HotkeyManager {
             if isResumePending, !isModifierHeld { finishResume() }
             return
         }
+        if isPastePending, !isModifierHeld { firePaste() }
         switch event {
         case .flagsChanged(let keyCode, let flags):
             // The cancel modifier (planning 0017) is interpreted off the same
@@ -281,6 +359,10 @@ final class HotkeyManager {
     // internal for testability — pure interpretation of a River hot key.
     func handle(_ event: HotKeyEvent) {
         guard !isPaused else { return }
+        if case .pressed(let id) = event, id != .dictation {
+            handleOtherHotKey(id)
+            return
+        }
         switch (shortcut, event) {
         case (.combination, .pressed(.dictation)):
             // Hold starts on the press. The tap modes wait for the release, so
@@ -297,16 +379,56 @@ final class HotkeyManager {
             case .singleTap, .doubleTap:
                 completeTap()
             }
-        case (.modifier, .pressed(let id)):
-            // Another River shortcut went down while the dictation modifier is held:
-            // the modifier is part of that shortcut, not a dictation.
-            guard isKeyDown, !isKeyPressSpent else { return }
-            isKeyPressSpent = true
-            logger.info("Hot key \(id.rawValue, privacy: .public) pressed during the dictation key; that press is not a dictation")
-            if mode == .hold { onDiscard?() }
         default:
             break
         }
+    }
+
+    // Esc cancels. Any other River hot key runs its action; pressed while a lone-modifier
+    // dictation key is held, that modifier is part of the shortcut, not a dictation, so a
+    // Hold recording it started is thrown away (spec 0036).
+    private func handleOtherHotKey(_ id: HotKeyID) {
+        if id == .cancelRecording {
+            logger.info("Cancel gesture (Esc)")
+            onCancel?()
+            return
+        }
+        if case .modifier = shortcut, isKeyDown, !isKeyPressSpent {
+            isKeyPressSpent = true
+            logger.info("Hot key \(id.rawValue, privacy: .public) pressed during the dictation key; that press is not a dictation")
+            if mode == .hold { onDiscard?() }
+        }
+        switch id {
+        case .pasteLast: pasteWhenKeysUp()
+        case .copyLast: onCopyLast?()
+        default: break
+        }
+    }
+
+    // Carbon reports the press with its modifiers still down, and typed text arriving under a
+    // held ⌃ or ⌘ could become commands in the app in front, so the paste waits for the tap to
+    // report every modifier up (spec 0036).
+    private func pasteWhenKeysUp() {
+        guard isModifierHeld else { return firePaste() }
+        guard !isPastePending else { return }
+        isPastePending = true
+        pasteDeadlineTask = Task { @MainActor [weak self, pasteTimeout] in
+            try? await Task.sleep(for: pasteTimeout)
+            guard let self, !Task.isCancelled, self.isPastePending else { return }
+            self.logger.info("No key-up from the tap; pasting anyway")
+            self.firePaste()
+        }
+    }
+
+    private func firePaste() {
+        cancelPendingPaste()
+        onPasteLast?()
+    }
+
+    private func cancelPendingPaste() {
+        isPastePending = false
+        pasteDeadlineTask?.cancel()
+        pasteDeadlineTask = nil
     }
 
     private func handleModifierEdge(isDown: Bool) {

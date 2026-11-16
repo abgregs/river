@@ -15,17 +15,22 @@ final class SettingsWindowModel {
     @ObservationIgnored let updater: UpdaterManager
     @ObservationIgnored let selectModel: (String) -> Void
     @ObservationIgnored let deleteModel: (String) throws -> Void
-    @ObservationIgnored let recorder: ShortcutRecorderModel
+    /// One recorder per row that records a shortcut.
+    @ObservationIgnored let recorders: [RiverShortcut: ShortcutRecorderModel]
+    /// The Dictate row's recorder.
+    var recorder: ShortcutRecorderModel { recorders[.dictate]! }
 
     init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
-         shortcutHooks: ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
+         shortcutHooks: (RiverShortcut) -> ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
          deleteModel: @escaping (String) throws -> Void) {
         self.appState = appState
         self.capabilities = capabilities
         self.updater = updater
         self.selectModel = selectModel
         self.deleteModel = deleteModel
-        recorder = ShortcutRecorderModel(hooks: shortcutHooks)
+        recorders = Dictionary(uniqueKeysWithValues: [RiverShortcut.dictate, .pasteLast, .copyLast].map {
+            ($0, ShortcutRecorderModel(row: $0, hooks: shortcutHooks($0)))
+        })
     }
 }
 
@@ -66,7 +71,7 @@ struct SettingsWindowView: View {
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, 10)
             switch model.section {
-            case .shortcuts: ShortcutsPane(appState: model.appState, recorder: model.recorder)
+            case .shortcuts: ShortcutsPane(appState: model.appState, recorders: model.recorders)
             case .dictation: DictationPane()
             case .model: ModelSectionView(appState: model.appState, selectModel: model.selectModel, deleteModel: model.deleteModel)
             case .general: GeneralPane(updater: model.updater)
@@ -121,7 +126,7 @@ private struct SettingsRail: View {
     private func badge(for section: SettingsSection) -> String? {
         switch section {
         case .permissions where model.permissionMissing: "A permission is missing"
-        case .shortcuts where model.appState.isDictationShortcutFailing: "A shortcut is not working"
+        case .shortcuts where model.appState.isAnyShortcutFailing: "A shortcut is not working"
         default: nil
         }
     }
@@ -188,57 +193,84 @@ private struct RailItem: View {
 
 private struct ShortcutsPane: View {
     let appState: AppState
-    let recorder: ShortcutRecorderModel
+    let recorders: [RiverShortcut: ShortcutRecorderModel]
     @AppStorage(Settings.dictationShortcut.name)
     private var dictationShortcut: Shortcut = Settings.dictationShortcut.defaultValue
+    @AppStorage(Settings.pasteLastShortcut.name)
+    private var pasteLastShortcut: ClearableShortcut = Settings.pasteLastShortcut.defaultValue
+    @AppStorage(Settings.copyLastShortcut.name)
+    private var copyLastShortcut: ClearableShortcut = Settings.copyLastShortcut.defaultValue
     @AppStorage(Settings.activationMode.name)
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            DictationShortcutRow(recorder: recorder, saved: dictationShortcut, appState: appState)
+            ShortcutRow(recorder: recorders[.dictate]!, saved: dictationShortcut, appState: appState, divider: false)
             SettingsRow(label: "Start by", description: Text(activationMode.description)) {
                 RiverSegmentedChoice(title: "Start by",
                                      options: ActivationMode.allCases.map { ($0, $0.label) },
                                      selection: $activationMode)
             }
-            // River's other shortcuts, from the list the recorder refuses (planning 0036, Cancel
-            // recording). They are fixed, so a row has no Record button, and an empty button
-            // column keeps the keys in line with the other rows'. Esc joins fn with PR 9.
-            ForEach(RiverShortcut.allCases, id: \.self) { river in
-                SettingsRow(label: river.label) {
-                    HStack(spacing: 8) {
-                        ShortcutChip(keys: ShortcutText.keys(river.shortcut))
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(ShortcutText.spoken(river.shortcut))
-                        Color.clear.frame(width: DictationShortcutRow.buttonWidth, height: 1)
+            cancelRow
+            ShortcutRow(recorder: recorders[.pasteLast]!, saved: pasteLastShortcut.shortcut, appState: appState)
+            ShortcutRow(recorder: recorders[.copyLast]!, saved: copyLastShortcut.shortcut, appState: appState)
+        }
+        .onAppear { for (row, recorder) in recorders { recorder.refresh(saved: saved(row)) } }
+        .onDisappear { for recorder in recorders.values { recorder.stop() } }
+    }
+
+    private func saved(_ row: RiverShortcut) -> Shortcut? {
+        switch row {
+        case .dictate: dictationShortcut
+        case .pasteLast: pasteLastShortcut.shortcut
+        case .copyLast: copyLastShortcut.shortcut
+        case .cancelRecording: nil
+        }
+    }
+
+    // The keys that cancel a recording (planning 0036, Cancel recording): fn, or Esc while a
+    // recording runs. They are fixed, so the row has no Record button, and an empty button
+    // column keeps the keys in line with the other rows'.
+    private var cancelRow: some View {
+        let keys = RiverShortcut.cancelKeys
+        return SettingsRow(label: RiverShortcut.cancelRecording.label) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    ForEach(Array(keys.enumerated()), id: \.offset) { index, key in
+                        if index > 0 { Text("or").foregroundStyle(SettingsInk(colorScheme).secondary) }
+                        ShortcutChip(keys: ShortcutText.keys(key))
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(keys.map { ShortcutText.spoken($0) }.joined(separator: " or "))
+                Color.clear.frame(width: ShortcutRow.buttonWidth, height: 1)
             }
         }
-        .onAppear { recorder.refresh(saved: dictationShortcut) }
-        .onDisappear { recorder.stop() }
     }
 }
 
-/// The dictation shortcut and its Record button (planning 0036, The recorder). The line under
-/// the row says how to record and why a shortcut was refused while recording; otherwise that
-/// the shortcut is unavailable during a dictation, does nothing, or is one macOS also uses.
-private struct DictationShortcutRow: View {
+/// A shortcut and its Record button (planning 0036, The recorder). The line under the row
+/// says how to record and why a shortcut was refused while recording; otherwise that the
+/// shortcut is unavailable during a dictation, does nothing, or is one macOS also uses. A row
+/// that can be empty reads None when cleared.
+private struct ShortcutRow: View {
     static let buttonWidth: Double = 70
 
     let recorder: ShortcutRecorderModel
-    let saved: Shortcut
+    let saved: Shortcut?
     let appState: AppState
+    var divider = true
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shakes = 0.0
 
     var body: some View {
         let isBusy = appState.state != .idle
-        SettingsRow(label: "Dictate", description: line(isBusy: isBusy).map(text), divider: false) {
+        let label = recorder.row.label
+        SettingsRow(label: label, description: line(isBusy: isBusy).map(text), divider: divider) {
             HStack(spacing: 8) {
-                chip
+                slot
                     .modifier(RefusalShake(animatableData: shakes))
                     .onChange(of: recorder.refusals) { _, count in
                         withAnimation(reduceMotion ? nil : .timingCurve(0.3, 0, 0.3, 1, duration: 0.32)) { shakes = Double(count) }
@@ -250,7 +282,7 @@ private struct DictationShortcutRow: View {
                 .buttonStyle(RiverBezelButtonStyle())
                 .disabled(isBusy)
                 .help(isBusy ? RecorderLine.busy.text : "")
-                .accessibilityLabel(recorder.isRecording ? "Cancel recording the dictation shortcut" : "Record the dictation shortcut")
+                .accessibilityLabel(recorder.isRecording ? "Cancel recording the \(label) shortcut" : "Record the \(label) shortcut")
                 .background {
                     GeometryReader { proxy in
                         Color.clear
@@ -262,13 +294,26 @@ private struct DictationShortcutRow: View {
         }
     }
 
+    // A cleared row at rest reads None; otherwise the chip.
+    @ViewBuilder
+    private var slot: some View {
+        if recorder.phase == .idle, saved == nil {
+            Text("None")
+                .font(.system(size: 13))
+                .foregroundStyle(SettingsInk(colorScheme).opacity(0.55))
+                .frame(height: 20)
+        } else {
+            chip
+        }
+    }
+
     // One chip in every phase: a save animates from the recording outline it already shows.
     // A chip per phase would be a new view at each change, starting at its end state.
     private var chip: some View {
         let shown: (keys: ShortcutText.Keys, look: ShortcutChip.Look, label: String) = switch recorder.phase {
         case .recording: (recorder.tried ?? ShortcutText.keys(recorder.held), .recording, "Recording")
         case .saving(let shortcut): (ShortcutText.keys(shortcut), .saving, ShortcutText.spoken(shortcut))
-        case .idle: (ShortcutText.keys(saved), .saved, ShortcutText.spoken(saved))
+        case .idle: saved.map { (ShortcutText.keys($0), .saved, ShortcutText.spoken($0)) } ?? (ShortcutText.Keys(keys: []), .saved, "None")
         }
         return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil, startedAt: recorder.startedAt)
             .accessibilityElement(children: .ignore)
@@ -278,7 +323,7 @@ private struct DictationShortcutRow: View {
     private func line(isBusy: Bool) -> RecorderLine? {
         if recorder.isRecording { return recorder.line }
         if isBusy { return .busy }
-        if let registration = appState.dictationRegistration, let failure = RecorderLine.notWorking(registration) {
+        if let registration = appState.shortcutRegistrations[recorder.row], let failure = RecorderLine.notWorking(registration) {
             return failure
         }
         return recorder.isSystemShortcut ? .macOSAlsoUses : nil

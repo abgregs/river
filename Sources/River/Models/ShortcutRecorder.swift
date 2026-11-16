@@ -87,8 +87,10 @@ struct RecorderLine: Equatable {
     let text: String
 
     static let recordingDictation = RecorderLine(kind: .hint, text: "Press a modifier alone, or modifiers with a key. Esc stops.")
+    static let recordingClearable = RecorderLine(kind: .hint, text: "Press modifiers with a key. Esc stops, Delete clears.")
     static let cannotClear = RecorderLine(kind: .refusal, text: "The dictation shortcut can’t be cleared.")
     static let needsModifier = RecorderLine(kind: .refusal, text: "Add a modifier: ⌃, ⌥, ⇧ or ⌘.")
+    static let needsKey = RecorderLine(kind: .refusal, text: "Add a key: this shortcut needs modifiers with a key.")
     static let macOSAlsoUses = RecorderLine(kind: .warning, text: "macOS also uses this shortcut. Both will run.")
     static let busy = RecorderLine(kind: .hint, text: "Available when this dictation ends.")
 

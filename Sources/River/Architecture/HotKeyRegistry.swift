@@ -8,6 +8,10 @@ struct HotKeyID: Hashable, Sendable {
     let rawValue: UInt32
 
     static let dictation = HotKeyID(rawValue: 1)
+    static let pasteLast = HotKeyID(rawValue: 2)
+    static let copyLast = HotKeyID(rawValue: 3)
+    // Esc, registered only while a recording runs.
+    static let cancelRecording = HotKeyID(rawValue: 4)
     // The recorder's question to macOS, registered and released at once.
     static let probe = HotKeyID(rawValue: 0xFFFF)
 }

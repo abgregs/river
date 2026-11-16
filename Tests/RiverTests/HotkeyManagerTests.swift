@@ -906,3 +906,135 @@ struct HotkeyManagerAvailabilityTests {
 private final class ProbeLog {
     var count = 0
 }
+
+@Suite("HotkeyManager paste, copy and Esc")
+@MainActor
+struct HotkeyManagerActionTests {
+    // Paste last, Copy last and Esc are River hot keys beside the dictation shortcut (spec 0036,
+    // PR 9). Presses are published through the registry's test seam and the tap's events are
+    // fed as the tap delivers them, so no real key is pressed.
+    private let controlOptionV = Shortcut.combination(keyCode: 9, modifiers: [.control, .option])
+    private let controlOptionC = Shortcut.combination(keyCode: 8, modifiers: [.control, .option])
+
+    private func makeManager(
+        _ dictation: Shortcut = .modifier(keyCode: 61), mode: ActivationMode = .hold, pasteTimeout: Duration = .seconds(1)
+    ) -> (HotkeyManager, HotKeyRegistry) {
+        let hotKeys = HotKeyRegistry(calls: .inert)
+        let manager = HotkeyManager(inputMonitoring: InputMonitoringCapability(), hotKeys: hotKeys,
+                                    initialShortcut: .modifier(keyCode: 61), initialMode: mode, pasteTimeout: pasteTimeout,
+                                    systemShortcuts: { [] })
+        // Bound as `start` binds, without a real tap; a shortcut set after that registers.
+        manager.bindEventStream()
+        manager.setShortcut(dictation)
+        manager.setShortcut(controlOptionV, for: .pasteLast)
+        manager.setShortcut(controlOptionC, for: .copyLast)
+        return (manager, hotKeys)
+    }
+
+    @Test("Paste last waits for its modifiers to lift, then fires once")
+    func pasteWaitsForKeysUp() {
+        // Carbon reports the press with ⌃⌥ still down; text typed under a held ⌃ would reach
+        // the app in front as control keys.
+        let (manager, hotKeys) = makeManager()
+        var pastes = 0
+        manager.onPasteLast = { pastes += 1 }
+        manager.handle(.flagsChanged(keyCode: 59, flags: .maskControl))
+        manager.handle(.flagsChanged(keyCode: 58, flags: [.maskControl, .maskAlternate]))
+        hotKeys.publishForTest(.pressed(.pasteLast))
+        #expect(pastes == 0)
+        manager.handle(.flagsChanged(keyCode: 58, flags: .maskControl))
+        #expect(pastes == 0)
+        manager.handle(.flagsChanged(keyCode: 59, flags: []))
+        #expect(pastes == 1)
+    }
+
+    @Test("Paste last fires at once when no modifier is down, and after its timeout if the tap falls silent")
+    func pasteTimeout() async throws {
+        // Without a key-up the paste must still happen, not wait forever.
+        let (manager, hotKeys) = makeManager(pasteTimeout: .milliseconds(20))
+        var pastes = 0
+        manager.onPasteLast = { pastes += 1 }
+        hotKeys.publishForTest(.pressed(.pasteLast))
+        #expect(pastes == 1)
+
+        manager.handle(.flagsChanged(keyCode: 59, flags: .maskControl))
+        hotKeys.publishForTest(.pressed(.pasteLast))
+        let deadline = Date().addingTimeInterval(5)
+        while pastes < 2, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(pastes == 2)
+    }
+
+    @Test("Copy last fires on its press")
+    func copyOnPress() {
+        let (manager, hotKeys) = makeManager()
+        var copies = 0
+        manager.onCopyLast = { copies += 1 }
+        hotKeys.publishForTest(.pressed(.copyLast))
+        #expect(copies == 1)
+    }
+
+    @Test("Esc is River's only while a recording runs, and cancels it")
+    func escapeWhileRecording() {
+        // Between recordings Esc belongs to the app in front (spec 0036, AC 5).
+        let (manager, hotKeys) = makeManager()
+        var cancels = 0
+        manager.onCancel = { cancels += 1 }
+        #expect(!hotKeys.registeredIDs.contains(.cancelRecording))
+        manager.setRecording(true)
+        #expect(hotKeys.registeredIDs.contains(.cancelRecording))
+        hotKeys.publishForTest(.pressed(.cancelRecording))
+        #expect(cancels == 1)
+        manager.setRecording(false)
+        #expect(!hotKeys.registeredIDs.contains(.cancelRecording))
+    }
+
+    @Test("a cleared shortcut lets go of its keys, and the recorder's pause lets go of every hot key")
+    func clearedAndPaused() {
+        // A cleared row must stop taking its keys from other apps, and a recorder must hear
+        // every River shortcut pressed again.
+        let (manager, hotKeys) = makeManager(.combination(keyCode: 49, modifiers: [.control, .option]))
+        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast])
+        manager.setShortcut(nil, for: .copyLast)
+        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast])
+        manager.pause()
+        #expect(hotKeys.registeredIDs.isEmpty)
+        manager.resume()
+        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast])
+    }
+
+    @Test("a row may keep its own shortcut but not take another row's")
+    func availabilityByRow() {
+        // Recording ⌃⌥V again on Paste last is a no-op save; on Copy last it would give one key
+        // two actions.
+        let (manager, _) = makeManager()
+        #expect(manager.availability(of: controlOptionV, for: .pasteLast) == .available)
+        #expect(manager.availability(of: controlOptionV, for: .copyLast) == .usedByRiver(.pasteLast))
+        #expect(manager.availability(of: controlOptionC, for: .dictate) == .usedByRiver(.copyLast))
+        #expect(manager.availability(of: .modifier(keyCode: 61), for: .dictate) == .available)
+    }
+
+    @Test("a River shortcut pressed during a lone-modifier hold discards that recording and still runs")
+    func shortcutDuringHold() {
+        // Right ⌥ as the Hold key, then ⌃⌥V: the user is pasting, not dictating (spec 0036).
+        let (manager, hotKeys) = makeManager()
+        var discards = 0
+        var pastes = 0
+        manager.onDiscard = { discards += 1 }
+        manager.onPasteLast = { pastes += 1 }
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        hotKeys.publishForTest(.pressed(.pasteLast))
+        #expect(discards == 1)
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(pastes == 1)
+    }
+
+    @Test("each combination's registration is reported under its row")
+    func registrationsByRow() {
+        // The Settings window's "Not working" line reads the row's own answer.
+        let (manager, _) = makeManager()
+        var latest: [RiverShortcut: HotKeyRegistration] = [:]
+        let token = manager.registrations.sink { latest = $0 }
+        defer { token.cancel() }
+        #expect(latest == [.pasteLast: .registered, .copyLast: .registered])
+    }
+}

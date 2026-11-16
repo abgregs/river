@@ -65,3 +65,25 @@ struct ShortcutTests {
         #expect(ShortcutModifiers.option.carbonFlags == UInt32(optionKey))
     }
 }
+
+@Suite("ClearableShortcut")
+struct ClearableShortcutTests {
+    @Test("an empty value is cleared, a combination is set, and anything else reads as nothing")
+    func storage() {
+        // Cleared has to stay apart from never set, which takes the default ⌃⌥V; and a lone
+        // modifier can't be a hot key, so a stored one falls back to the default.
+        #expect(ClearableShortcut(rawValue: "") == .cleared)
+        let controlOptionV = Shortcut.combination(keyCode: 9, modifiers: [.control, .option])
+        #expect(ClearableShortcut(rawValue: controlOptionV.rawValue) == .set(controlOptionV))
+        #expect(ClearableShortcut(rawValue: "mod:61") == nil)
+        #expect(ClearableShortcut.cleared.rawValue.isEmpty)
+        #expect(ClearableShortcut.set(controlOptionV).shortcut == controlOptionV)
+    }
+
+    @Test("Paste last ships ⌃⌥V and Copy last ⌃⌥C")
+    func defaults() {
+        // The spec's defaults (0036; Copy last's set by the maintainer, 2026-11-15).
+        #expect(Settings.pasteLastShortcut.defaultValue == .set(.combination(keyCode: 9, modifiers: [.control, .option])))
+        #expect(Settings.copyLastShortcut.defaultValue == .set(.combination(keyCode: 8, modifiers: [.control, .option])))
+    }
+}

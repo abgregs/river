@@ -86,7 +86,7 @@ struct ShortcutRecorderModelTests {
     func fnRefused() {
         // The row's message names the row that owns it, which is on screen below.
         let log = HooksLog()
-        log.check = { $0 == RiverShortcut.cancelRecording.shortcut ? .usedByRiver(.cancelRecording) : .available }
+        log.check = { RiverShortcut.cancelKeys.contains($0) ? .usedByRiver(.cancelRecording) : .available }
         let model = ShortcutRecorderModel(hooks: log.hooks)
         model.start()
         model.handle(.modifierChanged(keyCode: 63, isDown: true))
@@ -108,6 +108,34 @@ struct ShortcutRecorderModelTests {
         model.handle(.keyDown(keyCode: kVK_Escape, modifiers: [], isRepeat: false))
         #expect(model.phase == .idle)
         #expect(log.saved.isEmpty)
+    }
+
+    @Test("a row that can be empty clears on Delete, and says so while recording")
+    func clearableRow() {
+        // Paste last and Copy last can be turned off; Delete is how (spec 0036).
+        let log = HooksLog()
+        let model = ShortcutRecorderModel(row: .copyLast, hooks: log.hooks)
+        model.start()
+        #expect(model.line == .recordingClearable)
+        model.handle(.keyDown(keyCode: kVK_Delete, modifiers: [], isRepeat: false))
+        #expect(log.saved == [nil])
+        #expect(model.phase == .idle)
+        #expect(log.resumes == 1)
+    }
+
+    @Test("a hot key row refuses a lone modifier and keeps recording")
+    func hotKeyRowNeedsKey() {
+        // Paste last and Copy last are hot keys, which need a key with their modifiers.
+        let log = HooksLog()
+        let model = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
+        model.start()
+        model.handle(.modifierChanged(keyCode: 61, isDown: true))
+        model.handle(.modifierChanged(keyCode: 61, isDown: false))
+        #expect(model.line == .needsKey)
+        #expect(model.tried == ShortcutText.Keys(side: "Right", keys: ["⌥"]))
+        #expect(log.saved.isEmpty)
+        #expect(model.phase == .recording)
+        model.stop()
     }
 
     @Test("a shortcut macOS also uses is saved, and its warning stays")
@@ -139,7 +167,7 @@ struct ShortcutRecorderModelTests {
 private final class HooksLog {
     var pauses = 0
     var resumes = 0
-    var saved: [Shortcut] = []
+    var saved: [Shortcut?] = []
     var check: (Shortcut) -> ShortcutAvailability = { _ in .available }
     var pauseAllowed = true
 
