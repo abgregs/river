@@ -78,11 +78,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func save(_ shortcut: Shortcut?, for row: RiverShortcut) {
+    private func save(_ shortcut: Shortcut, for row: RiverShortcut) {
         switch row {
-        case .dictate: if let shortcut { settings.setValue(shortcut, for: Settings.dictationShortcut) }
-        case .pasteLast: settings.setValue(shortcut.map(ClearableShortcut.set) ?? .cleared, for: Settings.pasteLastShortcut)
-        case .copyLast: settings.setValue(shortcut.map(ClearableShortcut.set) ?? .cleared, for: Settings.copyLastShortcut)
+        case .dictate: settings.setValue(shortcut, for: Settings.dictationShortcut)
+        case .pasteLast: settings.setValue(shortcut, for: Settings.pasteLastShortcut)
+        case .copyLast: settings.setValue(shortcut, for: Settings.copyLastShortcut)
         case .cancelRecording: break
         }
     }

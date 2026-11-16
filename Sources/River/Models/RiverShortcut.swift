@@ -24,10 +24,6 @@ enum RiverShortcut: CaseIterable, Hashable, Sendable {
     /// and a hot key needs a key with its modifiers.
     var allowsLoneModifier: Bool { self == .dictate }
 
-    /// Whether its row can be left empty. Dictation always needs a shortcut, and Cancel
-    /// recording's keys are fixed.
-    var isClearable: Bool { self == .pasteLast || self == .copyLast }
-
     /// The fixed keys that cancel a recording: fn, and Esc while a recording runs.
     static let cancelKeys: [Shortcut] = [
         .modifier(keyCode: Constants.cancelKeyCode), .combination(keyCode: kVK_Escape, modifiers: []),

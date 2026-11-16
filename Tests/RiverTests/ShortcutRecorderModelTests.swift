@@ -102,37 +102,12 @@ struct ShortcutRecorderModelTests {
         let log = HooksLog()
         let model = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
         model.start()
+        #expect(model.line == .recordingHotKey)
         model.handle(.keyDown(keyCode: kVK_Delete, modifiers: [], isRepeat: false))
         #expect(model.line == .needsModifier)
         #expect(model.phase == .recording)
         model.handle(.keyDown(keyCode: kVK_Escape, modifiers: [], isRepeat: false))
         #expect(model.phase == .idle)
-        #expect(log.saved.isEmpty)
-    }
-
-    @Test("a row that can be empty clears in one step, without recording")
-    func clearableRow() {
-        // Paste last and Copy last take keys from every app, so a user who doesn't want one
-        // must be able to give its keys back (spec 0036). Clearing pauses nothing.
-        let log = HooksLog()
-        let model = ShortcutRecorderModel(row: .copyLast, hooks: log.hooks)
-        model.clear()
-        #expect(log.saved == [nil])
-        #expect(model.phase == .idle)
-        #expect(log.pauses == 0)
-    }
-
-    @Test("clearing does nothing while recording, or on the dictation row")
-    func clearOnlyAtRest() {
-        // Recording ends with Esc or a save; dictation always needs a shortcut.
-        let log = HooksLog()
-        let paste = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
-        paste.start()
-        #expect(paste.line == .recordingHotKey)
-        paste.clear()
-        #expect(paste.phase == .recording)
-        paste.stop()
-        ShortcutRecorderModel(hooks: log.hooks).clear()
         #expect(log.saved.isEmpty)
     }
 
@@ -180,7 +155,7 @@ struct ShortcutRecorderModelTests {
 private final class HooksLog {
     var pauses = 0
     var resumes = 0
-    var saved: [Shortcut?] = []
+    var saved: [Shortcut] = []
     var check: (Shortcut) -> ShortcutAvailability = { _ in .available }
     var pauseAllowed = true
 

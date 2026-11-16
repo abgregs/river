@@ -104,28 +104,18 @@ struct SettingsWindowSnapshotTests {
                          hooks: Self.hooks { [controlCommandSpace] in $0 == controlCommandSpace ? .alsoUsedByMacOS : .available }),
             RecorderShot(name: "failing", saved: controlOptionSpace, prepare: { $0.apply(shortcutRegistrations: [.dictate: .takenByAnotherApp]) }),
             RecorderShot(name: "busy", prepare: { $0.apply(.recording) }),
-            // PR 9's rows: Copy last cleared, and Paste last recording a lone modifier, which a
-            // hot key row refuses.
-            RecorderShot(name: "copy-cleared", copyLast: .cleared),
+            // PR 9's rows: Paste last recording a lone modifier, which a hot key row refuses.
             RecorderShot(name: "paste-needs-key", steps: [{ $0.recorders[.pasteLast]!.start() }, { model in
                 model.recorders[.pasteLast]!.handle(.modifierChanged(keyCode: 61, isDown: true))
                 model.recorders[.pasteLast]!.handle(.modifierChanged(keyCode: 61, isDown: false))
             }]),
         ]
-        defer {
-            UserDefaults.standard.removeObject(forKey: Settings.dictationShortcut.name)
-            UserDefaults.standard.removeObject(forKey: Settings.copyLastShortcut.name)
-        }
+        defer { UserDefaults.standard.removeObject(forKey: Settings.dictationShortcut.name) }
         for shot in shots {
             if let saved = shot.saved {
                 UserDefaults.standard.set(saved.rawValue, forKey: Settings.dictationShortcut.name)
             } else {
                 UserDefaults.standard.removeObject(forKey: Settings.dictationShortcut.name)
-            }
-            if let copyLast = shot.copyLast {
-                UserDefaults.standard.set(copyLast.rawValue, forKey: Settings.copyLastShortcut.name)
-            } else {
-                UserDefaults.standard.removeObject(forKey: Settings.copyLastShortcut.name)
             }
             for appearance in Self.appearances {
                 let appState = AppState()
@@ -142,7 +132,6 @@ struct SettingsWindowSnapshotTests {
     private struct RecorderShot {
         let name: String
         var saved: Shortcut?
-        var copyLast: ClearableShortcut?
         var hooks: ShortcutRecorderHooks = .inert
         var prepare: (AppState) -> Void = { _ in }
         var steps: [(SettingsWindowModel) -> Void] = []

@@ -988,18 +988,15 @@ struct HotkeyManagerActionTests {
         #expect(!hotKeys.registeredIDs.contains(.cancelRecording))
     }
 
-    @Test("a cleared shortcut lets go of its keys, and the recorder's pause lets go of every hot key")
-    func clearedAndPaused() {
-        // A cleared row must stop taking its keys from other apps, and a recorder must hear
-        // every River shortcut pressed again.
+    @Test("the recorder's pause lets go of every hot key, and resume takes them back")
+    func paused() {
+        // A recorder must hear every River shortcut pressed again, and none may stay lost after.
         let (manager, hotKeys) = makeManager(.combination(keyCode: 49, modifiers: [.control, .option]))
         #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast])
-        manager.setShortcut(nil, for: .copyLast)
-        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast])
         manager.pause()
         #expect(hotKeys.registeredIDs.isEmpty)
         manager.resume()
-        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast])
+        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast])
     }
 
     @Test("a row may keep its own shortcut but not take another row's")

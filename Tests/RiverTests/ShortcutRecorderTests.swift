@@ -57,8 +57,8 @@ struct ShortcutRecorderTests {
 
     @Test("Esc stops, and any other key with no modifier is refused, Delete included")
     func plainKeys() {
-        // Esc alone controls the recorder (spec 0036). Delete clears nothing: a row empties
-        // from its clear mark, apart from recording.
+        // Esc alone controls the recorder (spec 0036). Delete clears nothing: no shortcut can be
+        // cleared.
         var recorder = ShortcutRecorder()
         #expect(recorder.handle(.keyDown(keyCode: kVK_Escape, modifiers: [], isRepeat: false)) == .stop)
         #expect(recorder.handle(.keyDown(keyCode: kVK_Delete, modifiers: [], isRepeat: false)) == .bareKey(keyCode: kVK_Delete))

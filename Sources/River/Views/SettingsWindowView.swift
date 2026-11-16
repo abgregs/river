@@ -197,9 +197,9 @@ private struct ShortcutsPane: View {
     @AppStorage(Settings.dictationShortcut.name)
     private var dictationShortcut: Shortcut = Settings.dictationShortcut.defaultValue
     @AppStorage(Settings.pasteLastShortcut.name)
-    private var pasteLastShortcut: ClearableShortcut = Settings.pasteLastShortcut.defaultValue
+    private var pasteLastShortcut: Shortcut = Settings.pasteLastShortcut.defaultValue
     @AppStorage(Settings.copyLastShortcut.name)
-    private var copyLastShortcut: ClearableShortcut = Settings.copyLastShortcut.defaultValue
+    private var copyLastShortcut: Shortcut = Settings.copyLastShortcut.defaultValue
     @AppStorage(Settings.activationMode.name)
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
     @Environment(\.colorScheme) private var colorScheme
@@ -213,8 +213,8 @@ private struct ShortcutsPane: View {
                                      selection: $activationMode)
             }
             cancelRow
-            ShortcutRow(recorder: recorders[.pasteLast]!, saved: pasteLastShortcut.shortcut, appState: appState)
-            ShortcutRow(recorder: recorders[.copyLast]!, saved: copyLastShortcut.shortcut, appState: appState)
+            ShortcutRow(recorder: recorders[.pasteLast]!, saved: pasteLastShortcut, appState: appState)
+            ShortcutRow(recorder: recorders[.copyLast]!, saved: copyLastShortcut, appState: appState)
         }
         .onAppear { for (row, recorder) in recorders { recorder.refresh(saved: saved(row)) } }
         .onDisappear { for recorder in recorders.values { recorder.stop() } }
@@ -223,8 +223,8 @@ private struct ShortcutsPane: View {
     private func saved(_ row: RiverShortcut) -> Shortcut? {
         switch row {
         case .dictate: dictationShortcut
-        case .pasteLast: pasteLastShortcut.shortcut
-        case .copyLast: copyLastShortcut.shortcut
+        case .pasteLast: pasteLastShortcut
+        case .copyLast: copyLastShortcut
         case .cancelRecording: nil
         }
     }
@@ -252,13 +252,12 @@ private struct ShortcutsPane: View {
 
 /// A shortcut and its Record button (planning 0036, The recorder). The line under the row
 /// says how to record and why a shortcut was refused while recording; otherwise that the
-/// shortcut is unavailable during a dictation, does nothing, or is one macOS also uses. A row
-/// that can be empty has a clear mark in its chip, and reads None when cleared.
+/// shortcut is unavailable during a dictation, does nothing, or is one macOS also uses.
 private struct ShortcutRow: View {
     static let buttonWidth: Double = 70
 
     let recorder: ShortcutRecorderModel
-    let saved: Shortcut?
+    let saved: Shortcut
     let appState: AppState
     var divider = true
     @Environment(\.colorScheme) private var colorScheme
@@ -270,8 +269,7 @@ private struct ShortcutRow: View {
         let label = recorder.row.label
         SettingsRow(label: label, description: line(isBusy: isBusy).map(text), divider: divider) {
             HStack(spacing: 8) {
-                slot
-                    .disabled(isBusy)
+                chip
                     .modifier(RefusalShake(animatableData: shakes))
                     .onChange(of: recorder.refusals) { _, count in
                         withAnimation(reduceMotion ? nil : .timingCurve(0.3, 0, 0.3, 1, duration: 0.32)) { shakes = Double(count) }
@@ -295,32 +293,17 @@ private struct ShortcutRow: View {
         }
     }
 
-    // A cleared row at rest reads None; otherwise the chip.
-    @ViewBuilder
-    private var slot: some View {
-        if recorder.phase == .idle, saved == nil {
-            Text("None")
-                .font(.system(size: 13))
-                .foregroundStyle(SettingsInk(colorScheme).opacity(0.55))
-                .frame(height: 20)
-        } else {
-            chip
-        }
-    }
-
     // One chip in every phase: a save animates from the recording outline it already shows.
     // A chip per phase would be a new view at each change, starting at its end state.
     private var chip: some View {
         let shown: (keys: ShortcutText.Keys, look: ShortcutChip.Look, label: String) = switch recorder.phase {
         case .recording: (recorder.tried ?? ShortcutText.keys(recorder.held), .recording, "Recording")
         case .saving(let shortcut): (ShortcutText.keys(shortcut), .saving, ShortcutText.spoken(shortcut))
-        case .idle: saved.map { (ShortcutText.keys($0), .saved, ShortcutText.spoken($0)) } ?? (ShortcutText.Keys(keys: []), .saved, "None")
+        case .idle: (ShortcutText.keys(saved), .saved, ShortcutText.spoken(saved))
         }
-        let clear = recorder.row.isClearable
-            ? ShortcutChip.Clear(label: "Clear the \(recorder.row.label) shortcut", action: recorder.clear)
-            : nil
-        return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil,
-                            startedAt: recorder.startedAt, spoken: shown.label, clear: clear)
+        return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil, startedAt: recorder.startedAt)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(shown.label)
     }
 
     private func line(isBusy: Bool) -> RecorderLine? {

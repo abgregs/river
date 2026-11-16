@@ -15,8 +15,8 @@ struct ShortcutRecorderHooks {
     /// Whether a shortcut can be this row's, and if not, why
     /// (`HotkeyManager.availability(of:for:)`).
     var check: (Shortcut) -> ShortcutAvailability
-    /// Saves this row's shortcut; nil clears it.
-    var save: (Shortcut?) -> Void
+    /// Saves this row's shortcut.
+    var save: (Shortcut) -> Void
 
     /// Accepts every shortcut and reaches nothing.
     static let inert = ShortcutRecorderHooks(
@@ -28,8 +28,8 @@ struct ShortcutRecorderHooks {
 /// window's key presses, feeds them to `ShortcutRecorder`, and checks and saves what it hears;
 /// River's shortcuts are paused meanwhile, and HotkeyManager brings them back once every key is
 /// up. Esc, Cancel, a click anywhere but the button, or the window losing key stops it, keeping
-/// the saved shortcut. The row decides the rest: whether a lone modifier can be its shortcut,
-/// and whether it can be cleared, which happens at rest, apart from recording.
+/// the saved shortcut. The row decides whether a lone modifier can be its shortcut. No row
+/// can be cleared: one whose keys are unwanted records keys nothing else uses.
 @MainActor
 @Observable
 final class ShortcutRecorderModel {
@@ -153,15 +153,6 @@ final class ShortcutRecorderModel {
             guard !Task.isCancelled, let self, case .saving = self.phase else { return }
             self.phase = .idle
         }
-    }
-
-    /// Empties a row that can be empty, from its clear mark. Only at rest: recording is its own
-    /// step, and Esc leaves it with the saved shortcut.
-    func clear() {
-        guard row.isClearable, phase == .idle else { return }
-        hooks.save(nil)
-        isSystemShortcut = false
-        AccessibilityNotification.Announcement("\(row.label) cleared").post()
     }
 
     private func finish() {

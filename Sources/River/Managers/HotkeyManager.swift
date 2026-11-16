@@ -140,10 +140,10 @@ final class HotkeyManager {
         register(.dictate)
     }
 
-    /// Live-apply for Paste last's or Copy last's shortcut, nil when cleared. Applies at once.
-    func setShortcut(_ newShortcut: Shortcut?, for action: RiverShortcut) {
+    /// Live-apply for Paste last's or Copy last's shortcut. Applies at once.
+    func setShortcut(_ newShortcut: Shortcut, for action: RiverShortcut) {
         guard action == .pasteLast || action == .copyLast, actionShortcuts[action] != newShortcut else { return }
-        logger.info("\(action.label, privacy: .public) shortcut changed to \(newShortcut?.rawValue ?? "none", privacy: .public)")
+        logger.info("\(action.label, privacy: .public) shortcut changed to \(newShortcut.rawValue, privacy: .public)")
         actionShortcuts[action] = newShortcut
         register(action)
     }

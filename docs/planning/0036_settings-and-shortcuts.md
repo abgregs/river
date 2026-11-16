@@ -18,9 +18,9 @@
 |---|---|---|---|---|---|
 | Shortcuts | Dictate | recorder | `dictationShortcut` (new; migrates `activationKeyCode`) | Right ⌥ | 8 |
 | Shortcuts | Start by | Hold / Tap / Double-tap | `activationMode` | Hold | 7 |
-| Shortcuts | Paste last transcription | recorder, clearable | `pasteLastShortcut` (new) | ⌃⌥V | 9 |
-| Shortcuts | Copy last transcription | recorder, clearable | `copyLastShortcut` (new) | ⌃⌥C (maintainer, 2026-11-15) | 9 |
-| Shortcuts | Show or hide live text | recorder, clearable | `liveTextShortcut` (new) | ⌃⌥L | 10 |
+| Shortcuts | Paste last transcription | recorder | `pasteLastShortcut` (new) | ⌃⌥V | 9 |
+| Shortcuts | Copy last transcription | recorder | `copyLastShortcut` (new) | ⌃⌥C (maintainer, 2026-11-15) | 9 |
+| Shortcuts | Show or hide live text | recorder | `liveTextShortcut` (new) | ⌃⌥L | 10 |
 | Dictation | Play sounds when dictation starts and stops | toggle | `playFeedbackSounds` | off | 7 |
 | Dictation | Keep the microphone ready | toggle | `keepMicrophoneReady` (new; replaces `micOnlyWhileDictating`, inverted) | on | 7 |
 | Model | Model | catalogue: the model in use with its status, search, a provider filter, a table with a Select button per row | `selectedModel` | `openai_whisper-small.en` | 7 |
@@ -84,12 +84,12 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
   - A shortcut is written as macOS writes key equivalents, ⌃ ⌥ ⇧ ⌘ and then the key, inside one hairline outline. A lone modifier names its side ("Right ⌥"), letters follow the keyboard layout, and Escape reads "Esc", as River's copy writes it. A Record button beside it reads Cancel while recording.
   - Recording turns the outline akane ([../design/color.md](../design/color.md)) around a 6 pt dot whose halo widens and fades every 1.6 s, with the held modifiers inside. A refused attempt stays inside, dimmed, and the outline shakes once.
   - The line under the row is help while recording; a refusal, macOS's warning and a failure are full ink, each with its own symbol.
-  - A save holds the new shortcut in red; then the dot fades as it shrinks and the red fades as the outline closes on the keys, done in 217 ms ("Brisk"). On a row that can be empty the outline also opens to the right over the clear mark, into room the row keeps free while recording, so the keys stay put. Reduce Motion drops the halo, the shake and the shrink.
+  - A save holds the new shortcut in red; then the dot fades as it shrinks and the red fades as the outline closes on the keys, done in 217 ms ("Brisk"). Reduce Motion drops the halo, the shake and the shrink.
   - While a dictation runs only the Record button dims, and the row says "Available when this dictation ends."
   - A shortcut that fails at launch badges Shortcuts in the sidebar, and the window opens there unless a permission is missing.
 - **Lone modifier or combination.** A modifier pressed and released with no other key between records that modifier, left or right. A non-modifier key pressed while modifiers are held records the combination. A key with no modifier is not recordable.
 - **Esc stops recording**, so Esc alone is never recorded; Delete alone is refused like any key with no modifier.
-- **Clearing is its own step** (maintainer, 2026-11-16). A row that can be empty carries a clear mark (ⓧ) inside its outline at rest; one click sets the row to None and gives its keys back to the app in front. The mark dims while a dictation runs, and VoiceOver reads it as "Clear the <row> shortcut". The dictation shortcut cannot be cleared. **Why:** River's hot keys take their keys from every app while River runs, and a key bound inside an app (a menu shortcut, an editor binding) stops working there with no warning in River. A user who doesn't want Paste or Copy last needs to give the keys back without choosing others. Clearing by Delete while recording made it a two-step action that started with recording, which has nothing to do with it.
+- **No shortcut can be cleared** (maintainer, 2026-11-16). A user who doesn't want a row's keys records keys nothing else uses, such as ⌃⌥⇧⌘ with a function key. **Why:** River's hot keys take their keys from every app while River runs, so unwanted keys need a way out, and recording other keys is one that costs a few seconds once. Clearing would add a None state, a stored empty value and a clear control to every row, for a rare case. Copy Last Transcription stays in River's menu, so a cleared Copy last would save little, and live text shows only by its shortcut, so clearing that one would hide it for good. Clearing by Delete while recording was tried and dropped: it began with Record, a step that has nothing to do with clearing.
 - **River's shortcuts are off while recording.** Its hot keys are unregistered and the tap's actions ignored, then restored once the tap reports every modifier key up (after 10 s at most, should the tap fall silent), so no key held during recording reaches them half-pressed. **Why:** a registered hot key takes the key before the panel sees it (recorder probe). Recording is unavailable while a dictation is recording or processing. Restoring them registers the shortcut again, so recording a failing shortcut once another app lets go of it fixes it.
 - **Conflicts:**
   - A shortcut River already uses is refused, naming the row that has it: "Cancel recording uses fn. Choose another."
@@ -102,14 +102,14 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
 - **A River combination pressed during a lone-modifier hold** (Right ⌥ as the Hold key, then ⌃⌥V) discards the recording that hold started, with no cue, and the combination's action runs.
 - **Mode warnings.** PR 8 checked what River's tap sees for Caps Lock: one event per press and none on release, so Hold never stops and a tap mode needs two presses. Caps Lock is no longer a dictation key, and a saved one migrates to the default. No other recorded key is unreliable in a mode, so the Caps Lock + Hold warning goes and no mode warning remains.
 - **Changes apply** as today for the dictation shortcut and mode ([../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md), "Live apply"). The other shortcuts apply at once.
-- **Migration.** On first launch of `v0.3.0`, a saved `activationKeyCode` becomes the same lone modifier in `dictationShortcut`, once, and the old key is dropped. A shortcut is stored as one string value, so `@AppStorage` can bind it; an empty value means cleared.
+- **Migration.** On first launch of `v0.3.0`, a saved `activationKeyCode` becomes the same lone modifier in `dictationShortcut`, once, and the old key is dropped. A shortcut is stored as one string value, so `@AppStorage` can bind it; an unreadable value reads as the default.
 
 ## Acceptance criteria
 
 1. "Settings…" opens the panel with the five sections and rows above; the old Settings window, the Activation Key picker, "Transcribe while I speak" and the "Permissions…" menu item are gone.
 2. A recorded lone modifier and a recorded combination each start and stop dictation in Hold, Tap and Double-tap, and a combination never types into the app in front.
 3. An existing `activationKeyCode` survives the update as the same dictation key.
-4. ⌃⌥V types the last transcription at the cursor with no modifier leaking into it and no clipboard change; ⌃⌥L shows or hides the live text; both can be recorded over or cleared.
+4. ⌃⌥V types the last transcription at the cursor with no modifier leaking into it and no clipboard change; ⌃⌥L shows or hides the live text; both can be recorded over.
 5. Esc cancels a recording and reaches other apps normally between recordings.
 6. Each conflict case shows its message, and a refused combination is not saved.
 7. The tap is still created with `.listenOnly` and `flagsChanged` only.

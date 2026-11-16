@@ -331,8 +331,8 @@ private final class ManualToastScheduler {
 struct AppStateShortcutRegistrationTests {
     @Test("a shortcut that failed to register is failing until it registers, whichever row it is")
     func registrationFailure() {
-        // The Settings window's badge reads this. A lone modifier or a cleared shortcut has no
-        // registration and never fails this way.
+        // The Settings window's badge reads this. A lone modifier has no registration and never
+        // fails this way.
         let state = AppState()
         #expect(!state.isAnyShortcutFailing)
         state.apply(shortcutRegistrations: [.dictate: .takenByAnotherApp])

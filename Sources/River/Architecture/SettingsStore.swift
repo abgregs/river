@@ -21,14 +21,14 @@ enum Settings {
         defaultValue: Constants.defaultDictationShortcut
     )
     // Types the last transcription again at the cursor, and copies it (spec 0036, PR 9). Each
-    // is a combination or cleared; an empty string means cleared.
-    static let pasteLastShortcut = SettingKey<ClearableShortcut>(
+    // is a combination, since it is a hot key, and cannot be cleared.
+    static let pasteLastShortcut = SettingKey<Shortcut>(
         name: "pasteLastShortcut",
-        defaultValue: .set(Constants.defaultPasteLastShortcut)
+        defaultValue: Constants.defaultPasteLastShortcut
     )
-    static let copyLastShortcut = SettingKey<ClearableShortcut>(
+    static let copyLastShortcut = SettingKey<Shortcut>(
         name: "copyLastShortcut",
-        defaultValue: .set(Constants.defaultCopyLastShortcut)
+        defaultValue: Constants.defaultCopyLastShortcut
     )
     static let activationMode = SettingKey<ActivationMode>(
         name: "activationMode",
@@ -206,4 +206,3 @@ extension DefaultsConvertible where Self: RawRepresentable {
 
 extension ActivationMode: DefaultsConvertible {}
 extension Shortcut: DefaultsConvertible {}
-extension ClearableShortcut: DefaultsConvertible {}

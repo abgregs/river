@@ -8,9 +8,8 @@ import CoreGraphics
 /// setting (`ActivationMode`).
 ///
 /// Persisted as one string so `@AppStorage` can bind it: `mod:61` for a lone
-/// modifier, `key:49:ctrl,opt` for a combination. An empty string is the cleared
-/// form; the dictation shortcut can never be cleared, so a cleared or unreadable
-/// value falls back to the default.
+/// modifier, `key:49:ctrl,opt` for a combination. No shortcut can be cleared, so an
+/// unreadable value falls back to the default.
 enum Shortcut: Hashable, Sendable {
     case modifier(keyCode: Int)
     case combination(keyCode: Int, modifiers: ShortcutModifiers)
@@ -114,33 +113,5 @@ struct ShortcutModifiers: OptionSet, Hashable, Sendable {
         if contains(.shift) { flags.insert(.maskShift) }
         if contains(.command) { flags.insert(.maskCommand) }
         return flags
-    }
-}
-
-/// A shortcut its row can leave empty (spec 0036): stored as one string, empty when cleared,
-/// so `@AppStorage` binds it, and a cleared row stays apart from one never set, which takes its
-/// default. Only a combination: these shortcuts are hot keys.
-enum ClearableShortcut: Hashable, Sendable, RawRepresentable {
-    case cleared
-    case set(Shortcut)
-
-    init?(rawValue: String) {
-        if rawValue.isEmpty {
-            self = .cleared
-            return
-        }
-        guard let shortcut = Shortcut(rawValue: rawValue), case .combination = shortcut else { return nil }
-        self = .set(shortcut)
-    }
-
-    var rawValue: String {
-        switch self {
-        case .cleared: ""
-        case .set(let shortcut): shortcut.rawValue
-        }
-    }
-
-    var shortcut: Shortcut? {
-        if case .set(let shortcut) = self { shortcut } else { nil }
     }
 }

@@ -43,7 +43,7 @@ Direction from 2026-10-21, not final. The maintainer deferred all of it past `v0
 2. A fresh install starts with the live text hidden; the panel shows the mark only.
 3. Showing the live text with the shortcut takes effect during a recording and is remembered for the next one.
 4. With the live text hidden, no preview decode runs (log), and release-to-text time matches the shown case.
-5. ⌃⌥L toggles the live text on a fresh install; a recorded shortcut replaces it; with the shortcut cleared, nothing is bound and the text stays as last set.
+5. ⌃⌥L toggles the live text on a fresh install; a recorded shortcut replaces it.
 6. "Keep the microphone ready" behaves as 0033 specifies, with the live text shown or hidden.
 
 ## Related

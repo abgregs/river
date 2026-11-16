@@ -433,10 +433,10 @@ final class RiverSession {
             .store(in: &cancellables)
         // Paste last's and Copy last's shortcuts apply at once (spec 0036, Changes apply).
         settings.publisher(for: Settings.pasteLastShortcut)
-            .sink { [weak self] value in self?.hotkey.setShortcut(value.shortcut, for: .pasteLast) }
+            .sink { [weak self] value in self?.hotkey.setShortcut(value, for: .pasteLast) }
             .store(in: &cancellables)
         settings.publisher(for: Settings.copyLastShortcut)
-            .sink { [weak self] value in self?.hotkey.setShortcut(value.shortcut, for: .copyLast) }
+            .sink { [weak self] value in self?.hotkey.setShortcut(value, for: .copyLast) }
             .store(in: &cancellables)
         settings.publisher(for: Settings.activationMode)
             .sink { [weak self] newMode in
