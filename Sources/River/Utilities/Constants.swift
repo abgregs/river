@@ -42,7 +42,7 @@ enum Constants {
 
     // Paste last transcription ⌃⌥V and Copy last transcription ⌃⌥C (spec 0036; Copy last's
     // default set by the maintainer, 2026-11-15). Keycodes 9 and 8 are V and C. Both can be
-    // recorded over or cleared.
+    // recorded over.
     static let defaultPasteLastShortcut: Shortcut = .combination(keyCode: 9, modifiers: [.control, .option])
     static let defaultCopyLastShortcut: Shortcut = .combination(keyCode: 8, modifiers: [.control, .option])
     // Paste last types once every modifier is up, so a held ⌃ or ⌘ can't turn the text into
