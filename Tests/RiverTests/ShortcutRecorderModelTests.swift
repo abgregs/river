@@ -96,31 +96,44 @@ struct ShortcutRecorderModelTests {
         model.stop()
     }
 
-    @Test("Delete can't clear the dictation shortcut, and Esc stops, keeping it")
+    @Test("Delete is refused like any key with no modifier, and Esc stops, keeping the shortcut")
     func deleteAndEscape() {
-        // Dictation always needs a shortcut; Esc must leave the saved one exactly as it was.
+        // Recording never clears; Esc must leave the saved shortcut exactly as it was.
         let log = HooksLog()
-        let model = ShortcutRecorderModel(hooks: log.hooks)
+        let model = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
         model.start()
         model.handle(.keyDown(keyCode: kVK_Delete, modifiers: [], isRepeat: false))
-        #expect(model.line == .cannotClear)
+        #expect(model.line == .needsModifier)
         #expect(model.phase == .recording)
         model.handle(.keyDown(keyCode: kVK_Escape, modifiers: [], isRepeat: false))
         #expect(model.phase == .idle)
         #expect(log.saved.isEmpty)
     }
 
-    @Test("a row that can be empty clears on Delete, and says so while recording")
+    @Test("a row that can be empty clears in one step, without recording")
     func clearableRow() {
-        // Paste last and Copy last can be turned off; Delete is how (spec 0036).
+        // Paste last and Copy last take keys from every app, so a user who doesn't want one
+        // must be able to give its keys back (spec 0036). Clearing pauses nothing.
         let log = HooksLog()
         let model = ShortcutRecorderModel(row: .copyLast, hooks: log.hooks)
-        model.start()
-        #expect(model.line == .recordingClearable)
-        model.handle(.keyDown(keyCode: kVK_Delete, modifiers: [], isRepeat: false))
+        model.clear()
         #expect(log.saved == [nil])
         #expect(model.phase == .idle)
-        #expect(log.resumes == 1)
+        #expect(log.pauses == 0)
+    }
+
+    @Test("clearing does nothing while recording, or on the dictation row")
+    func clearOnlyAtRest() {
+        // Recording ends with Esc or a save; dictation always needs a shortcut.
+        let log = HooksLog()
+        let paste = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
+        paste.start()
+        #expect(paste.line == .recordingHotKey)
+        paste.clear()
+        #expect(paste.phase == .recording)
+        paste.stop()
+        ShortcutRecorderModel(hooks: log.hooks).clear()
+        #expect(log.saved.isEmpty)
     }
 
     @Test("a hot key row refuses a lone modifier and keeps recording")

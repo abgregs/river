@@ -5,7 +5,7 @@ import Foundation
 /// synthetic key events, as `TapStateMachine` is; `ShortcutRecorderModel` feeds it the
 /// window's key events. A modifier pressed and released with nothing else down records that
 /// modifier, keeping its side. A key pressed with modifiers held records the combination.
-/// Esc stops, Delete clears, and a key with no modifier is refused.
+/// Esc stops, and any other key with no modifier is refused.
 struct ShortcutRecorder {
     enum Event: Equatable {
         /// A non-modifier key went down with these device-independent modifiers held.
@@ -21,8 +21,6 @@ struct ShortcutRecorder {
         case candidate(Shortcut)
         /// Esc: stop, keeping the saved shortcut.
         case stop
-        /// Delete: clear the shortcut, where the row allows it.
-        case clear
         /// A key with no modifier, which can't be a shortcut.
         case bareKey(keyCode: Int)
     }
@@ -45,7 +43,6 @@ struct ShortcutRecorder {
             guard modifiers.isEmpty else { return .candidate(.combination(keyCode: keyCode, modifiers: modifiers)) }
             switch keyCode {
             case kVK_Escape: return .stop
-            case kVK_Delete, kVK_ForwardDelete: return .clear
             default: return .bareKey(keyCode: keyCode)
             }
         case .modifierChanged(let keyCode, let isDown):
@@ -87,8 +84,7 @@ struct RecorderLine: Equatable {
     let text: String
 
     static let recordingDictation = RecorderLine(kind: .hint, text: "Press a modifier alone, or modifiers with a key. Esc stops.")
-    static let recordingClearable = RecorderLine(kind: .hint, text: "Press modifiers with a key. Esc stops, Delete clears.")
-    static let cannotClear = RecorderLine(kind: .refusal, text: "The dictation shortcut can’t be cleared.")
+    static let recordingHotKey = RecorderLine(kind: .hint, text: "Press modifiers with a key. Esc stops.")
     static let needsModifier = RecorderLine(kind: .refusal, text: "Add a modifier: ⌃, ⌥, ⇧ or ⌘.")
     static let needsKey = RecorderLine(kind: .refusal, text: "Add a key: this shortcut needs modifiers with a key.")
     static let macOSAlsoUses = RecorderLine(kind: .warning, text: "macOS also uses this shortcut. Both will run.")

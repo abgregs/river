@@ -29,7 +29,7 @@ struct ShortcutRecorderHooks {
 /// River's shortcuts are paused meanwhile, and HotkeyManager brings them back once every key is
 /// up. Esc, Cancel, a click anywhere but the button, or the window losing key stops it, keeping
 /// the saved shortcut. The row decides the rest: whether a lone modifier can be its shortcut,
-/// and whether Delete clears it.
+/// and whether it can be cleared, which happens at rest, apart from recording.
 @MainActor
 @Observable
 final class ShortcutRecorderModel {
@@ -78,8 +78,8 @@ final class ShortcutRecorderModel {
         isSystemShortcut = saved.map { hooks.check($0) == .alsoUsedByMacOS } ?? false
     }
 
-    // How to record on this row: a cleared row's line says Delete clears.
-    private var hint: RecorderLine { row.isClearable ? .recordingClearable : .recordingDictation }
+    // How to record on this row: only dictation takes a lone modifier.
+    private var hint: RecorderLine { row.allowsLoneModifier ? .recordingDictation : .recordingHotKey }
 
     func toggle() {
         isRecording ? stop() : start()
@@ -119,8 +119,6 @@ final class ShortcutRecorderModel {
             }
         case .stop:
             stop()
-        case .clear:
-            row.isClearable ? clear() : refuse(.cannotClear, tried: nil)
         case .bareKey(let keyCode):
             refuse(.needsModifier, tried: ShortcutText.Keys(keys: [ShortcutText.keyName(keyCode)]))
         case .candidate(let shortcut):
@@ -157,12 +155,12 @@ final class ShortcutRecorderModel {
         }
     }
 
-    // Delete on a row that can be empty: saved as cleared, and recording stops.
-    private func clear() {
-        finish()
+    /// Empties a row that can be empty, from its clear mark. Only at rest: recording is its own
+    /// step, and Esc leaves it with the saved shortcut.
+    func clear() {
+        guard row.isClearable, phase == .idle else { return }
         hooks.save(nil)
         isSystemShortcut = false
-        phase = .idle
         AccessibilityNotification.Announcement("\(row.label) cleared").post()
     }
 

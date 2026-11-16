@@ -253,7 +253,7 @@ private struct ShortcutsPane: View {
 /// A shortcut and its Record button (planning 0036, The recorder). The line under the row
 /// says how to record and why a shortcut was refused while recording; otherwise that the
 /// shortcut is unavailable during a dictation, does nothing, or is one macOS also uses. A row
-/// that can be empty reads None when cleared.
+/// that can be empty has a clear mark in its chip, and reads None when cleared.
 private struct ShortcutRow: View {
     static let buttonWidth: Double = 70
 
@@ -271,6 +271,7 @@ private struct ShortcutRow: View {
         SettingsRow(label: label, description: line(isBusy: isBusy).map(text), divider: divider) {
             HStack(spacing: 8) {
                 slot
+                    .disabled(isBusy)
                     .modifier(RefusalShake(animatableData: shakes))
                     .onChange(of: recorder.refusals) { _, count in
                         withAnimation(reduceMotion ? nil : .timingCurve(0.3, 0, 0.3, 1, duration: 0.32)) { shakes = Double(count) }
@@ -315,9 +316,11 @@ private struct ShortcutRow: View {
         case .saving(let shortcut): (ShortcutText.keys(shortcut), .saving, ShortcutText.spoken(shortcut))
         case .idle: saved.map { (ShortcutText.keys($0), .saved, ShortcutText.spoken($0)) } ?? (ShortcutText.Keys(keys: []), .saved, "None")
         }
-        return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil, startedAt: recorder.startedAt)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(shown.label)
+        let clear = recorder.row.isClearable
+            ? ShortcutChip.Clear(label: "Clear the \(recorder.row.label) shortcut", action: recorder.clear)
+            : nil
+        return ShortcutChip(keys: shown.keys, look: shown.look, isTried: recorder.tried != nil,
+                            startedAt: recorder.startedAt, spoken: shown.label, clear: clear)
     }
 
     private func line(isBusy: Bool) -> RecorderLine? {

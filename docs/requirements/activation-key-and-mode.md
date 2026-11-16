@@ -87,7 +87,7 @@ The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-sh
 4. **Paste last transcription** — types the last transcription again at the cursor, once every modifier is up, through the typing path, so the clipboard is never touched; default ⌃⌥V, writes `pasteLastShortcut`.
 5. **Copy last transcription** — copies it, as the menu item does; default ⌃⌥C, writes `copyLastShortcut`.
 
-Rows 4 and 5 take combinations only, since a hot key needs a key with its modifiers, and Delete clears them while recording; a cleared row reads None and its keys go back to the app in front. Every row refuses a shortcut another row already uses, naming that row.
+Rows 4 and 5 take combinations only, since a hot key needs a key with its modifiers. Each carries a clear mark (ⓧ) in its shortcut: one click, apart from recording, sets the row to None and gives its keys back to the app in front. Every row refuses a shortcut another row already uses, naming that row.
 
 Warnings inform and never block: the user knows their keyboard better than the app does. No shortcut and mode pair carries a warning.
 
