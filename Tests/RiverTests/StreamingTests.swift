@@ -301,6 +301,60 @@ struct DictationStreamTests {
     }
 
     @MainActor
+    @Test("with the live text hidden, no provisional decode runs and committed segments still decode")
+    func hiddenRunsNoPreview() async {
+        // Hidden is the default, so most dictations must not pay for text nobody sees, while
+        // release stays one short decode (planning 0034, decision 3).
+        let decoder = FakeDecoder([.success("Hello there.")])
+        let stream = DictationStream(decode: decoder.decode)
+        stream.showsPreview = false
+        var shown: [String] = []
+        stream.onTextChange = { shown.append($0) }
+        stream.append(speech(2))
+        await stream.settle()
+        #expect(decoder.clipSeconds.isEmpty)
+        stream.append(silence(1.2))
+        await stream.settle()
+        #expect(shown == ["Hello there."])
+        #expect(stream.provisionalCount == 0)
+    }
+
+    @MainActor
+    @Test("hiding keeps the last provisional text, and showing again starts no decode by itself")
+    func hideKeepsLastPreview() async {
+        // Toggling back and forth must cost no more than leaving the text shown.
+        let decoder = FakeDecoder([.success("Hello the")])
+        let stream = DictationStream(decode: decoder.decode)
+        stream.append(speech(2))
+        await stream.settle()
+        #expect(stream.shownText == "Hello the")
+        stream.showsPreview = false
+        stream.append(speech(1))
+        await stream.settle()
+        #expect(decoder.clipSeconds.count == 1)
+        #expect(stream.shownText == "Hello the")
+        stream.showsPreview = true
+        await stream.settle()
+        #expect(decoder.clipSeconds.count == 1)
+    }
+
+    @MainActor
+    @Test("a provisional decode still running when the text is hidden is dropped")
+    func hideDropsRunningPreview() async {
+        let decoder = HeldDecoder(["Hello the"])
+        let stream = DictationStream(decode: decoder.decode)
+        var shown: [String] = []
+        stream.onTextChange = { shown.append($0) }
+        stream.append(speech(2))
+        while !decoder.isHolding { await Task.yield() }
+        stream.showsPreview = false
+        decoder.release()
+        await stream.settle()
+        #expect(shown.isEmpty)
+        #expect(stream.provisionalCount == 0)
+    }
+
+    @MainActor
     @Test("too little speech gets no provisional decode")
     func provisionalNeedsSpeech() async {
         // A half-second fragment decodes as a partial or invented word.

@@ -92,7 +92,12 @@ struct RecordingIndicatorCoordinatorTests {
         try await waitForObservation()
         #expect(panel.ignoresMouseEvents)
 
+        // Hidden, the transcript takes no room and no clicks (planning 0034).
         appState.apply(liveTranscript: "The first words")
+        try await waitForObservation()
+        #expect(panel.ignoresMouseEvents)
+
+        appState.apply(isLiveTextShown: true)
         try await waitForObservation()
         #expect(!panel.ignoresMouseEvents)
 

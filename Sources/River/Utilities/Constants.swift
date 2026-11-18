@@ -45,6 +45,8 @@ enum Constants {
     // recorded over.
     static let defaultPasteLastShortcut: Shortcut = .combination(keyCode: 9, modifiers: [.control, .option])
     static let defaultCopyLastShortcut: Shortcut = .combination(keyCode: 8, modifiers: [.control, .option])
+    // Toggle live text ⌃⌥L (planning 0034, decision 4). Keycode 37 is L.
+    static let defaultLiveTextShortcut: Shortcut = .combination(keyCode: 37, modifiers: [.control, .option])
     // Paste last types once every modifier is up, so a held ⌃ or ⌘ can't turn the text into
     // commands in the app in front (spec 0036). If the tap reports no key-up for this long, it
     // types anyway.
@@ -235,6 +237,10 @@ enum Constants {
     // this outlives the return to `.idle`, so the fade animation completes on screen
     // before the window is removed (planning 0002 acceptance criterion 2).
     static let hudFadeSeconds: Double = 0.22
+    // The live text shown and hidden by its shortcut (planning 0034, Panel controls): quicker
+    // than the stack's fade, since the user asked for it, on a strong ease-out.
+    static let liveTextShowSeconds: Double = 0.15
+    static let liveTextHideSeconds: Double = 0.12
     // Gap between the mark's panel and the bottom of the active screen's visible frame (the
     // Dock's top edge, or the screen's bottom when the Dock hides): about the gap between
     // Dock icons, so the mark sits just above the Dock like one more tile.

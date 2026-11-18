@@ -7,9 +7,10 @@ struct TranscriptPanelView: View {
     let text: String
     @Environment(\.colorScheme) private var colorScheme
 
-    // Shown from the first decoded segment until the cycle returns to idle.
-    static func isVisible(state: RiverState, text: String) -> Bool {
-        state != .idle && !text.isEmpty
+    // Shown while the user has the live text on (planning 0034), from the first decoded text
+    // until the cycle returns to idle.
+    static func isVisible(state: RiverState, text: String, isShown: Bool) -> Bool {
+        isShown && state != .idle && !text.isEmpty
     }
 
     var body: some View {

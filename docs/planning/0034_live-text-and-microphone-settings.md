@@ -1,6 +1,6 @@
 # Live text and microphone settings (0034)
 
-**Status: planned for `v0.3.0` (PR 10), not started.** Collects the maintainer's direction on what the user controls around streaming, the live text and the microphone, agreed in chat from 2026-10-16 to 2026-10-31 and amended for `v0.3.0` on 2026-11-04. The microphone switch shipped in PR #79 ([0033](0033_warm-microphone-pre-roll.md)); the rest is unbuilt. Every other setting, and how shortcuts are registered and recorded, is in [0036](0036_settings-and-shortcuts.md).
+**Status: PR 10 built (2026-11-18), awaiting the maintainer's smoke test.** Collects the maintainer's direction on what the user controls around streaming, the live text and the microphone, agreed in chat from 2026-10-16 to 2026-10-31 and amended for `v0.3.0` on 2026-11-04. The microphone switch shipped in PR #79 ([0033](0033_warm-microphone-pre-roll.md)); PR 10 builds the rest. Every other setting, and how shortcuts are registered and recorded, is in [0036](0036_settings-and-shortcuts.md).
 
 ## Problem
 
@@ -15,7 +15,8 @@ River now streams: it decodes speech while the user talks and shows the text abo
    - Shown: preview decodes run, gated by a runtime flag on `DictationStream`.
    - On hide, the last preview is kept and new ones stop; a decode already in flight finishes and its result is dropped. Showing again never forces a decode, so toggling back and forth costs no more than leaving the text shown.
 4. **Settings holds two entries for this area, and only two.**
-   - **"Show or hide live text":** a shortcut recorder in the Shortcuts section, **default ⌃⌥L**, which the user can record over or clear. Amended 2026-11-04 from "empty by default": the shortcut is now the only way to show the text, so it ships set. Registered as a hot key and fired on press ([0036](0036_settings-and-shortcuts.md)).
+   - **"Toggle live text":** a shortcut recorder in the Shortcuts section, **default ⌃⌥L**, which the user can record over; like every shortcut it can't be cleared ([0036](0036_settings-and-shortcuts.md), 2026-11-16). Amended 2026-11-04 from "empty by default": the shortcut is now the only way to show the text, so it ships set. Registered as a hot key and fired on press ([0036](0036_settings-and-shortcuts.md)). Labelled "Toggle live text" (maintainer, 2026-11-18), an imperative action like the other rows.
+   - **It never ends a recording** (maintainer, 2026-11-18). Pressed while a lone-modifier dictation key is held in Hold mode (Right ⌥ held, then ⌃ and L), the recording goes on, unlike PR 9's other shortcuts, which discard it; in a tap mode that press is not a tap. **Why:** the user shows the text while dictating, and every other choice could lose speech. The cost: pressing ⌃⌥L from idle with Right ⌥ as its ⌥ starts a Hold recording that types nothing at release.
    - **"Keep the microphone ready":** on/off, default on, in the Dictation section. Shipped in PR #79 (merged 2026-10-29) as "Only use the microphone while dictating", default off; turned around in PR 7 (maintainer, 2026-11-09). See [0033](0033_warm-microphone-pre-roll.md), decision 3. It controls only when the microphone is open, never whether River streams or what the panel shows.
 5. **Privacy is unchanged by streaming.** Streaming captures nothing beyond the press-to-release window. The only extra audio is the warm microphone's 0.5 s pre-roll before the press, held in memory and discarded continuously, and the user is told so plainly ([0033](0033_warm-microphone-pre-roll.md), "What the user is told"). Nothing is kept after release.
 

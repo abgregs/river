@@ -907,7 +907,7 @@ private final class ProbeLog {
     var count = 0
 }
 
-@Suite("HotkeyManager paste, copy and Esc")
+@Suite("HotkeyManager paste, copy, live text and Esc")
 @MainActor
 struct HotkeyManagerActionTests {
     // Paste last, Copy last and Esc are River hot keys beside the dictation shortcut (spec 0036,
@@ -915,6 +915,7 @@ struct HotkeyManagerActionTests {
     // fed as the tap delivers them, so no real key is pressed.
     private let controlOptionV = Shortcut.combination(keyCode: 9, modifiers: [.control, .option])
     private let controlOptionC = Shortcut.combination(keyCode: 8, modifiers: [.control, .option])
+    private let controlOptionL = Shortcut.combination(keyCode: 37, modifiers: [.control, .option])
 
     private func makeManager(
         _ dictation: Shortcut = .modifier(keyCode: 61), mode: ActivationMode = .hold, pasteTimeout: Duration = .seconds(1)
@@ -928,6 +929,7 @@ struct HotkeyManagerActionTests {
         manager.setShortcut(dictation)
         manager.setShortcut(controlOptionV, for: .pasteLast)
         manager.setShortcut(controlOptionC, for: .copyLast)
+        manager.setShortcut(controlOptionL, for: .toggleLiveText)
         return (manager, hotKeys)
     }
 
@@ -992,11 +994,11 @@ struct HotkeyManagerActionTests {
     func paused() {
         // A recorder must hear every River shortcut pressed again, and none may stay lost after.
         let (manager, hotKeys) = makeManager(.combination(keyCode: 49, modifiers: [.control, .option]))
-        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast])
+        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast, .toggleLiveText])
         manager.pause()
         #expect(hotKeys.registeredIDs.isEmpty)
         manager.resume()
-        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast])
+        #expect(hotKeys.registeredIDs == [.dictation, .pasteLast, .copyLast, .toggleLiveText])
     }
 
     @Test("a row may keep its own shortcut but not take another row's")
@@ -1032,6 +1034,46 @@ struct HotkeyManagerActionTests {
         var latest: [RiverShortcut: HotKeyRegistration] = [:]
         let token = manager.registrations.sink { latest = $0 }
         defer { token.cancel() }
-        #expect(latest == [.pasteLast: .registered, .copyLast: .registered])
+        #expect(latest == [.pasteLast: .registered, .copyLast: .registered, .toggleLiveText: .registered])
+    }
+
+    @Test("Toggle live text fires on its press, and a Hold recording goes on through it")
+    func liveTextDuringHold() {
+        // Right ⌥ held to dictate, then ⌃⌥L to watch the text: the user is still dictating, so
+        // the recording must neither be discarded nor lose its release (planning 0034).
+        let (manager, hotKeys) = makeManager()
+        var activations = 0, deactivations = 0, discards = 0, toggles = 0
+        manager.onActivate = { activations += 1 }
+        manager.onDeactivate = { deactivations += 1 }
+        manager.onDiscard = { discards += 1 }
+        manager.onToggleLiveText = { toggles += 1 }
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        hotKeys.publishForTest(.pressed(.toggleLiveText))
+        #expect(toggles == 1)
+        #expect(discards == 0)
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(activations == 1)
+        #expect(deactivations == 1)
+    }
+
+    @Test("in a tap mode, a press that carried Toggle live text is not a tap")
+    func liveTextInTapMode() {
+        // Right ⌥ as part of ⌃⌥L must not also start or stop a dictation.
+        let (manager, hotKeys) = makeManager(mode: .singleTap)
+        var activations = 0, toggles = 0
+        manager.onActivate = { activations += 1 }
+        manager.onToggleLiveText = { toggles += 1 }
+        manager.handle(.flagsChanged(keyCode: 61, flags: .maskAlternate))
+        hotKeys.publishForTest(.pressed(.toggleLiveText))
+        manager.handle(.flagsChanged(keyCode: 61, flags: []))
+        #expect(toggles == 1)
+        #expect(activations == 0)
+    }
+
+    @Test("Toggle live text can't take another row's keys, nor they its")
+    func liveTextAvailability() {
+        let (manager, _) = makeManager()
+        #expect(manager.availability(of: controlOptionL, for: .pasteLast) == .usedByRiver(.toggleLiveText))
+        #expect(manager.availability(of: controlOptionV, for: .toggleLiveText) == .usedByRiver(.pasteLast))
     }
 }

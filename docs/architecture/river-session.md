@@ -14,6 +14,7 @@ final class RiverSession {
     var errors: AnyPublisher<RiverError, Never> { get }           // per-stage cycle failures
     var notices: AnyPublisher<String, Never> { get }              // recording-context notices
     var liveTranscript: AnyPublisher<String, Never> { get }       // streaming text for the panel
+    var isLiveTextShown: AnyPublisher<Bool, Never> { get }        // whether the panel shows it
 
     func start() async throws        // begin listening; idempotent
     func stop() async                // tear down cleanly; idempotent
@@ -30,6 +31,7 @@ That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a
 4. **Re-entrancy guards.** Activations during `.recording` or `.processing` are no-ops with logging. Out-of-order events are no-ops with logging.
 5. **Microphone readiness.** The session combines the `keepMicrophoneReady` setting, whether onboarding is complete (the three capabilities' statuses through `OnboardingGate`), the model-load state and the system's availability, puts them through the pure `MicrophoneReadiness` rule, and tells `AudioCaptureManager` whether to keep the capture unit running between recordings ([river-pipeline.md](river-pipeline.md), "The ready microphone and the pre-roll"). This is not the apply-or-defer path in item 3: the manager owns the unit and applies a mid-recording change itself when the recording ends.
 6. **The last transcript, outside the cycle.** `pasteLastTranscript()` types it again through the insertion path, only while `.idle`, and a failure goes out as a `.textInsertion` error; `copyLastTranscript(to:)` copies it for the menu item and the Copy last shortcut ([0036](../planning/0036_settings-and-shortcuts.md)). Neither changes the state.
+7. **The live text's visibility.** `toggleLiveText()`, from its shortcut, flips `Settings.showLiveText`, during a recording or between recordings, and never touches the cycle. The session hands the setting to the recording's `DictationStream` as `showsPreview`, so a hidden live text runs no preview decodes ([0034](../planning/0034_live-text-and-microphone-settings.md)).
 
 ## What the session does not own
 

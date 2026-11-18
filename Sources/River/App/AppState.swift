@@ -39,6 +39,9 @@ final class AppState {
     /// The current recording's streaming transcript (0025 prototype), shown in the
     /// transcript panel. Empty when streaming is off or nothing has been decoded yet.
     private(set) var liveTranscript: String = ""
+    /// Whether the live text shows above the indicator; hidden by default, and only its
+    /// shortcut changes it (planning 0034, decision 2).
+    private(set) var isLiveTextShown = false
     /// Whether the most recent recording was canceled (planning 0017) rather than stopped.
     /// Set as the state leaves `.recording`, which `apply(_:)` sees one change at a time:
     /// only a cancel goes straight to `.idle`, and a stop always passes through
@@ -85,6 +88,9 @@ final class AppState {
             .store(in: &cancellables)
         session.liveTranscript
             .sink { [weak self] text in self?.apply(liveTranscript: text) }
+            .store(in: &cancellables)
+        session.isLiveTextShown
+            .sink { [weak self] shown in self?.apply(isLiveTextShown: shown) }
             .store(in: &cancellables)
         session.shortcutRegistrations
             .sink { [weak self] registrations in self?.apply(shortcutRegistrations: registrations) }
@@ -198,6 +204,11 @@ final class AppState {
     // `bind`), so a test can show the transcript panel without a live session.
     func apply(liveTranscript text: String) {
         liveTranscript = text
+    }
+
+    // internal for testability — the live text's visibility entry point (also used by `bind`).
+    func apply(isLiveTextShown shown: Bool) {
+        isLiveTextShown = shown
     }
 
     // internal for testability — the registrations entry point (also used by `bind`), so a
