@@ -8,9 +8,8 @@ import CoreGraphics
 /// setting (`ActivationMode`).
 ///
 /// Persisted as one string so `@AppStorage` can bind it: `mod:61` for a lone
-/// modifier, `key:49:ctrl,opt` for a combination. An empty string is the cleared
-/// form; the dictation shortcut can never be cleared, so a cleared or unreadable
-/// value falls back to the default.
+/// modifier, `key:49:ctrl,opt` for a combination. No shortcut can be cleared, so an
+/// unreadable value falls back to the default.
 enum Shortcut: Hashable, Sendable {
     case modifier(keyCode: Int)
     case combination(keyCode: Int, modifiers: ShortcutModifiers)

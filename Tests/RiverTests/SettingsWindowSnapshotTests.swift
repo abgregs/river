@@ -27,7 +27,7 @@ struct SettingsWindowSnapshotTests {
         transcription.skipLoadForTesting = true
         appState.bind(transcription: transcription)
         let model = SettingsWindowModel(appState: appState, capabilities: [microphone, inputMonitoring, accessibility],
-                                        updater: UpdaterManager(), shortcutHooks: .inert, selectModel: { _ in },
+                                        updater: UpdaterManager(), shortcutHooks: { _ in .inert }, selectModel: { _ in },
                                         deleteModel: { _ in })
         model.permissionMissing = true
         // Each section, then the Model section with a choice waiting for a dictation to end,
@@ -102,8 +102,13 @@ struct SettingsWindowSnapshotTests {
             RecorderShot(name: "saved", saved: controlOptionSpace),
             RecorderShot(name: "macos-warning", saved: controlCommandSpace,
                          hooks: Self.hooks { [controlCommandSpace] in $0 == controlCommandSpace ? .alsoUsedByMacOS : .available }),
-            RecorderShot(name: "failing", saved: controlOptionSpace, prepare: { $0.apply(dictationRegistration: .takenByAnotherApp) }),
+            RecorderShot(name: "failing", saved: controlOptionSpace, prepare: { $0.apply(shortcutRegistrations: [.dictate: .takenByAnotherApp]) }),
             RecorderShot(name: "busy", prepare: { $0.apply(.recording) }),
+            // PR 9's rows: Paste last recording a lone modifier, which a hot key row refuses.
+            RecorderShot(name: "paste-needs-key", steps: [{ $0.recorders[.pasteLast]!.start() }, { model in
+                model.recorders[.pasteLast]!.handle(.modifierChanged(keyCode: 61, isDown: true))
+                model.recorders[.pasteLast]!.handle(.modifierChanged(keyCode: 61, isDown: false))
+            }]),
         ]
         defer { UserDefaults.standard.removeObject(forKey: Settings.dictationShortcut.name) }
         for shot in shots {
@@ -116,10 +121,10 @@ struct SettingsWindowSnapshotTests {
                 let appState = AppState()
                 shot.prepare(appState)
                 let model = SettingsWindowModel(appState: appState, capabilities: [], updater: UpdaterManager(),
-                                                shortcutHooks: shot.hooks, selectModel: { _ in }, deleteModel: { _ in })
+                                                shortcutHooks: { _ in shot.hooks }, selectModel: { _ in }, deleteModel: { _ in })
                 try write(model, size: Constants.settingsWindowSize, appearance: appearance, steps: shot.steps, wait: shot.wait,
                           to: directory.appendingPathComponent("settings-shortcuts-\(shot.name)-\(appearance.name).png"))
-                model.recorder.stop()
+                for recorder in model.recorders.values { recorder.stop() }
             }
         }
     }
@@ -136,10 +141,10 @@ struct SettingsWindowSnapshotTests {
 
     private static let appearances: [(name: String, appearance: NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
 
-    // River's own shortcuts are refused as HotkeyManager refuses them; anything else gets `answer`.
+    // River's cancel keys are refused as HotkeyManager refuses them; anything else gets `answer`.
     private static func hooks(_ answer: @escaping (Shortcut) -> ShortcutAvailability = { _ in .available }) -> ShortcutRecorderHooks {
         ShortcutRecorderHooks(pause: { true }, resume: {}, check: { shortcut in
-            RiverShortcut.allCases.first { $0.shortcut == shortcut }.map { .usedByRiver($0) } ?? answer(shortcut)
+            RiverShortcut.cancelKeys.contains(shortcut) ? .usedByRiver(.cancelRecording) : answer(shortcut)
         }, save: { _ in })
     }
 

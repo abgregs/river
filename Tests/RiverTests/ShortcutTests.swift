@@ -65,3 +65,13 @@ struct ShortcutTests {
         #expect(ShortcutModifiers.option.carbonFlags == UInt32(optionKey))
     }
 }
+
+@Suite("Paste and Copy last defaults")
+struct ActionShortcutDefaultsTests {
+    @Test("Paste last ships ⌃⌥V and Copy last ⌃⌥C")
+    func defaults() {
+        // The spec's defaults (0036; Copy last's set by the maintainer, 2026-11-15).
+        #expect(Settings.pasteLastShortcut.defaultValue == .combination(keyCode: 9, modifiers: [.control, .option]))
+        #expect(Settings.copyLastShortcut.defaultValue == .combination(keyCode: 8, modifiers: [.control, .option]))
+    }
+}

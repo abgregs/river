@@ -1,6 +1,6 @@
 # Settings and shortcuts (0036)
 
-**Status: PR 7 merged ([#92](https://github.com/abgregs/river/pull/92)) and PR 8's shortcut engine merged ([#90](https://github.com/abgregs/river/pull/90)); PR 8's recorder built (2026-11-12); PRs 9 and 10 not started.** Every setting River offers in `v0.3.0`, how the settings panel groups and labels them, and how River registers and records its shortcuts. Agreed with the maintainer on 2026-11-04 and 2026-11-05. PRs 7 to 10 of the `v0.3.0` plan ([current-focus.md](current-focus.md)) build it. The panel's visual design (layout, icons, size) is PR 7's design rounds, not this spec. The live text and microphone decisions are in [0034](0034_live-text-and-microphone-settings.md). The mechanism rests on [../research/shortcut-registration.md](../research/shortcut-registration.md) and [../research/shortcut-recorder.md](../research/shortcut-recorder.md).
+**Status: PR 7 merged ([#92](https://github.com/abgregs/river/pull/92)) and PR 8's shortcut engine merged ([#90](https://github.com/abgregs/river/pull/90)); PR 8's recorder merged ([#93](https://github.com/abgregs/river/pull/93)); PR 9 built (2026-11-15); PR 10 not started.** Every setting River offers in `v0.3.0`, how the settings panel groups and labels them, and how River registers and records its shortcuts. Agreed with the maintainer on 2026-11-04 and 2026-11-05. PRs 7 to 10 of the `v0.3.0` plan ([current-focus.md](current-focus.md)) build it. The panel's visual design (layout, icons, size) is PR 7's design rounds, not this spec. The live text and microphone decisions are in [0034](0034_live-text-and-microphone-settings.md). The mechanism rests on [../research/shortcut-registration.md](../research/shortcut-registration.md) and [../research/shortcut-recorder.md](../research/shortcut-recorder.md).
 
 ## The panel
 
@@ -18,9 +18,9 @@
 |---|---|---|---|---|---|
 | Shortcuts | Dictate | recorder | `dictationShortcut` (new; migrates `activationKeyCode`) | Right ⌥ | 8 |
 | Shortcuts | Start by | Hold / Tap / Double-tap | `activationMode` | Hold | 7 |
-| Shortcuts | Paste last transcription | recorder, clearable | `pasteLastShortcut` (new) | ⌃⌥V | 9 |
-| Shortcuts | Copy last transcription | recorder, clearable | `copyLastShortcut` (new) | none | 9 |
-| Shortcuts | Show or hide live text | recorder, clearable | `liveTextShortcut` (new) | ⌃⌥L | 10 |
+| Shortcuts | Paste last transcription | recorder | `pasteLastShortcut` (new) | ⌃⌥V | 9 |
+| Shortcuts | Copy last transcription | recorder | `copyLastShortcut` (new) | ⌃⌥C (maintainer, 2026-11-15) | 9 |
+| Shortcuts | Show or hide live text | recorder | `liveTextShortcut` (new) | ⌃⌥L | 10 |
 | Dictation | Play sounds when dictation starts and stops | toggle | `playFeedbackSounds` | off | 7 |
 | Dictation | Keep the microphone ready | toggle | `keepMicrophoneReady` (new; replaces `micOnlyWhileDictating`, inverted) | on | 7 |
 | Model | Model | catalogue: the model in use with its status, search, a provider filter, a table with a Select button per row | `selectedModel` | `openai_whisper-small.en` | 7 |
@@ -28,7 +28,7 @@
 | General | Check for updates automatically | toggle, release builds only | Sparkle's `automaticallyChecksForUpdates` | on | 7 |
 | Permissions | Microphone · Input Monitoring · Accessibility | "Granted", or an "Open System Settings…" button | none (the capabilities' status) | | 7 |
 
-- **Cancel recording** is a row after Start by (maintainer, 2026-11-12): the keys that cancel a recording, in the same outlines as the shortcuts, with no Record button, since they are fixed. It shows fn, and fn or Esc once PR 9 adds Esc. It replaced the cancel line that followed the Start by description (2026-11-09), which had been the Shortcuts footer.
+- **Cancel recording** is a row after Start by (maintainer, 2026-11-12): the keys that cancel a recording, in the same outlines as the shortcuts, with no Record button, since they are fixed. It shows fn or Esc; PR 9 added Esc. It replaced the cancel line that followed the Start by description (2026-11-09), which had been the Shortcuts footer.
 - **Start by** keeps today's three modes under shorter labels, each with today's one-line description, worded for a shortcut ("Hold the shortcut while speaking; release to finish.").
 - **Dictation** shows the microphone switch's description from [0033](0033_warm-microphone-pre-roll.md) ("What the user is told"). The switch is turned around from PR #79's "Only use the microphone while dictating" (maintainer, 2026-11-09): on by default and named for its on state. `micOnlyWhileDictating` never shipped in a release, so the new key replaces it with no migration.
 - **Model** (maintainer, 2026-11-09, settings panel study round 13):
@@ -70,7 +70,7 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
 
 **Why the hybrid:** a registered combination needs no permission, reaches River within a few milliseconds, never repeats while held, and is kept from the app in front (probe: TextEdit showed `abcdef`). The event tap stays listen-only and never sees ordinary typing, so [0006](0006_runtime-security-hardening.md) stands. Esc needs no tap change, which settles [0017](0017_cancel-recording.md)'s concern. An active `keyDown` tap would pass every keystroke on the Mac through River and lose keys in password fields. See [../research/shortcut-registration.md](../research/shortcut-registration.md), §6.
 
-- **Exclusive registration.** Every River hot key passes `kEventHotKeyExclusive`, so another app's non-exclusive registration of the same combination does not also act on the press. Only another exclusive holder is reported, as `eventHotKeyExistsErr`. macOS's own shortcuts still fire alongside River's (⌘Space opened Spotlight in the probe).
+- **Exclusive registration.** Every River hot key passes `kEventHotKeyExclusive`, so another app's non-exclusive registration of the same combination does not also act on the press (on device 2026-11-18: with Raycast holding ⌃⌥V, the press typed River's last transcription and Raycast did not act). Only another exclusive holder is reported, as `eventHotKeyExistsErr`. macOS's own shortcuts still fire alongside River's (⌘Space opened Spotlight in the probe).
 - **Paste last waits for every key to lift.** Carbon's release arrives with the modifiers still held, and typed text arriving under a held ⌘ could become shortcuts in the target app. River waits until the tap shows no modifiers down, with a short timeout, then types the last transcription through the existing insertion path; the clipboard is never touched. With no last transcription, or while a dictation is recording or processing, it does nothing.
 - **Copy last** does what the menu item does.
 - **Show or hide** toggles `showLiveText`, during a recording or between recordings (0034).
@@ -88,27 +88,29 @@ The menu's ⌘. / ⌘, / ⌘Q are menu key equivalents that work only while the 
   - While a dictation runs only the Record button dims, and the row says "Available when this dictation ends."
   - A shortcut that fails at launch badges Shortcuts in the sidebar, and the window opens there unless a permission is missing.
 - **Lone modifier or combination.** A modifier pressed and released with no other key between records that modifier, left or right. A non-modifier key pressed while modifiers are held records the combination. A key with no modifier is not recordable.
-- **Esc stops recording; Delete clears the shortcut**, so Esc and Delete alone are never recorded. The dictation shortcut cannot be cleared.
+- **Esc stops recording**, so Esc alone is never recorded; Delete alone is refused like any key with no modifier.
+- **No shortcut can be cleared** (maintainer, 2026-11-16). A user who doesn't want a row's keys records keys nothing else uses, such as ⌃⌥⇧⌘ with a function key. **Why:** River's hot keys take their keys from every app while River runs, so unwanted keys need a way out, and recording other keys is one that costs a few seconds once. Clearing would add a None state, a stored empty value and a clear control to those rows, for a rare case. Copy Last Transcription stays in River's menu, so a cleared Copy last would save little, and live text shows only by its shortcut, so clearing that one would hide it for good. Clearing by Delete while recording was tried and dropped: it began with Record, a step that has nothing to do with clearing.
 - **River's shortcuts are off while recording.** Its hot keys are unregistered and the tap's actions ignored, then restored once the tap reports every modifier key up (after 10 s at most, should the tap fall silent), so no key held during recording reaches them half-pressed. **Why:** a registered hot key takes the key before the panel sees it (recorder probe). Recording is unavailable while a dictation is recording or processing. Restoring them registers the shortcut again, so recording a failing shortcut once another app lets go of it fixes it.
 - **Conflicts:**
   - A shortcut River already uses is refused, naming the row that has it: "Cancel recording uses fn. Choose another."
   - A combination another app holds exclusively is refused: "Another app uses this shortcut. Choose another."
+  - A combination another app holds without exclusive use, as Raycast does, can't be recorded while that app runs: River's shortcuts are paused, so the other app takes the key press and the recorder hears nothing (on device 2026-11-18). Once saved with that app closed, River's exclusive registration takes the key from it.
   - A combination in macOS's own list (`CopySymbolicHotKeys`, enabled entries) is saved with a warning: "macOS also uses this shortcut. Both will run." Inform, don't block. In practice macOS takes its own enabled shortcuts before the Settings window sees the key press (⌘Space opened Spotlight and the recorder heard nothing, on device 2026-11-13), so recording can't capture one. The warning shows when the Shortcuts pane appears and macOS's list holds the saved shortcut, as after the user assigns it to a macOS shortcut in System Settings.
   - A refusal at registration is shown in the same place: "macOS 15.0 needs ⌃ or ⌘ in this shortcut. Choose another." for an ⌥-only combination on 15.0 or 15.1 (the Mac's own version), otherwise "macOS refused this shortcut. Choose another." The recorder asks macOS by registering the combination and releasing it at once, before it saves.
-  - A key with no modifier is refused: "Add a modifier: ⌃, ⌥, ⇧ or ⌘." Delete on the dictation row: "The dictation shortcut can't be cleared."
+  - A key with no modifier is refused: "Add a modifier: ⌃, ⌥, ⇧ or ⌘."
   - A saved shortcut that fails at launch shows "Not working: another app uses this shortcut." on its row, or "Not working: macOS refused this shortcut.".
 - **fn is not a dictation shortcut** (maintainer, 2026-11-12). It cancels a recording, so the recorder refuses it as a shortcut River already uses ("Cancel recording uses fn. Choose another."), and a saved fn falls back to the default, as Caps Lock does. **Why:** as the dictation key its press would start and stop dictation, so it could not also cancel, and the Settings window had to explain the exception.
 - **A River combination pressed during a lone-modifier hold** (Right ⌥ as the Hold key, then ⌃⌥V) discards the recording that hold started, with no cue, and the combination's action runs.
 - **Mode warnings.** PR 8 checked what River's tap sees for Caps Lock: one event per press and none on release, so Hold never stops and a tap mode needs two presses. Caps Lock is no longer a dictation key, and a saved one migrates to the default. No other recorded key is unreliable in a mode, so the Caps Lock + Hold warning goes and no mode warning remains.
 - **Changes apply** as today for the dictation shortcut and mode ([../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md), "Live apply"). The other shortcuts apply at once.
-- **Migration.** On first launch of `v0.3.0`, a saved `activationKeyCode` becomes the same lone modifier in `dictationShortcut`, once, and the old key is dropped. A shortcut is stored as one string value, so `@AppStorage` can bind it; an empty value means cleared.
+- **Migration.** On first launch of `v0.3.0`, a saved `activationKeyCode` becomes the same lone modifier in `dictationShortcut`, once, and the old key is dropped. A shortcut is stored as one string value, so `@AppStorage` can bind it; an unreadable value reads as the default.
 
 ## Acceptance criteria
 
 1. "Settings…" opens the panel with the five sections and rows above; the old Settings window, the Activation Key picker, "Transcribe while I speak" and the "Permissions…" menu item are gone.
 2. A recorded lone modifier and a recorded combination each start and stop dictation in Hold, Tap and Double-tap, and a combination never types into the app in front.
 3. An existing `activationKeyCode` survives the update as the same dictation key.
-4. ⌃⌥V types the last transcription at the cursor with no modifier leaking into it and no clipboard change; ⌃⌥L shows or hides the live text; both can be recorded over or cleared.
+4. ⌃⌥V types the last transcription at the cursor with no modifier leaking into it and no clipboard change; ⌃⌥L shows or hides the live text; both can be recorded over.
 5. Esc cancels a recording and reaches other apps normally between recordings.
 6. Each conflict case shows its message, and a refused combination is not saved.
 7. The tap is still created with `.listenOnly` and `flagsChanged` only.

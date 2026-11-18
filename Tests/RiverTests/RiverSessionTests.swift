@@ -1111,6 +1111,51 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("Paste last types the last transcription again, and nothing before there is one")
+    func pasteLastTypesAgain() async throws {
+        // The shortcut reuses the typing path, so what it types can't drift from what was
+        // typed, and the clipboard is never touched (spec 0036).
+        let env = makeSession()
+        env.session.pasteLastTranscript()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(env.accessibility.postedKeyDownTextForTesting.isEmpty)
+
+        env.transcription.transcribeResultForTesting = "hello again"
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        let first = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(first == "hello again")
+
+        env.session.pasteLastTranscript()
+        let deadline = Date().addingTimeInterval(5)
+        while env.accessibility.postedKeyDownTextForTesting.joined().count < first.count * 2, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == first + first)
+    }
+
+    @MainActor
+    @Test("Paste last does nothing while a dictation records")
+    func pasteLastWaitsOutRecording() async throws {
+        // Typing into the app in front mid-dictation would mix two transcriptions.
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "hello again"
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+        env.session.pasteLastTranscript()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == typed)
+    }
+
+    @MainActor
     @Test("last transcript is retained even when insertion fails (the recovery case)")
     func lastTranscriptRetainedWhenInsertionFails() async throws {
         // AC1: a paste failure is exactly the moment recovery matters. The transcript

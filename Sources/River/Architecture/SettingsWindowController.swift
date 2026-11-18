@@ -17,7 +17,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var subscriptions = Set<AnyCancellable>()
 
     init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
-         shortcutHooks: ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
+         shortcutHooks: (RiverShortcut) -> ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
          deleteModel: @escaping (String) throws -> Void) {
         model = SettingsWindowModel(appState: appState, capabilities: capabilities, updater: updater,
                                     shortcutHooks: shortcutHooks, selectModel: selectModel, deleteModel: deleteModel)
@@ -38,7 +38,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// the window can take key presses.
     func show() {
         model.section = SettingsSection.opening(lastShown: model.section, permissionMissing: model.permissionMissing,
-                                                shortcutFailing: model.appState.isDictationShortcutFailing)
+                                                shortcutFailing: model.appState.isAnyShortcutFailing)
         let window = self.window ?? makeWindow()
         resize(window, for: model.section, animate: false)
         NSApp.activate(ignoringOtherApps: true)

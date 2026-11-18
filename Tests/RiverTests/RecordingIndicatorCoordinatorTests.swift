@@ -25,7 +25,9 @@ struct RecordingIndicatorCoordinatorTests {
         #expect(first.isVisible)
 
         appState.apply(.idle)
-        try await Task.sleep(for: .seconds(RecordingIndicatorCoordinator.orderOutDelay + 0.2))
+        // The order-out runs on a timer after the exit, which a loaded machine (CI's runner)
+        // can run late; `outlivesMarkExit` checks it never runs early.
+        try await waitUntil(seconds: RecordingIndicatorCoordinator.orderOutDelay + 5) { coordinator.panel !== first }
         let second = try #require(coordinator.panel)
         // A reused panel keeps whatever Spaces the window server last left it on;
         // after a full-screen Space closed, that can be none at all.
@@ -35,7 +37,7 @@ struct RecordingIndicatorCoordinatorTests {
 
         second.alphaValue = 0
         appState.apply(.recording)
-        try await waitForObservation()
+        try await waitUntil(seconds: 5) { second.isVisible }
         #expect(coordinator.panel === second)
         #expect(second.isVisible)
         appState.apply(.idle)
@@ -102,5 +104,13 @@ struct RecordingIndicatorCoordinatorTests {
     // The coordinator re-reads `AppState` on a main-actor hop after each change.
     private func waitForObservation() async throws {
         try await Task.sleep(for: .milliseconds(50))
+    }
+
+    // Checks `condition` every 20 ms until it holds or `seconds` pass, for work on a timer.
+    private func waitUntil(seconds: Double, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !condition(), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
     }
 }

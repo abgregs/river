@@ -49,9 +49,9 @@ final class AppState {
     /// Whether the most recent recording was discarded silently because its key was
     /// part of another River shortcut (spec 0036). Not a cancel: no cue plays.
     private(set) var lastRecordingWasDiscarded = false
-    /// What macOS said to the dictation combination's registration: a refusal is the
-    /// Settings window's "Not working" line and its sidebar badge. Nil for a lone modifier.
-    private(set) var dictationRegistration: HotKeyRegistration?
+    /// What macOS said to each combination River holds: a refusal is the Settings window's
+    /// "Not working" line on that row and its sidebar badge. A lone modifier has none.
+    private(set) var shortcutRegistrations: [RiverShortcut: HotKeyRegistration] = [:]
     // Set by the session's `discards` signal, which arrives just before that
     // recording's `.idle`; consumed as the state leaves `.recording`.
     @ObservationIgnored private var isDiscardPending = false
@@ -86,8 +86,8 @@ final class AppState {
         session.liveTranscript
             .sink { [weak self] text in self?.apply(liveTranscript: text) }
             .store(in: &cancellables)
-        session.dictationRegistration
-            .sink { [weak self] registration in self?.apply(dictationRegistration: registration) }
+        session.shortcutRegistrations
+            .sink { [weak self] registrations in self?.apply(shortcutRegistrations: registrations) }
             .store(in: &cancellables)
     }
 
@@ -200,18 +200,15 @@ final class AppState {
         liveTranscript = text
     }
 
-    // internal for testability — the registration entry point (also used by `bind`), so a
+    // internal for testability — the registrations entry point (also used by `bind`), so a
     // snapshot shows a failing shortcut without another app holding it.
-    func apply(dictationRegistration registration: HotKeyRegistration?) {
-        dictationRegistration = registration
+    func apply(shortcutRegistrations registrations: [RiverShortcut: HotKeyRegistration]) {
+        shortcutRegistrations = registrations
     }
 
-    /// Whether the dictation shortcut failed to register, so it does nothing.
-    var isDictationShortcutFailing: Bool {
-        switch dictationRegistration {
-        case .takenByAnotherApp, .refused: true
-        case .registered, nil: false
-        }
+    /// Whether any of River's shortcuts failed to register, so it does nothing.
+    var isAnyShortcutFailing: Bool {
+        shortcutRegistrations.values.contains { $0 != .registered }
     }
 
     // internal for testability — the model selection entry point (also used by

@@ -86,7 +86,7 @@ struct ShortcutRecorderModelTests {
     func fnRefused() {
         // The row's message names the row that owns it, which is on screen below.
         let log = HooksLog()
-        log.check = { $0 == RiverShortcut.cancelRecording.shortcut ? .usedByRiver(.cancelRecording) : .available }
+        log.check = { RiverShortcut.cancelKeys.contains($0) ? .usedByRiver(.cancelRecording) : .available }
         let model = ShortcutRecorderModel(hooks: log.hooks)
         model.start()
         model.handle(.modifierChanged(keyCode: 63, isDown: true))
@@ -96,18 +96,34 @@ struct ShortcutRecorderModelTests {
         model.stop()
     }
 
-    @Test("Delete can't clear the dictation shortcut, and Esc stops, keeping it")
+    @Test("Delete is refused like any key with no modifier, and Esc stops, keeping the shortcut")
     func deleteAndEscape() {
-        // Dictation always needs a shortcut; Esc must leave the saved one exactly as it was.
+        // Recording never clears; Esc must leave the saved shortcut exactly as it was.
         let log = HooksLog()
-        let model = ShortcutRecorderModel(hooks: log.hooks)
+        let model = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
         model.start()
+        #expect(model.line == .recordingHotKey)
         model.handle(.keyDown(keyCode: kVK_Delete, modifiers: [], isRepeat: false))
-        #expect(model.line == .cannotClear)
+        #expect(model.line == .needsModifier)
         #expect(model.phase == .recording)
         model.handle(.keyDown(keyCode: kVK_Escape, modifiers: [], isRepeat: false))
         #expect(model.phase == .idle)
         #expect(log.saved.isEmpty)
+    }
+
+    @Test("a hot key row refuses a lone modifier and keeps recording")
+    func hotKeyRowNeedsKey() {
+        // Paste last and Copy last are hot keys, which need a key with their modifiers.
+        let log = HooksLog()
+        let model = ShortcutRecorderModel(row: .pasteLast, hooks: log.hooks)
+        model.start()
+        model.handle(.modifierChanged(keyCode: 61, isDown: true))
+        model.handle(.modifierChanged(keyCode: 61, isDown: false))
+        #expect(model.line == .needsKey)
+        #expect(model.tried == ShortcutText.Keys(side: "Right", keys: ["⌥"]))
+        #expect(log.saved.isEmpty)
+        #expect(model.phase == .recording)
+        model.stop()
     }
 
     @Test("a shortcut macOS also uses is saved, and its warning stays")

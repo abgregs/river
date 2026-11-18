@@ -40,6 +40,16 @@ enum Constants {
     // 63 on-device — the Globe key is special-cased on some keyboards.
     static let cancelKeyCode: Int = 63
 
+    // Paste last transcription ⌃⌥V and Copy last transcription ⌃⌥C (spec 0036; Copy last's
+    // default set by the maintainer, 2026-11-15). Keycodes 9 and 8 are V and C. Both can be
+    // recorded over.
+    static let defaultPasteLastShortcut: Shortcut = .combination(keyCode: 9, modifiers: [.control, .option])
+    static let defaultCopyLastShortcut: Shortcut = .combination(keyCode: 8, modifiers: [.control, .option])
+    // Paste last types once every modifier is up, so a held ⌃ or ⌘ can't turn the text into
+    // commands in the app in front (spec 0036). If the tap reports no key-up for this long, it
+    // types anyway.
+    static let pasteKeyUpTimeoutSeconds: Double = 1
+
     // Double-tap detection window. Two complete taps within this many milliseconds
     // start a recording. Deliberately an internal tunable, NOT a user setting:
     // exposing a slider is friction for a value the user shouldn't have to reason

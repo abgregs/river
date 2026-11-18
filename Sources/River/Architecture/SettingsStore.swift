@@ -20,6 +20,16 @@ enum Settings {
         name: "dictationShortcut",
         defaultValue: Constants.defaultDictationShortcut
     )
+    // Types the last transcription again at the cursor, and copies it (spec 0036, PR 9). Each
+    // is a combination, since it is a hot key, and cannot be cleared.
+    static let pasteLastShortcut = SettingKey<Shortcut>(
+        name: "pasteLastShortcut",
+        defaultValue: Constants.defaultPasteLastShortcut
+    )
+    static let copyLastShortcut = SettingKey<Shortcut>(
+        name: "copyLastShortcut",
+        defaultValue: Constants.defaultCopyLastShortcut
+    )
     static let activationMode = SettingKey<ActivationMode>(
         name: "activationMode",
         defaultValue: Constants.defaultActivationMode

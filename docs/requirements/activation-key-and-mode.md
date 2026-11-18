@@ -58,8 +58,10 @@ Declared as typed keys on the `Settings` namespace (backed by `UserDefaults.stan
 |---|---|---|
 | `Settings.dictationShortcut` | `Shortcut` | Right Option (`mod:61`) |
 | `Settings.activationMode` | `ActivationMode` | `.hold` |
+| `Settings.pasteLastShortcut` | `Shortcut` (a combination) | ⌃⌥V (`key:9:ctrl,opt`) |
+| `Settings.copyLastShortcut` | `Shortcut` (a combination) | ⌃⌥C (`key:8:ctrl,opt`) |
 
-A shortcut is stored as one string so `@AppStorage` can bind it: `mod:61` for a lone modifier, `key:49:ctrl,opt` for a combination. An empty string means cleared; the dictation shortcut cannot be cleared, so a cleared or unreadable value reads as the default.
+A shortcut is stored as one string so `@AppStorage` can bind it: `mod:61` for a lone modifier, `key:49:ctrl,opt` for a combination. No shortcut can be cleared, so an unreadable value reads as the default.
 
 **Migration.** Before v0.3.0 the key was `activationKeyCode`, an `Int`. At launch, a saved `activationKeyCode` that is one of the 8 lone modifiers becomes that `dictationShortcut`, unless one is already saved; any other value is dropped. The old key is then removed.
 
@@ -75,6 +77,8 @@ See [../architecture/settings-store.md](../architecture/settings-store.md) for t
 - **Recording in a tap mode** → the change applies **live** and the recording continues. The new shortcut or mode immediately becomes the stop gesture, and the session posts a notice confirming the user can use it to stop the current recording. No audio is lost, because nothing tears down the running tap.
 - **Recording in Hold mode, or processing** → the change is deferred and applied when the cycle returns to `.idle`. Hold defers because the user is physically holding the old shortcut, whose release must still stop the recording.
 
+Paste last's and Copy last's shortcuts apply at once, in any state: each change moves only that row's hot key, and neither drives a recording.
+
 There is no path that tears down the event tap mid-cycle. See [../architecture/river-session.md](../architecture/river-session.md).
 
 ## Settings UI
@@ -83,7 +87,11 @@ The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-sh
 
 1. **Dictate** — the dictation shortcut in its outline and a Record button. Recording takes a lone modifier or a combination, refuses what cannot work or what River already uses, and writes `dictationShortcut` ([0036](../planning/0036_settings-and-shortcuts.md), The recorder).
 2. **Start by** — a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description under it.
-3. **Cancel recording** — the keys that cancel a recording (fn, and Esc from PR 9), shown, not editable.
+3. **Cancel recording** — the keys that cancel a recording, fn or Esc, shown, not editable. Esc is River's only while a recording runs.
+4. **Paste last transcription** — types the last transcription again at the cursor, once every modifier is up, through the typing path, so the clipboard is never touched; default ⌃⌥V, writes `pasteLastShortcut`.
+5. **Copy last transcription** — copies it, as the menu item does; default ⌃⌥C, writes `copyLastShortcut`.
+
+Rows 4 and 5 take combinations only, since a hot key needs a key with its modifiers. No row can be cleared: a user who doesn't want a row's keys records keys nothing else uses. Every row refuses a shortcut another row already uses, naming that row.
 
 Warnings inform and never block: the user knows their keyboard better than the app does. No shortcut and mode pair carries a warning.
 
