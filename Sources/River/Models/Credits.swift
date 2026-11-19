@@ -31,6 +31,10 @@ enum Credits {
         // Linked into River by FluidAudio, which builds them from source or ships them prebuilt.
         Software(identity: "text-processing-rs", name: "text-processing-rs", holder: "FluidInference", licence: "Apache-2.0"),
         Software(identity: "fastcluster", name: "fastcluster", holder: "Daniel Müllner and Google Inc.", licence: "BSD-2-Clause"),
+        // Ported into FluidAudio's Japanese text frontend, which River builds in but never uses.
+        Software(identity: "misaki", name: "misaki", holder: "hexgrad", licence: "Apache-2.0"),
+        Software(identity: "cutlet", name: "cutlet", holder: "Paul O'Leary McCann", licence: "MIT"),
+        Software(identity: "convert-numbers-to-japanese", name: "Convert-Numbers-to-Japanese", holder: "David Wilson", licence: "MIT"),
     ]
 
     /// Resolved packages that build tools use but River never links, so it ships no copy.
