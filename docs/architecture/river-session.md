@@ -21,7 +21,7 @@ final class RiverSession {
 }
 ```
 
-That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a `RiverError` (one case per cycle stage) when capture, transcription, or paste fails — a side signal that never changes the cycle's return to `.idle`. The `notices` publisher emits a short message when a settings change is applied **live** during a tap-mode recording (e.g. "the new key now stops the recording"). The UI observes all three publishers through [`AppState`](app-state-and-menu-bar.md), not directly. **Why:** configuration changes flow in via subscription to [SettingsStore](settings-store.md) publishers inside the session — pushing configuration into the session externally would re-create the leak we're trying to remove.
+That's it. There is no `reconfigure(...)` method. The `errors` publisher emits a `RiverError` (one case per cycle stage) when capture, transcription, or paste fails — a side signal that never changes the cycle's return to `.idle`. The `notices` publisher emits a short message when a settings change is applied **live** during a tap-mode recording (e.g. "the new key now stops the recording"). The UI observes these publishers through [`AppState`](app-state-and-menu-bar.md), not directly. **Why:** configuration changes flow in via subscription to [SettingsStore](settings-store.md) publishers inside the session — pushing configuration into the session externally would re-create the leak we're trying to remove.
 
 ## What the session owns
 
