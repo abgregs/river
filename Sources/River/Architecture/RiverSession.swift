@@ -501,6 +501,10 @@ final class RiverSession {
     func toggleLiveText() {
         let shown = !settings.value(for: Settings.showLiveText)
         logger.info("Live text \(shown ? "shown" : "hidden", privacy: .public)")
+        if shown, !settings.value(for: Settings.streamingDictation) {
+            // The hidden fallback decodes at release only, so there is no text to show.
+            logger.notice("Live text has nothing to show: streamingDictation is off (defaults delete com.river.app streamingDictation)")
+        }
         settings.setValue(shown, for: Settings.showLiveText)
     }
 
