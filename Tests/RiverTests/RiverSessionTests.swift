@@ -520,6 +520,30 @@ struct RiverSessionTests {
         #expect(env.transcription.currentModelName == Constants.defaultModel)
     }
 
+    // PR 7a smoke test (2026-11-19): a model that became ready while River was idle took over,
+    // but the Model section kept reading "Waiting" for it through every later dictation. The
+    // commit ran inside the delivery of the ready value, so subscribers after the session got
+    // the switched selection first and the older value last. Delivery order isn't fixed, so
+    // the Model section's state is bound both before and after the session subscribes.
+    @MainActor
+    @Test("a switch committed at idle leaves every subscriber with the model in use")
+    func idleCommitReachesEverySubscriber() async throws {
+        let env = makeSession()
+        let before = AppState()
+        before.bind(transcription: env.transcription)
+        try await env.session.start()
+        let after = AppState()
+        after.bind(transcription: env.transcription)
+
+        env.session.selectModel("openai_whisper-base.en")
+        await waitUntil { env.transcription.currentModelName == "openai_whisper-base.en" }
+        await waitUntil { before.modelSelection == env.transcription.currentSelection && after.modelSelection == env.transcription.currentSelection }
+        let inUse = ModelSelection(inUse: "openai_whisper-base.en", inUseState: .ready, next: nil)
+        #expect(env.transcription.currentSelection == inUse)
+        #expect(before.modelSelection == inUse)
+        #expect(after.modelSelection == inUse)
+    }
+
     // Try Again on a failed model chooses the saved model again, which a setting write
     // would swallow as no change.
     @MainActor

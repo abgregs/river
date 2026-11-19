@@ -468,9 +468,15 @@ final class RiverSession {
                     self.settings.setValue(selection.inUse, for: Settings.selectedModel)
                 }
                 // A model ready beside the one in use takes over at `.idle`; one that becomes
-                // ready mid-cycle takes over on the return to `.idle`.
+                // ready mid-cycle takes over on the return to `.idle`. The commit waits until
+                // this value has reached every subscriber: committing inside the delivery sends
+                // the switched selection first, and the rest then receive this older one last,
+                // which left the Model section reading "Waiting" after the switch (PR 7a smoke).
                 if selection.next?.phase == .ready, self.currentState == .idle {
-                    self.transcription.commitModelSwitch()
+                    Task { @MainActor [weak self] in
+                        guard let self, self.currentState == .idle else { return }
+                        self.transcription.commitModelSwitch()
+                    }
                 }
             }
             .store(in: &cancellables)
