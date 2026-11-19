@@ -45,7 +45,7 @@ struct TranscriptionManagerLoadStateTests {
     func isModelCachedFalseWhenMissing() {
         let temp = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("ff-test-\(UUID().uuidString)", isDirectory: true)
-        #expect(!TranscriptionManager.isModelCached(downloadBase: temp, modelName: "openai_whisper-small.en"))
+        #expect(!WhisperKitLoader.isModelCached(downloadBase: temp, modelName: "openai_whisper-small.en"))
     }
 }
 
@@ -102,15 +102,16 @@ struct TranscriptionManagerModelSwitchTests {
     @MainActor
     @Test("a failed new model leaves the one in use, and choosing it again retries")
     func failedStageKeepsCurrentAndRetries() async {
-        let mgr = stagingManager()
-        mgr.stageFailsForTesting = true
+        let loader = FakeModelLoader()
+        let mgr = stagingManager(loader)
+        loader.failing = ["openai_whisper-base.en"]
         await mgr.switchModel(to: "openai_whisper-base.en")
         #expect(mgr.currentModelSwitch?.phase == .failed)
         #expect(!mgr.commitModelSwitch())
         #expect(mgr.currentModelName == "openai_whisper-small.en")
         #expect(mgr.currentModelLoadState == .ready)
 
-        mgr.stageFailsForTesting = false
+        loader.failing = []
         await mgr.switchModel(to: "openai_whisper-base.en")
         #expect(mgr.currentModelSwitch?.phase == .ready)
     }
@@ -149,10 +150,9 @@ struct TranscriptionManagerModelSwitchTests {
     }
 
     @MainActor
-    private func stagingManager() -> TranscriptionManager {
-        let mgr = TranscriptionManager(modelName: "openai_whisper-small.en")
+    private func stagingManager(_ loader: FakeModelLoader? = nil) -> TranscriptionManager {
+        let mgr = TranscriptionManager.withFake(loader ?? FakeModelLoader(), modelName: "openai_whisper-small.en")
         mgr.setModelLoadStateForTesting(.ready)
-        mgr.skipLoadForTesting = true
         return mgr
     }
 }
@@ -232,7 +232,7 @@ struct TranscriptionCacheLocationTests {
     }
 }
 
-@Suite("TranscriptionManager empty-prompt retry")
+@Suite("WhisperKitModel empty-prompt retry")
 struct TranscriptionEmptyPromptRetryTests {
     // The dictionary-can-only-help guarantee (custom-dictionary.md): a prompted
     // decode that comes back empty must retry unprompted, so adding a dictionary
@@ -245,9 +245,8 @@ struct TranscriptionEmptyPromptRetryTests {
     func promptedEmptyRetriesUnprompted() async throws {
         // Prompted decode degenerates to empty; unprompted yields text. The retry
         // must fire and its text — not an error — is what the user gets.
-        let service = TranscriptionManager()
         var calls: [[Int]] = []
-        let text = try await service.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { tokens in
+        let text = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { tokens in
             calls.append(tokens)
             return tokens.isEmpty ? "hello" : ""
         }
@@ -261,9 +260,8 @@ struct TranscriptionEmptyPromptRetryTests {
         // The retry degrades a bad prompt to neutral, not error — but honest
         // failure must survive: if the audio itself is silent, both decodes are
         // empty and the cycle must still surface `.emptyTranscription`.
-        let service = TranscriptionManager()
         await #expect(throws: TranscriptionError.self) {
-            _ = try await service.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { _ in "" }
+            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { _ in "" }
         }
     }
 
@@ -272,10 +270,9 @@ struct TranscriptionEmptyPromptRetryTests {
     func noPromptEmptyThrowsWithoutRetry() async {
         // With no prompt in play there is nothing to degrade to, so an empty
         // decode is an honest empty result — it must not trigger a second call.
-        let service = TranscriptionManager()
         var callCount = 0
         await #expect(throws: TranscriptionError.self) {
-            _ = try await service.resolveWithEmptyPromptRetry(promptTokens: []) { _ in
+            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in
                 callCount += 1
                 return ""
             }
@@ -290,9 +287,8 @@ struct TranscriptionEmptyPromptRetryTests {
         // real room tone decodes to "[BLANK_AUDIO]" (planning 0023). That text
         // must never paste, and it must classify as the quiet no-op case (the
         // session skips it silently) rather than the loud .emptyTranscription.
-        let service = TranscriptionManager()
         do {
-            _ = try await service.resolveWithEmptyPromptRetry(promptTokens: []) { _ in "[BLANK_AUDIO]" }
+            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in "[BLANK_AUDIO]" }
             Issue.record("expected .noSpeechDetected to be thrown")
         } catch TranscriptionError.noSpeechDetected {
             // expected: quiet no-op classification
@@ -307,9 +303,8 @@ struct TranscriptionEmptyPromptRetryTests {
         // Annotation-only is "no speech" for retry purposes too: a prompt that
         // degenerates decoding to "[BLANK_AUDIO]" must get the same second
         // chance as one that degenerates to empty — the dictionary can only help.
-        let service = TranscriptionManager()
         var calls: [[Int]] = []
-        let text = try await service.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { tokens in
+        let text = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { tokens in
             calls.append(tokens)
             return tokens.isEmpty ? "hello" : "[BLANK_AUDIO]"
         }
@@ -318,7 +313,7 @@ struct TranscriptionEmptyPromptRetryTests {
     }
 }
 
-@Suite("TranscriptionManager non-speech annotation detector")
+@Suite("WhisperKitModel non-speech annotation detector")
 struct TranscriptionAnnotationDetectorTests {
     // Pure whole-output classifier for Whisper's non-speech labels. The probe
     // clips (planning 0023) produced exactly these shapes: "[BLANK_AUDIO]"
@@ -329,10 +324,10 @@ struct TranscriptionAnnotationDetectorTests {
     @MainActor
     @Test("recognizes the observed annotation forms")
     func recognizesObservedForms() {
-        #expect(TranscriptionManager.isNonSpeechAnnotation("[BLANK_AUDIO]"))
-        #expect(TranscriptionManager.isNonSpeechAnnotation("(heavy breathing)"))
-        #expect(TranscriptionManager.isNonSpeechAnnotation("[MUSIC]"))
-        #expect(TranscriptionManager.isNonSpeechAnnotation(" [BLANK_AUDIO] "))
+        #expect(WhisperKitModel.isNonSpeechAnnotation("[BLANK_AUDIO]"))
+        #expect(WhisperKitModel.isNonSpeechAnnotation("(heavy breathing)"))
+        #expect(WhisperKitModel.isNonSpeechAnnotation("[MUSIC]"))
+        #expect(WhisperKitModel.isNonSpeechAnnotation(" [BLANK_AUDIO] "))
     }
 
     @MainActor
@@ -340,18 +335,18 @@ struct TranscriptionAnnotationDetectorTests {
     func recognizesCompositeForms() {
         // WhisperKit joins segments with spaces, and models often append a
         // period — leftover punctuation must not defeat the classification.
-        #expect(TranscriptionManager.isNonSpeechAnnotation("[BLANK_AUDIO] [BLANK_AUDIO]"))
-        #expect(TranscriptionManager.isNonSpeechAnnotation("(sighs)."))
-        #expect(TranscriptionManager.isNonSpeechAnnotation("[MUSIC] (heavy breathing)"))
+        #expect(WhisperKitModel.isNonSpeechAnnotation("[BLANK_AUDIO] [BLANK_AUDIO]"))
+        #expect(WhisperKitModel.isNonSpeechAnnotation("(sighs)."))
+        #expect(WhisperKitModel.isNonSpeechAnnotation("[MUSIC] (heavy breathing)"))
     }
 
     @MainActor
     @Test("never classifies output containing real words")
     func neverEatsRealSpeech() {
         // Mixed annotation+speech keeps the speech — whole-output check only.
-        #expect(!TranscriptionManager.isNonSpeechAnnotation("Hello world"))
-        #expect(!TranscriptionManager.isNonSpeechAnnotation("Hello (laughs) world"))
-        #expect(!TranscriptionManager.isNonSpeechAnnotation("[MUSIC] turn it up"))
+        #expect(!WhisperKitModel.isNonSpeechAnnotation("Hello world"))
+        #expect(!WhisperKitModel.isNonSpeechAnnotation("Hello (laughs) world"))
+        #expect(!WhisperKitModel.isNonSpeechAnnotation("[MUSIC] turn it up"))
     }
 
     @MainActor
@@ -360,13 +355,13 @@ struct TranscriptionAnnotationDetectorTests {
         // Empty is `.emptyTranscription`'s territory, and punctuation-only output
         // with no bracketed label present is left alone — classification requires
         // at least one annotation to have matched.
-        #expect(!TranscriptionManager.isNonSpeechAnnotation(""))
-        #expect(!TranscriptionManager.isNonSpeechAnnotation("   "))
-        #expect(!TranscriptionManager.isNonSpeechAnnotation("..."))
+        #expect(!WhisperKitModel.isNonSpeechAnnotation(""))
+        #expect(!WhisperKitModel.isNonSpeechAnnotation("   "))
+        #expect(!WhisperKitModel.isNonSpeechAnnotation("..."))
     }
 }
 
-@Suite("TranscriptionManager prompt-token filter")
+@Suite("WhisperKitModel prompt-token filter")
 struct TranscriptionFilterTests {
     // The custom-dictionary prompt feeds raw token IDs into WhisperKit's
     // `DecodingOptions.promptTokens`. WhisperKit's tokenizer also emits
@@ -378,7 +373,7 @@ struct TranscriptionFilterTests {
     @MainActor
     @Test("drops tokens at or above specialTokenBegin")
     func dropsAtAndAboveThreshold() {
-        let filtered = TranscriptionManager.filterSpecialTokens(
+        let filtered = WhisperKitModel.filterSpecialTokens(
             [0, 5, 100, 50_256, 50_257, 50_258],
             specialTokenBegin: 50_257
         )
@@ -388,7 +383,7 @@ struct TranscriptionFilterTests {
     @MainActor
     @Test("passes everything below the threshold through unchanged")
     func passesBelowThreshold() {
-        let filtered = TranscriptionManager.filterSpecialTokens(
+        let filtered = WhisperKitModel.filterSpecialTokens(
             [1, 2, 3, 12_345],
             specialTokenBegin: 50_257
         )
@@ -398,7 +393,7 @@ struct TranscriptionFilterTests {
     @MainActor
     @Test("empty input returns empty output")
     func emptyInput() {
-        #expect(TranscriptionManager.filterSpecialTokens([], specialTokenBegin: 50_257).isEmpty)
+        #expect(WhisperKitModel.filterSpecialTokens([], specialTokenBegin: 50_257).isEmpty)
     }
 
     @MainActor
@@ -406,7 +401,7 @@ struct TranscriptionFilterTests {
     func zeroThresholdFiltersAll() {
         // Defensive: if a future tokenizer reports `specialTokenBegin == 0`,
         // we must not pass a single token through (the filter is `<`, not `<=`).
-        let filtered = TranscriptionManager.filterSpecialTokens([0, 1, 2, 999], specialTokenBegin: 0)
+        let filtered = WhisperKitModel.filterSpecialTokens([0, 1, 2, 999], specialTokenBegin: 0)
         #expect(filtered.isEmpty)
     }
 }
@@ -441,7 +436,7 @@ struct TranscriptionManagerShortClipTests {
     }
 }
 
-@Suite("TranscriptionManager tokenizer file check")
+@Suite("WhisperKitLoader tokenizer file check")
 struct TranscriptionManagerTokenizerCheckTests {
     // A tokenizer folder with `tokenizer.json` and `config.json` but no usable
     // `tokenizer_config.json` sends swift-transformers to its `Hub` resource bundle,
@@ -481,7 +476,7 @@ struct TranscriptionManagerTokenizerCheckTests {
         defer { try? FileManager.default.removeItem(at: base) }
         try Self.writeTokenizer(in: base, tokenizerConfig: nil)
         #expect(performing: {
-            try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+            try WhisperKitLoader.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
         }, throws: Self.isUnusableTokenizerError)
     }
 
@@ -496,7 +491,7 @@ struct TranscriptionManagerTokenizerCheckTests {
         defer { try? FileManager.default.removeItem(at: base) }
         try Self.writeTokenizer(in: base, tokenizerConfig: tokenizerConfig)
         #expect(performing: {
-            try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+            try WhisperKitLoader.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
         }, throws: Self.isUnusableTokenizerError)
     }
 
@@ -506,7 +501,7 @@ struct TranscriptionManagerTokenizerCheckTests {
         let base = try Self.makeBase()
         defer { try? FileManager.default.removeItem(at: base) }
         try Self.writeTokenizer(in: base, tokenizerConfig: #"{"tokenizer_class": "WhisperTokenizer"}"#)
-        try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+        try WhisperKitLoader.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
     }
 
     @MainActor
@@ -514,7 +509,7 @@ struct TranscriptionManagerTokenizerCheckTests {
     func emptyCachePasses() throws {
         let base = try Self.makeBase()
         defer { try? FileManager.default.removeItem(at: base) }
-        try TranscriptionManager.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
+        try WhisperKitLoader.checkTokenizerFiles(downloadBase: base, modelName: Self.model)
     }
 }
 
@@ -532,7 +527,7 @@ private struct ModelFixture {
 
     func remove() { try? FileManager.default.removeItem(at: base) }
 
-    func modelFolder(_ name: String) -> URL { TranscriptionManager.modelFolder(downloadBase: base, modelName: name) }
+    func modelFolder(_ name: String) -> URL { WhisperKitLoader.modelFolder(downloadBase: base, modelName: name) }
     var records: URL { base.appendingPathComponent("models/argmaxinc/whisperkit-coreml/.cache/huggingface/download") }
     var tokenizer: URL { base.appendingPathComponent("models/openai/whisper-small.en") }
 
@@ -565,7 +560,7 @@ private struct ModelFixture {
     func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
 }
 
-@Suite("TranscriptionManager downloaded check")
+@Suite("WhisperKitLoader downloaded check")
 struct TranscriptionManagerDownloadedCheckTests {
     // planning 0026 finding 3, 0038: a cut-off download used to read as downloaded because
     // one file was there. "Downloaded", the Delete offer and the warm-launch load all rely on
@@ -579,7 +574,7 @@ struct TranscriptionManagerDownloadedCheckTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Self.model)
-        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.model))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.model))
     }
 
     @MainActor
@@ -596,7 +591,7 @@ struct TranscriptionManagerDownloadedCheckTests {
         defer { fixture.remove() }
         try fixture.writeModel(Self.model)
         try fixture.removeFile(missing, of: Self.model)
-        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.model))
+        #expect(!WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.model))
     }
 
     @MainActor
@@ -606,7 +601,7 @@ struct TranscriptionManagerDownloadedCheckTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.write(fixture.modelFolder(Self.model).appendingPathComponent("AudioEncoder.mlmodelc/coremldata.bin"), bytes: 1)
-        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.model))
+        #expect(!WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.model))
     }
 
     @MainActor
@@ -616,9 +611,9 @@ struct TranscriptionManagerDownloadedCheckTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(model, prefill: true)
-        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: model))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: model))
         try fixture.removeFile("TextDecoderContextPrefill.mlmodelc/weights/weight.bin", of: model)
-        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: model))
+        #expect(!WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: model))
     }
 }
 
@@ -641,7 +636,7 @@ struct TranscriptionManagerDeleteModelTests {
         try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
         #expect(!fixture.exists(fixture.modelFolder(Self.other)))
         #expect(!fixture.exists(fixture.records.appendingPathComponent(Self.other)))
-        #expect(!TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.other))
+        #expect(!WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.other))
     }
 
     @MainActor
@@ -655,8 +650,8 @@ struct TranscriptionManagerDeleteModelTests {
         try fixture.writeTokenizer()
         let manager = TranscriptionManager(modelName: Self.inUse)
         try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
-        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
-        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: "distil-whisper_distil-large-v3"))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: "distil-whisper_distil-large-v3"))
         #expect(fixture.exists(fixture.records.appendingPathComponent(Self.inUse)))
         #expect(fixture.exists(fixture.tokenizer.appendingPathComponent("tokenizer.json")))
     }
@@ -672,7 +667,7 @@ struct TranscriptionManagerDeleteModelTests {
         #expect(throws: ModelDeletionError.inUse) {
             try manager.deleteModel(named: Self.inUse, downloadBase: fixture.base)
         }
-        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
     }
 
     @MainActor
@@ -681,16 +676,16 @@ struct TranscriptionManagerDeleteModelTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Self.other)
-        let manager = TranscriptionManager(modelName: Self.inUse)
+        let loader = FakeModelLoader()
+        if fails { loader.failing = [Self.other] }
+        let manager = TranscriptionManager.withFake(loader, modelName: Self.inUse)
         manager.setModelLoadStateForTesting(.ready)
-        manager.skipLoadForTesting = true
-        manager.stageFailsForTesting = fails
         await manager.switchModel(to: Self.other)
         #expect(manager.currentModelSwitch?.target == Self.other)
         #expect(throws: ModelDeletionError.loading) {
             try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
         }
-        #expect(TranscriptionManager.isModelCached(downloadBase: fixture.base, modelName: Self.other))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.other))
     }
 
     @MainActor
@@ -712,7 +707,7 @@ struct TranscriptionManagerDeleteModelTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Self.other, bytes: 100_000)
-        let freed = TranscriptionManager.diskUsage(downloadBase: fixture.base, modelName: Self.other)
+        let freed = TranscriptionManager.diskUsage(of: WhisperKitLoader().files(of: Self.other, downloadBase: fixture.base))
         // 17 files of 100 kB, plus 17 one-byte records, each taking at least a block.
         #expect(freed >= 17 * 100_000)
         #expect(freed == TranscriptionManager.diskUsage(of: fixture.modelFolder(Self.other))! + TranscriptionManager.diskUsage(of: fixture.records.appendingPathComponent(Self.other))!)
@@ -745,11 +740,89 @@ struct CachedModelOfflineLoadTests {
     func cachedModelLoadsOffline() async throws {
         let model = ProcessInfo.processInfo.environment["RIVER_OFFLINE_LOAD_MODEL"] ?? "openai_whisper-base.en"
         try #require(
-            TranscriptionManager.isModelCached(downloadBase: TranscriptionManager.modelDownloadBase(), modelName: model),
+            WhisperKitLoader.isModelCached(downloadBase: TranscriptionManager.modelDownloadBase(), modelName: model),
             "\(model) is not downloaded; pick it in River once, then rerun"
         )
         let manager = TranscriptionManager(modelName: model)
         try await manager.loadModel()
         #expect(manager.currentModelLoadState == .ready)
+    }
+}
+
+@Suite("TranscriptionManager engines")
+struct TranscriptionManagerEngineTests {
+    // planning 0037: the switching logic is written once, and each model loads through its own
+    // engine's loader, picked from its catalogue entry.
+    private static let parakeet = "parakeet-tdt-0.6b-v2-coreml"
+    private static let phonon = "phonon-2-coreml"
+
+    @MainActor
+    @Test("a model loads through its own engine's loader, and transcribes once it takes over")
+    func modelLoadsThroughItsEngine() async throws {
+        let whisper = FakeModelLoader()
+        let fluid = FakeModelLoader()
+        let mgr = TranscriptionManager(modelName: Constants.defaultModel) { $0 == .fluidAudio ? fluid : whisper }
+        try await mgr.loadModel()
+        #expect(whisper.loads == [Constants.defaultModel])
+
+        await mgr.switchModel(to: Self.parakeet)
+        #expect(fluid.loads == [Self.parakeet])
+        #expect(whisper.loads == [Constants.defaultModel])
+        // Until the switch commits, dictation keeps the model in use.
+        #expect(try await mgr.transcribe(audioSamples: [0.1]) == Constants.defaultModel)
+        #expect(mgr.commitModelSwitch())
+        #expect(try await mgr.transcribe(audioSamples: [0.1]) == Self.parakeet)
+    }
+
+    // A saved name River can't load would leave the user with no model at all: one from an
+    // older catalogue has no engine, and Phonon-2 needs macOS 15.
+    @MainActor
+    @Test("a saved model this Mac can't run falls back to the default")
+    func unrunnableSavedModelFallsBack() {
+        #expect(TranscriptionManager.runnableModel("openai_whisper-tiny.en", macOSMajor: 15) == Constants.defaultModel)
+        #expect(TranscriptionManager.runnableModel(Self.phonon, macOSMajor: 14) == Constants.defaultModel)
+        #expect(TranscriptionManager.runnableModel(Self.phonon, macOSMajor: 15) == Self.phonon)
+        #expect(TranscriptionManager.runnableModel(Self.parakeet, macOSMajor: 14) == Self.parakeet)
+        let mgr = TranscriptionManager.withFake(FakeModelLoader(), modelName: "openai_whisper-tiny.en")
+        #expect(mgr.currentModelName == Constants.defaultModel)
+    }
+
+    // planning 0038: the Model section's folder total, Show in Finder and Delete read one
+    // models folder, so every engine must keep its models inside it.
+    @MainActor
+    @Test("every catalogue model's files sit inside the one models folder")
+    func everyModelIsInsideTheModelsFolder() {
+        let base = URL(fileURLWithPath: "/tmp/river-base", isDirectory: true)
+        let models = TranscriptionManager.modelsFolder(downloadBase: base).path + "/"
+        for option in Constants.curatedModels {
+            let loader = option.engine.loader
+            let paths = [loader.folder(of: option.name, downloadBase: base)] + loader.files(of: option.name, downloadBase: base)
+            for path in paths.map(\.path) { #expect(path.hasPrefix(models), "\(option.name): \(path)") }
+        }
+    }
+
+    @MainActor
+    @Test("a FluidAudio model with no files, or one River doesn't list, is not downloaded")
+    func fluidAudioDownloadedCheck() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        let loader = FluidAudioLoader()
+        try fixture.write(loader.folder(of: Self.parakeet, downloadBase: fixture.base).appendingPathComponent("Encoder.mlmodelc/model.mil.partial"), bytes: 1)
+        #expect(!loader.isDownloaded(Self.parakeet, downloadBase: fixture.base))
+        #expect(!loader.isDownloaded("parakeet-tdt-0.6b-v3-coreml", downloadBase: fixture.base))
+    }
+
+    @MainActor
+    @Test("deleting a FluidAudio model removes its folder and leaves the Whisper models")
+    func deleteFluidAudioModel() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        try fixture.writeModel(Constants.defaultModel)
+        let folder = FluidAudioLoader().folder(of: Self.parakeet, downloadBase: fixture.base)
+        try fixture.write(folder.appendingPathComponent("parakeet_vocab.json"), bytes: 1)
+        let mgr = TranscriptionManager(modelName: Constants.defaultModel)
+        try mgr.deleteModel(named: Self.parakeet, downloadBase: fixture.base)
+        #expect(!fixture.exists(folder))
+        #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Constants.defaultModel))
     }
 }

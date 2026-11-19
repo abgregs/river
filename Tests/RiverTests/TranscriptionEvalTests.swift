@@ -43,7 +43,7 @@ struct TranscriptionEvalTests {
 
         var rows: [ScorecardRow] = []
         for clip in corpus.clips {
-            let samples = try TranscriptionManager.loadAudioSamples(fromPath: corpus.wavPath(for: clip))
+            let samples = try WhisperKitLoader.loadAudioSamples(fromPath: corpus.wavPath(for: clip))
             // Mirror the production front-end: the app trims silence before
             // decode (planning 0023), so the eval must too — otherwise silence
             // clips would be judged on un-trimmed audio the app never sees.

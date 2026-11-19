@@ -19,7 +19,7 @@ The same file also holds the indicator's **snapshot harness** (`RiverIndicatorSn
 
 ## Transcription eval harness (0022)
 
-`TranscriptionEvalTests` measures a WhisperKit model against a fixed local corpus of dictation clips and writes a per-model scorecard (WER per clip + aggregate, per-clip latency, model load time, on-disk model size). It is the instrument behind the [0021 model-picker](../planning/0021_model-picker.md) decisions — the curated list and default are chosen from *our* short-dictation workload, not published long-form benchmarks. Two layers:
+`TranscriptionEvalTests` measures a model, of either engine, against a fixed local corpus of dictation clips and writes a per-model scorecard (WER per clip + aggregate, per-clip latency, model load time, on-disk model size). It is the instrument behind the [0021 model-picker](../planning/0021_model-picker.md) decisions — the curated list and default are chosen from *our* short-dictation workload, not published long-form benchmarks. Two layers:
 
 - **`WordErrorRate`** (in `Sources`) is the pure, model-free scorer: the normalization rules (lowercase; drop every non-alphanumeric, non-whitespace character so `"don't"` stays one token; split on whitespace) live there and nowhere else, so scorecards are only ever comparable when scored by the same rules. Fully unit-tested (`WordErrorRateTests`) on synthetic string pairs — it runs in the default suite with no model and no corpus.
 - **The harness test** is **env-gated** (`.enabled(if: RIVER_EVAL_CORPUS)`), exactly the `DictionaryEvalTests` shape. The normal `swift test` and CI never download a model and never touch the corpus.
@@ -53,7 +53,7 @@ RIVER_EVAL_CORPUS="$HOME/river-eval-corpus" swift test --filter TranscriptionEva
 open -e eval-openai_whisper-small.en.txt    # the scorecard, written to the package root
 ```
 
-- `RIVER_EVAL_MODEL` — WhisperKit model name (default: `Constants.defaultModel`, i.e. `small.en`). Run once per candidate model; the fixed corpus makes scorecards directly comparable.
+- `RIVER_EVAL_MODEL` — the catalogue name of the model (default: `Constants.defaultModel`, i.e. `small.en`). Run once per candidate model; the fixed corpus makes scorecards directly comparable.
 - `RIVER_EVAL_OUT` — override the scorecard path (default: `./eval-<model>.txt`).
 
 ## Offline model load (0004)

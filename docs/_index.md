@@ -1,6 +1,6 @@
 # River Docs
 
-A macOS menu bar dictation app. Hold (or tap) a configurable activation key → capture mic audio → transcribe locally with WhisperKit → type at cursor. Apple Silicon, macOS 14+.
+A macOS menu bar dictation app. Hold (or tap) a configurable activation key → capture mic audio → transcribe locally with WhisperKit or FluidAudio → type at cursor. Apple Silicon, macOS 14+.
 
 These docs are the source of truth for how River is built and maintained. The working convention: before a non-trivial change, surface the applicable conventions from these docs. Contributing requires no particular agent, harness, or tooling. Doc updates alongside a change are welcome, not a requirement — doc/code drift is caught by the maintainer's automated doc sync ([conventions/doc-maintenance.md](conventions/doc-maintenance.md)).
 

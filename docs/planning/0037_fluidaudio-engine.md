@@ -1,6 +1,6 @@
 # Planning: A Second Speech Engine (FluidAudio)
 
-**Status: planned for `v0.3.0` as PR 7a, `feat/fluidaudio-engine`, not started.** Agreed with the maintainer on 2026-11-10, after a spike the same day. It adds the two new models in [0036](0036_settings-and-shortcuts.md)'s Model section, NVIDIA Parakeet TDT v2 and Fermion Research's Phonon-2, which WhisperKit cannot run. It is built alongside PRs 8 to 10 and lands before PR 11 (the preparing look) and PR 12 (the onboarding model step) ([current-focus.md](current-focus.md)).
+**Status: built for `v0.3.0` as PR 7a, `feat/fluidaudio-engine` (2026-11-19), awaiting the maintainer's smoke test.** Agreed with the maintainer on 2026-11-10, after a spike the same day. It adds the two new models in [0036](0036_settings-and-shortcuts.md)'s Model section, NVIDIA Parakeet TDT v2 and Fermion Research's Phonon-2, which WhisperKit cannot run. It is built alongside PRs 8 to 10 and lands before PR 11 (the preparing look) and PR 12 (the onboarding model step) ([current-focus.md](current-focus.md)).
 
 ## What the spike showed
 
@@ -23,11 +23,20 @@ Not yet measured: accuracy on the maintainer's own voice (the spike used synthes
 - **The same load states.** Downloading, then Preparing, then Ready, as for Whisper. The 19 s first preparation shows as Preparing.
 - **Phonon-2 needs macOS 15.** On macOS 14 its row says so and cannot be selected. River still supports macOS 14.
 - **The custom dictionary is Whisper's.** Prompt biasing and the retry without the prompt (`resolveWithEmptyPromptRetry`) are Whisper features. The FluidAudio path takes no dictionary terms; nothing in `v0.3.0` lets the user set any ([0036](0036_settings-and-shortcuts.md), "Not in `v0.3.0`").
-- **Where models live: open.** By default FluidAudio keeps its models in its own folder under Application Support, which raises no permission prompt (the concern in [0010](0010_relocate-model-cache.md)). [0038](0038_model-storage.md) shows River's models folder and deletes models from it, so this PR either points FluidAudio's downloads into `River/models` or makes 0038's folder line and Delete cover both folders. Check whether FluidAudio's download location can be set before choosing. The downloaded check is per engine either way.
+- **Where models live: River's one models folder.** FluidAudio's download folder can be set (`AsrModels.download(to:)`), so its models go in `~/Library/Application Support/River/models/FluidInference/<repo folder>`, beside the Whisper models, and [0038](0038_model-storage.md)'s folder total, Show in Finder and Delete cover them with no change. Like FluidAudio's own default, the folder is under Application Support, so it raises no permission prompt ([0010](0010_relocate-model-cache.md)). The downloaded check is per engine: FluidAudio's own load-ready check (`AsrModels.modelsExist`), which a cut-off download's `.partial` files fail.
+
+## Built (2026-11-19)
+
+- **The seam.** `ModelLoader` (`isDownloaded`, `folder(of:)`, `files(of:)`, `load`) has two adapters in `Managers/`: `WhisperKitLoader`, which took over WhisperKit's folder, file-set check, tokenizer check and load from `TranscriptionManager`, and `FluidAudioLoader`. `load` returns a `LoadedModel` that transcribes; Whisper's prompt, retry and annotation check moved with it into `WhisperKitModel`. `TranscriptionManager` no longer imports WhisperKit. Tests pass `FakeModelLoader`.
+- **Names.** A FluidAudio model's catalogue name is its FluidAudio 0.18.3 repo folder (`parakeet-tdt-0.6b-v2-coreml`, `phonon-2-coreml`), which `FluidAudioLoader` maps to FluidAudio's version: FluidAudio keeps the folder names internal, so a version bump must check them.
+- **No words is no speech.** Parakeet and Phonon write nothing for audio with no words, where Whisper writes "[BLANK_AUDIO]"; both read as `.noSpeechDetected`, the session's quiet no-op ([0023](0023_silence-decoding-hardening.md)).
+- **Short clips.** FluidAudio refuses audio under 0.3 s. River's padding of clips under 1.2 s with 0.5 s of silence on each side now runs for every engine, which lifts any clip past that.
+- **A saved model this Mac can't run** (a name an older catalogue listed, or Phonon-2 on macOS 14) loads the default instead, which the session then saves once ready; `switchModel` ignores such a choice.
+- **Downloading includes a first compile.** FluidAudio's download compiles each model once to check it, so part of a new model's first preparation shows as Downloading. How long each phase then reads is unmeasured; the smoke test watches it, and PR 11's preparing look depends on it.
 
 ## Licences
 
-- **Credits.** PR 7's About window and notices file ([0036](0036_settings-and-shortcuts.md), "The panel ends with the version line") gain FluidAudio (Apache-2.0) and the text-processing library it links into River, `text-processing-rs` (Apache-2.0), with the Apache and MIT libraries built into it, as listed in FluidAudio's `ThirdPartyLicenses`.
+- **Credits.** PR 7's About window and notices file ([0036](0036_settings-and-shortcuts.md), "The panel ends with the version line") gain FluidAudio (Apache-2.0) and the text-processing library it links into River, `text-processing-rs` (Apache-2.0), with the Apache and MIT libraries built into it, as listed in FluidAudio's `ThirdPartyLicenses`. The build adds one more: FluidAudio compiles fastcluster (BSD 2-Clause) into River, so its notice ships too.
 - **The models are CC-BY-4.0.** The credit names the creator (NVIDIA; Fermion Research), links the licence, and says the model was converted to Core ML.
 - **No text-to-speech data ships.** FluidAudio carries pronunciation data for its text-to-speech, derived from GPL-3.0-or-later and CC-BY-SA-4.0 sources, and its notes say apps that don't use text-to-speech can leave it out. River's `make bundle` copies only the files it names, so the data stays out; `make verify` fails if it is ever in the bundle. FluidAudio's Swift 6.2 manifest can drop the text-processing library too, but the Command Line Tools' Swift 6.1 reads the other manifest, which always links it.
 

@@ -2,12 +2,14 @@ import Foundation
 
 /// What River credits in the About window and its notices file (planning 0036, The panel ends
 /// with the version line): the models first, then the open-source software built into the app.
-/// **Why:** River ships MIT and Apache-2.0 packages and MIT-licensed Whisper models, and both
-/// licences require their notice to travel with every copy. The full texts are in
-/// `noticesFileName`, which `make verify` requires in the bundle.
+/// **Why:** River ships MIT, Apache-2.0 and BSD packages, MIT-licensed Whisper models and
+/// CC BY 4.0 models (planning 0037), and each licence requires its notice or attribution to
+/// travel with every copy. The full texts are in `noticesFileName`, which `make verify`
+/// requires in the bundle.
 enum Credits {
     struct Software: Equatable {
-        /// The package's identity in `Package.resolved`.
+        /// The package's identity in `Package.resolved`, or for code a package links in from
+        /// elsewhere, the project's own name.
         let identity: String
         let name: String
         let holder: String
@@ -25,6 +27,10 @@ enum Credits {
         Software(identity: "swift-crypto", name: "Swift Crypto", holder: "Apple Inc.", licence: "Apache-2.0"),
         Software(identity: "yyjson", name: "yyjson", holder: "YaoYuan", licence: "MIT"),
         Software(identity: "sparkle", name: "Sparkle", holder: "the Sparkle Project", licence: "MIT"),
+        Software(identity: "fluidaudio", name: "FluidAudio", holder: "FluidInference", licence: "Apache-2.0"),
+        // Linked into River by FluidAudio, which builds them from source or ships them prebuilt.
+        Software(identity: "text-processing-rs", name: "text-processing-rs", holder: "FluidInference", licence: "Apache-2.0"),
+        Software(identity: "fastcluster", name: "fastcluster", holder: "Daniel Müllner and Google Inc.", licence: "BSD-2-Clause"),
     ]
 
     /// Resolved packages that build tools use but River never links, so it ships no copy.
@@ -34,6 +40,7 @@ enum Credits {
     static func coreMLConverter(for engine: SpeechEngine) -> String {
         switch engine {
         case .whisperKit: "Argmax"
+        case .fluidAudio: "FluidInference"
         }
     }
 
@@ -50,7 +57,8 @@ enum Credits {
         }
         let modelLines = families.map { family in
             let first = family.models[0]
-            return "\(family.key): \(family.models.map(\.label).joined(separator: ", ")). \(first.licence.name) licence. "
+            let link = first.licence.link.map { " (\($0))" } ?? ""
+            return "\(family.key): \(family.models.map(\.label).joined(separator: ", ")). \(first.licence.name) licence\(link). "
                 + "Converted to Core ML by \(coreMLConverter(for: first.engine))."
         }
         let softwareLines = software.map { "\($0.name), \($0.holder). \($0.licence) licence." }

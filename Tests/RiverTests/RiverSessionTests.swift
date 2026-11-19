@@ -493,9 +493,9 @@ struct RiverSessionTests {
 
         await env.transcription.switchModel(to: "openai_whisper-base.en")
         #expect(env.transcription.currentModelSwitch?.phase == .ready)
-        env.transcription.stageFailsForTesting = true
+        env.loader.failing = ["distil-whisper_distil-large-v3"]
         env.session.selectModel("distil-whisper_distil-large-v3")
-        await waitUntil { env.transcription.currentModelSwitch?.target == "distil-whisper_distil-large-v3" }
+        await waitUntil { env.transcription.currentModelSwitch == ModelSwitch(target: "distil-whisper_distil-large-v3", phase: .failed) }
 
         env.microphone.publishForTest(makeBuffer())
         await env.session.handleDeactivate()
@@ -512,7 +512,7 @@ struct RiverSessionTests {
     func failedChoiceIsNotSaved() async throws {
         let env = makeSession()
         try await env.session.start()
-        env.transcription.stageFailsForTesting = true
+        env.loader.failing = ["openai_whisper-base.en"]
         env.session.selectModel("openai_whisper-base.en")
         await waitUntil { env.transcription.currentModelSwitch?.phase == .failed }
         #expect(env.transcription.currentModelSwitch?.phase == .failed)
@@ -900,6 +900,7 @@ struct RiverSessionTests {
         let inputMonitoring: InputMonitoringCapability
         let microphone: MicrophoneCapability
         let transcription: TranscriptionManager
+        let loader: FakeModelLoader
         let accessibility: AccessibilityCapability
         let audio: AudioCaptureManager
         let system: SystemAvailabilityMonitor
@@ -930,13 +931,12 @@ struct RiverSessionTests {
             inputMonitoring: inputMonitoring, hotKeys: hotKeys, initialShortcut: .modifier(keyCode: 62)
         )
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
-        let transcription = TranscriptionManager()
-        // Unit tests never load the real model, so mark the model as ready to
-        // exercise the normal recording path without triggering the model gate, and
-        // skip the async reload so a model switch (planning 0021) exercises the
-        // session's apply-or-defer routing without a real WhisperKit download.
+        let loader = FakeModelLoader()
+        let transcription = TranscriptionManager.withFake(loader)
+        // Unit tests never load a real model, so mark the model as ready to exercise the
+        // normal recording path without triggering the model gate. A model switch (planning
+        // 0021) loads through the fake, so the session's routing runs without a download.
         transcription.setModelLoadStateForTesting(.ready)
-        transcription.skipLoadForTesting = true
         // The clock is frozen: these tests are about the cycle, and with suites running
         // in parallel a recording here has measured 1.6 s of wall time for 0.1 s of fake
         // audio, which the capture-gap check would report as lost audio. The gap check and
@@ -961,6 +961,7 @@ struct RiverSessionTests {
             inputMonitoring: inputMonitoring,
             microphone: microphone,
             transcription: transcription,
+            loader: loader,
             accessibility: accessibility,
             audio: audio,
             system: system

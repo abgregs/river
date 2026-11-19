@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Project: **River** — a macOS menu bar dictation app. macOS 14+, Apple Silicon, on-device transcription via WhisperKit.
+Project: **River** — a macOS menu bar dictation app. macOS 14+, Apple Silicon, on-device transcription via WhisperKit and FluidAudio.
 
 ## Working in this repo
 

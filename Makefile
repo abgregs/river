@@ -34,6 +34,9 @@ GLASS_METALLIB := $(BUILD_DIR)/KawaGlass.metallib
 # The licence notices for the models and packages River ships (planning 0036): MIT and
 # Apache-2.0 both require their notice to travel with every copy.
 NOTICES := Sources/River/Resources/ThirdPartyNotices.txt
+# FluidAudio builds a resource bundle of text-to-speech pronunciation data, derived from
+# GPL-3.0-or-later and CC-BY-SA-4.0 sources (planning 0037). River has no text-to-speech and
+# `bundle` copies only the files it names, so the data stays out; `verify` fails if it gets in.
 # Hardened runtime enforces library validation: embedded non-Apple code must be
 # signed with the app's own Team ID. The self-signed dev identity has no Team ID,
 # so macOS refuses to load the embedded Sparkle.framework and the app dies at
@@ -139,6 +142,9 @@ verify: sign
 	@test -s $(APP_BUNDLE)/Contents/Resources/ThirdPartyNotices.txt || \
 		(echo "FAIL: ThirdPartyNotices.txt missing from the bundle"; exit 1)
 	@echo "OK: licence notices present"
+	@test -z "$$(find $(APP_BUNDLE) -iname '*luxtts*')" || \
+		(echo "FAIL: FluidAudio's text-to-speech data is in the bundle; River must not ship it"; exit 1)
+	@echo "OK: no text-to-speech data"
 	@test "$$(nm -U $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME) | wc -l)" -le 1 || \
 		(echo "FAIL: the app binary still carries its symbol table"; exit 1)
 	@echo "OK: app binary stripped"

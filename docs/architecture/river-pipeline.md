@@ -10,7 +10,7 @@ One full cycle from keypress to pasted text. `RiverState` is the lock; [`RiverSe
 
 - **.idle** — accepting new activations.
 - **.recording** — the capture unit is delivering `AVAudioPCMBuffer`s into the recording; new activations are ignored.
-- **.processing** — the recording has ended (the unit keeps running when the microphone is ready, see below), WhisperKit running, paste pending; new activations are ignored.
+- **.processing** — the recording has ended (the unit keeps running when the microphone is ready, see below), the model transcribing, paste pending; new activations are ignored.
 
 Re-entrancy is safe: every transition is guarded by `guard state == expected` before mutating. Stale callbacks log and return.
 

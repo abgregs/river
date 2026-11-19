@@ -245,12 +245,12 @@ struct ModelSectionView: View {
     @ViewBuilder
     private func rowMenu(_ model: ModelOption, status: ModelCatalogue.RowStatus) -> some View {
         Button("Show in Finder") {
-            NSWorkspace.shared.activateFileViewerSelecting([TranscriptionManager.modelFolder(downloadBase: downloadBase, modelName: model.name)])
+            NSWorkspace.shared.activateFileViewerSelecting([model.engine.loader.folder(of: model.name, downloadBase: downloadBase)])
         }
         if ModelCatalogue.offersDelete(status) {
             Divider()
             Button("Delete…") {
-                pendingDelete = PendingDelete(model: model, freed: TranscriptionManager.diskUsage(downloadBase: downloadBase, modelName: model.name))
+                pendingDelete = PendingDelete(model: model, freed: TranscriptionManager.diskUsage(of: model.engine.loader.files(of: model.name, downloadBase: downloadBase)))
             }
         }
     }
@@ -289,7 +289,7 @@ struct ModelSectionView: View {
     // Which models are downloaded, and the models folder's size: on showing, on every change
     // to the selection (a download or load moving on), and after a delete.
     private func refreshDownloaded() {
-        downloaded = Set(models.map(\.name).filter { TranscriptionManager.isModelCached(downloadBase: downloadBase, modelName: $0) })
+        downloaded = Set(models.filter { $0.engine.loader.isDownloaded($0.name, downloadBase: downloadBase) }.map(\.name))
         modelsSize = TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: downloadBase))
     }
 }
