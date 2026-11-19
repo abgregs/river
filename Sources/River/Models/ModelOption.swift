@@ -23,6 +23,9 @@ struct ModelOption: Identifiable, Equatable {
     /// makes the row say so and refuse selection on older Macs.
     let minimumMacOS: Int
     let licence: ModelLicence
+    /// The model this one was derived from, which its licence asks the credit to name too
+    /// (Phonon-2 is a retraining of NVIDIA's Parakeet TDT 0.6B v3).
+    var basedOn: String? = nil
     var id: String { name }
 }
 

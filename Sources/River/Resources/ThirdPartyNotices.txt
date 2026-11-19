@@ -13,10 +13,10 @@ MODELS
   https://huggingface.co/argmaxinc/whisperkit-coreml
 - NVIDIA Parakeet (Parakeet TDT v2), CC BY 4.0 licence.
   https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
-- Fermion Research Phonon (Phonon-2), CC BY 4.0 licence.
-  https://huggingface.co/FermionResearch/Phonon-2
-- Core ML conversions of Parakeet TDT v2 and Phonon-2 published by FluidInference,
-  CC BY 4.0 licence. https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml
+- Fermion Research Phonon (Phonon-2), based on NVIDIA Parakeet TDT 0.6B v3,
+  CC BY 4.0 licence. https://huggingface.co/FermionResearch/Phonon-2
+- Core ML conversions of Parakeet TDT v2 and Phonon-2 by FluidInference, CC BY 4.0 licence.
+  https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml
   and https://huggingface.co/FluidInference/phonon-2-coreml
 
 SOFTWARE
@@ -118,14 +118,32 @@ SOFTWARE.
 NVIDIA Parakeet and Fermion Research Phonon, and their Core ML conversions
 ===============================================================================
 
-Parakeet TDT v2 is by NVIDIA, and Phonon-2 is by Fermion Research. Each is licensed
-under the Creative Commons Attribution 4.0 International licence (CC BY 4.0):
-https://creativecommons.org/licenses/by/4.0/
+Each model below is licensed under the Creative Commons Attribution 4.0 International
+licence (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
 
-Changes: the models were converted to Core ML and are published by FluidInference at
-https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml and
-https://huggingface.co/FluidInference/phonon-2-coreml. River downloads these Core ML
-models unchanged the first time you choose one.
+Parakeet TDT v2
+  (c) NVIDIA Corporation. https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+  Changes: converted to Core ML by FluidInference,
+  https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml
+
+Phonon-2
+  Copyright 2026 Fermion Research. https://huggingface.co/FermionResearch/Phonon-2
+  Derived from NVIDIA Parakeet TDT 0.6B v3, (c) NVIDIA Corporation, CC BY 4.0.
+  https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  Changes by Fermion Research, from its NOTICE: the encoder's linear weights were
+  re-trained and quantised to a five-value alphabet; the remaining parameters were
+  quantised to 6-bit integer tables. The FastConformer encoder architecture, the TDT
+  decoder, the tokenizer and the feature-extractor configuration derive from NVIDIA's
+  model and remain under CC BY 4.0.
+  Training data, from Fermion Research's NOTICE: CHiME-6, under the Creative Commons
+  Attribution-ShareAlike 4.0 International licence
+  (https://chimechallenge.github.io/chime6/, https://creativecommons.org/licenses/by-sa/4.0/),
+  and SPGISpeech, under Kensho's public terms
+  (https://datasets.kensho.com/datasets/spgispeech).
+  Further changes: converted to Core ML by FluidInference,
+  https://huggingface.co/FluidInference/phonon-2-coreml
+
+River downloads these Core ML models unchanged the first time you choose one.
 
 The licensors offer the models as-is and as-available, and make no representations or
 warranties of any kind concerning them, as set out in section 5 of the licence.

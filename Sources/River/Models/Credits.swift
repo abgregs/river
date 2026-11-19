@@ -58,7 +58,8 @@ enum Credits {
         let modelLines = families.map { family in
             let first = family.models[0]
             let link = first.licence.link.map { " (\($0))" } ?? ""
-            return "\(family.key): \(family.models.map(\.label).joined(separator: ", ")). \(first.licence.name) licence\(link). "
+            let basedOn = first.basedOn.map { ", based on \($0)" } ?? ""
+            return "\(family.key): \(family.models.map(\.label).joined(separator: ", "))\(basedOn). \(first.licence.name) licence\(link). "
                 + "Converted to Core ML by \(coreMLConverter(for: first.engine))."
         }
         let softwareLines = software.map { "\($0.name), \($0.holder). \($0.licence) licence." }

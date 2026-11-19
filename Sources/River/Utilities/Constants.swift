@@ -105,7 +105,8 @@ enum Constants {
         ModelOption(
             name: "phonon-2-coreml", label: "Phonon-2", provider: "Fermion Research", family: "Phonon",
             summary: "A compact retraining of Parakeet for English, with punctuation.",
-            downloadMegabytes: 378, engine: .fluidAudio, minimumMacOS: 15, licence: .ccBy4
+            downloadMegabytes: 378, engine: .fluidAudio, minimumMacOS: 15, licence: .ccBy4,
+            basedOn: "NVIDIA Parakeet TDT 0.6B v3"
         ),
     ]
 
