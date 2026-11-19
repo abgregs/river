@@ -461,7 +461,7 @@ final class TranscriptionManager {
     func transcribe(audioSamples: [Float]) async throws -> String {
         if let result = transcribeResultForTesting { return result }
         guard let model else { throw TranscriptionError.modelNotLoaded }
-        logger.info("Transcribing \(audioSamples.count, privacy: .public) samples")
+        logger.info("Transcribing \(audioSamples.count, privacy: .public) samples with \(self.modelName, privacy: .public)")
         let text = try await model.transcribe(Self.paddedForDecoding(audioSamples), dictionaryTerms: customDictionaryTerms)
         logger.info("Transcribed \(text.count, privacy: .public) chars")
         return text

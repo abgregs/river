@@ -253,7 +253,7 @@ final class RiverSession {
             if let stream, stream.cutCount > 0 {
                 // Streaming: the segments are already decoded; only the tail is left.
                 let outcome = await stream.finish()
-                logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s")
+                logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
                 if let error = outcome.error {
                     errorSubject.send(.transcription(underlying: error))
                 }
@@ -284,7 +284,7 @@ final class RiverSession {
                 }
                 do {
                     let text = try await transcription.transcribe(audioSamples: samples)
-                    logger.info("Transcribed \(text.count, privacy: .public) chars")
+                    logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
                     await deliver(text)
                 } catch TranscriptionError.noSpeechDetected {
                     // Decode heard only non-speech (breath, room tone, music the
