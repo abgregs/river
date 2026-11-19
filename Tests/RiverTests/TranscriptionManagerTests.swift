@@ -812,17 +812,46 @@ struct TranscriptionManagerEngineTests {
         #expect(!loader.isDownloaded("parakeet-tdt-0.6b-v3-coreml", downloadBase: fixture.base))
     }
 
+    // The files FluidAudio 0.18.3 writes for each model, as on the maintainer's Mac
+    // (2026-11-19): a compiled model is a folder holding `coremldata.bin`.
+    private static let fluidAudioFiles = [
+        parakeet: ["Preprocessor", "Encoder", "Decoder", "JointDecision"].map { "\($0).mlmodelc/coremldata.bin" }
+            + ["parakeet_vocab.json", "config.json"],
+        phonon: ["Preprocessor", "Encoder", "Decoder", "JointDecisionv3"].map { "\($0).mlmodelc/coremldata.bin" }
+            + ["parakeet_vocab.json", "parakeet_v3_vocab.json", "config.json"],
+    ]
+
     @MainActor
-    @Test("deleting a FluidAudio model removes its folder and leaves the Whisper models")
+    private func writeFluidAudioModel(_ name: String, in fixture: ModelFixture) throws -> URL {
+        let folder = FluidAudioLoader().folder(of: name, downloadBase: fixture.base)
+        for file in Self.fluidAudioFiles[name] ?? [] { try fixture.write(folder.appendingPathComponent(file), bytes: 1) }
+        return folder
+    }
+
+    // PR 7a smoke test (2026-11-19): FluidAudio names its folder `phonon-2`, not after the
+    // repo's `-coreml` name, so a guessed folder left Show in Finder and Delete pointing at
+    // nothing. FluidAudio's own check reading the files where River says they are ties the two.
+    @MainActor
+    @Test("FluidAudio finds a model in the folder River shows and deletes", arguments: [parakeet, phonon])
+    func fluidAudioFolderIsWhereFluidAudioLooks(model: String) throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        let folder = try writeFluidAudioModel(model, in: fixture)
+        #expect(FluidAudioLoader().isDownloaded(model, downloadBase: fixture.base))
+        #expect(!folder.lastPathComponent.hasSuffix("-coreml"))
+    }
+
+    @MainActor
+    @Test("deleting a FluidAudio model removes its folder, so it reads as not downloaded, and leaves the Whisper models")
     func deleteFluidAudioModel() throws {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Constants.defaultModel)
-        let folder = FluidAudioLoader().folder(of: Self.parakeet, downloadBase: fixture.base)
-        try fixture.write(folder.appendingPathComponent("parakeet_vocab.json"), bytes: 1)
+        let folder = try writeFluidAudioModel(Self.parakeet, in: fixture)
         let mgr = TranscriptionManager(modelName: Constants.defaultModel)
         try mgr.deleteModel(named: Self.parakeet, downloadBase: fixture.base)
         #expect(!fixture.exists(folder))
+        #expect(!FluidAudioLoader().isDownloaded(Self.parakeet, downloadBase: fixture.base))
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Constants.defaultModel))
     }
 }

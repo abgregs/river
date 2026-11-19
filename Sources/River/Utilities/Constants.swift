@@ -70,7 +70,7 @@ enum Constants {
     // The Model section's catalogue (planning 0036), in no particular order: the table groups
     // and sorts it. Whisper names are the exact `argmaxinc/whisperkit-coreml` repo folders
     // WhisperKit downloads (verified against WhisperKit 0.18's model tables); Parakeet and
-    // Phonon names are the FluidAudio 0.18.3 repo folders `FluidAudioLoader` maps (planning
+    // Phonon names are the FluidAudio 0.18.3 repo names `FluidAudioLoader` maps (planning
     // 0037). Sizes are the Hugging Face file sizes of what each engine downloads, Whisper Base
     // measured from River's cache (2026-11-09). Descriptions are the settings panel study's
     // (round 13). Still provisional: each entry must earn its place via a 0022 scorecard.

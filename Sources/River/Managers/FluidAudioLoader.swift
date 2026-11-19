@@ -2,32 +2,35 @@ import FluidAudio
 import Foundation
 
 /// The Parakeet and Phonon models' loader: the only file that imports FluidAudio (planning
-/// 0037). A model's name is its FluidAudio repo folder, kept in River's one models folder
-/// (planning 0038) as `models/FluidInference/<name>`, so the Model section's folder total,
-/// Show in Finder and Delete cover it like a Whisper model.
+/// 0037). A model's name is its FluidAudio repo, kept in River's one models folder (planning
+/// 0038) under `models/FluidInference`, so the Model section's folder total, Show in Finder
+/// and Delete cover it like a Whisper model.
 struct FluidAudioLoader: ModelLoader {
-    // FluidAudio 0.18.3's repo folder for each version River lists. `AsrModelVersion.repo`
-    // is internal to FluidAudio, so the names are River's to keep in step.
-    private static let versions: [String: AsrModelVersion] = [
-        "parakeet-tdt-0.6b-v2-coreml": .v2,
-        "phonon-2-coreml": .phonon2,
+    // The FluidAudio 0.18.3 version and repo for each model River lists. `AsrModelVersion.repo`
+    // is internal to FluidAudio, so River pairs them itself.
+    private static let models: [String: (version: AsrModelVersion, repo: Repo)] = [
+        "parakeet-tdt-0.6b-v2-coreml": (.v2, .parakeetV2),
+        "phonon-2-coreml": (.phonon2, .phonon2),
     ]
 
+    /// Where FluidAudio writes the model: its repo's `folderName`, which drops the repo name's
+    /// "-coreml" (`phonon-2`), under the folder River hands it.
     func folder(of model: String, downloadBase: URL) -> URL {
-        downloadBase.appendingPathComponent("models/FluidInference/\(model)", isDirectory: true)
+        let folderName = Self.models[model]?.repo.folderName ?? model
+        return downloadBase.appendingPathComponent("models/FluidInference/\(folderName)", isDirectory: true)
     }
 
     /// FluidAudio's own load-ready check: every compiled model complete and the vocabulary
     /// present. A cut-off download leaves `.partial` files inside the folder, which fail it.
     func isDownloaded(_ model: String, downloadBase: URL) -> Bool {
-        guard let version = Self.versions[model] else { return false }
+        guard let version = Self.models[model]?.version else { return false }
         return AsrModels.modelsExist(at: folder(of: model, downloadBase: downloadBase), version: version)
     }
 
     func load(
         _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
     ) async throws -> any LoadedModel {
-        guard let version = Self.versions[model] else { throw FluidAudioLoaderError.unknownModel }
+        guard let version = Self.models[model]?.version else { throw FluidAudioLoaderError.unknownModel }
         // FluidAudio puts a repo in the parent of the folder it is given, under the repo's own
         // folder name, which is this folder.
         let folder = folder(of: model, downloadBase: downloadBase)

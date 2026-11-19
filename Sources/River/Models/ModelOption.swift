@@ -6,8 +6,8 @@ import Foundation
 struct ModelOption: Identifiable, Equatable {
     /// The engine's own name for the model, stored in `Settings.selectedModel`. For WhisperKit,
     /// the `argmaxinc/whisperkit-coreml` repo folder, e.g. `openai_whisper-small.en`, passed
-    /// verbatim to `WhisperKit(model:)`; for FluidAudio, its repo folder, e.g.
-    /// `parakeet-tdt-0.6b-v2-coreml`. Either way it names the model's folder on disk.
+    /// verbatim to `WhisperKit(model:)` and naming its folder on disk; for FluidAudio, its repo
+    /// name, e.g. `parakeet-tdt-0.6b-v2-coreml`, whose folder `FluidAudioLoader` finds.
     let name: String
     let label: String
     /// Who made the model, and the family it belongs to: the table groups rows by provider and
