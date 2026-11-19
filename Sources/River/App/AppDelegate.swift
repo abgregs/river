@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .dictate: settings.setValue(shortcut, for: Settings.dictationShortcut)
         case .pasteLast: settings.setValue(shortcut, for: Settings.pasteLastShortcut)
         case .copyLast: settings.setValue(shortcut, for: Settings.copyLastShortcut)
+        case .toggleLiveText: settings.setValue(shortcut, for: Settings.liveTextShortcut)
         case .cancelRecording: break
         }
     }

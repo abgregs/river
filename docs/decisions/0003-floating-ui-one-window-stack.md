@@ -37,7 +37,7 @@ The window is sized for the tallest stack (`RiverIndicatorView.contentSize` plus
 
 - The window spans the whole stack (about 536 × 476 pt), far more than the 48 pt mark. Outside the transcript's lifetime it ignores the mouse, so it never blocks clicks. While the transcript shows, it relies on AppKit passing clicks on transparent pixels through to the app behind. The maintainer's on-device smoke test of this branch on 2026-10-12, which included clicking into the app above the Dock while dictating, found no problem.
 - Every floating surface now shares one view and one coordinator, so a fault in either affects all of them.
-- `TranscriptPanelView` is a plain view of the text. Its visibility rule (`isVisible(state:text:)`) stays on it, and both the stack and the coordinator's mouse decision read it.
+- `TranscriptPanelView` is a plain view of the text. Its visibility rule (`isVisible(state:isShown:)` since planning 0034, which shows it for the whole dictation once the live text is on; `isVisible(state:text:)` before) stays on it, and both the stack and the coordinator's mouse decision read it.
 - `AppState.apply(liveTranscript:)` lets tests show the transcript without a live session.
 
 ## Revisit if

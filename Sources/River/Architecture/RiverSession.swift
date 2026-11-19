@@ -90,6 +90,8 @@ final class RiverSession {
     var hasLastTranscript: Bool { lastTranscript != nil }
     // The streaming transcript of the current recording, for the transcript panel.
     var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
+    // Whether the live text shows above the indicator (planning 0034, decision 2).
+    var isLiveTextShown: AnyPublisher<Bool, Never> { settings.publisher(for: Settings.showLiveText) }
     // What macOS said to each combination River holds, for Settings' "Not working" lines.
     var shortcutRegistrations: AnyPublisher<[RiverShortcut: HotKeyRegistration], Never> { hotkey.registrations }
 
@@ -164,6 +166,7 @@ final class RiverSession {
         hotkey.onDiscard = { [weak self] in self?.handleDiscard() }
         hotkey.onPasteLast = { [weak self] in self?.pasteLastTranscript() }
         hotkey.onCopyLast = { [weak self] in self?.copyLastTranscript() }
+        hotkey.onToggleLiveText = { [weak self] in self?.toggleLiveText() }
         hotkey.isRecording = { [weak self] in self?.currentState == .recording }
         // Esc cancels only while a recording runs; between recordings it belongs to the app
         // in front (spec 0036).
@@ -225,6 +228,7 @@ final class RiverSession {
         let transcription = self.transcription
         let stream = DictationStream { samples in try await transcription.transcribe(audioSamples: samples) }
         stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
+        stream.showsPreview = settings.value(for: Settings.showLiveText)
         return stream
     }
 
@@ -438,6 +442,14 @@ final class RiverSession {
         settings.publisher(for: Settings.copyLastShortcut)
             .sink { [weak self] value in self?.hotkey.setShortcut(value, for: .copyLast) }
             .store(in: &cancellables)
+        settings.publisher(for: Settings.liveTextShortcut)
+            .sink { [weak self] value in self?.hotkey.setShortcut(value, for: .toggleLiveText) }
+            .store(in: &cancellables)
+        // Hidden, a recording runs no preview decodes; shown again, it runs them on their own
+        // schedule (planning 0034, decision 3).
+        settings.publisher(for: Settings.showLiveText)
+            .sink { [weak self] shown in self?.stream?.showsPreview = shown }
+            .store(in: &cancellables)
         settings.publisher(for: Settings.activationMode)
             .sink { [weak self] newMode in
                 self?.reconfigureHotkey(notice: ActivationNotice.modeChanged(to: newMode)) { [weak self] in
@@ -482,6 +494,18 @@ final class RiverSession {
     /// (`HotkeyManager.availability(of:for:)`).
     func availability(of shortcut: Shortcut, for row: RiverShortcut) -> ShortcutAvailability {
         hotkey.availability(of: shortcut, for: row)
+    }
+
+    /// Toggle live text's shortcut (planning 0034): shows or hides the live text, during a
+    /// recording or between recordings, and the choice is kept for the next one.
+    func toggleLiveText() {
+        let shown = !settings.value(for: Settings.showLiveText)
+        logger.info("Live text \(shown ? "shown" : "hidden", privacy: .public)")
+        if shown, !settings.value(for: Settings.streamingDictation) {
+            // The hidden fallback decodes at release only, so there is no text to show.
+            logger.notice("Live text has nothing to show: streamingDictation is off (defaults delete com.river.app streamingDictation)")
+        }
+        settings.setValue(shown, for: Settings.showLiveText)
     }
 
     /// Paste last transcription's shortcut (spec 0036): types the last transcription again at

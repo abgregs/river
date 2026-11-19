@@ -64,7 +64,14 @@ struct RiverIndicatorView: View {
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.toast)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.modelLoadState)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.notice)
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: isTranscriptShown)
+        // The transcript comes and goes with the cycle, as the other surfaces do; its shortcut
+        // shows it quicker and hides it quicker still (planning 0034).
+        .animation(liveTextToggle, value: appState.isLiveTextShown)
+    }
+
+    private var liveTextToggle: Animation {
+        .timingCurve(0.23, 1, 0.32, 1, duration: appState.isLiveTextShown
+                     ? Constants.liveTextShowSeconds : Constants.liveTextHideSeconds)
     }
 
     // Enter and exit: opacity with a 6 pt rise, ease-out both ways; a plain fade under Reduce Motion.
@@ -73,7 +80,7 @@ struct RiverIndicatorView: View {
     }
 
     private var isTranscriptShown: Bool {
-        TranscriptPanelView.isVisible(state: appState.state, text: appState.liveTranscript)
+        TranscriptPanelView.isVisible(state: appState.state, isShown: appState.isLiveTextShown)
     }
 
     // Loading only matters while idle: the model is ready before recording is permitted.

@@ -60,6 +60,12 @@ final class DictationStream {
     /// Called whenever the shown text changes: the transcript, then any provisional text.
     var onTextChange: ((String) -> Void)?
 
+    /// Whether the phrase still being spoken is decoded for the panel (planning 0034, decision
+    /// 3). Off while the live text is hidden: no new provisional decode starts, one already
+    /// running is dropped, and the last provisional text stays. Turning it on starts nothing
+    /// by itself; the next one runs when due.
+    var showsPreview = true
+
     var text: String { joiner.text }
     var shownText: String { [joiner.text, provisional].filter { !$0.isEmpty }.joined(separator: " ") }
 
@@ -162,17 +168,18 @@ final class DictationStream {
     }
 
     private func provisionalRangeIfDue() -> Range<Int>? {
-        guard let interval = provisionalIntervalSamples, !isFinishing, failedFrom == nil,
+        guard showsPreview, let interval = provisionalIntervalSamples, !isFinishing, failedFrom == nil,
               samples.count - provisionalFrom >= interval else { return nil }
         let open = segmenter.segmentStart..<samples.count
         guard segmenter.voicedSeconds(in: open) >= provisionalMinVoicedSeconds else { return nil }
         return open
     }
 
-    // Display only: a failure or an empty result changes nothing, and a cut since the decode
-    // started makes the result stale (the committed segment will replace it).
+    // Display only: a failure or an empty result changes nothing, a cut since the decode
+    // started makes the result stale (the committed segment will replace it), and a hide
+    // since it started drops it.
     private func decodeProvisional(_ range: Range<Int>) async {
-        guard let decoded = try? await decodeClip(range),
+        guard let decoded = try? await decodeClip(range), showsPreview,
               !isCanceled, failedFrom == nil, segmenter.segmentStart == range.lowerBound else { return }
         provisionalCount += 1
         provisional = decoded.trimmingCharacters(in: .whitespaces)

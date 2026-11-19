@@ -1137,6 +1137,39 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("the live text starts hidden, and its shortcut flips and keeps the choice")
+    func liveTextToggle() async throws {
+        // Hidden on a fresh install, first run included; the shortcut is the only way to show
+        // it, and the next recording starts as the user left it (planning 0034, decision 2).
+        let env = makeSession()
+        env.session.wireHotkeyCallbacks()   // drive the real hotkey → session chain
+        var shown: [Bool] = []
+        let token = env.session.isLiveTextShown.sink { shown.append($0) }
+        defer { token.cancel() }
+        #expect(shown == [false])
+        env.hotkey.handle(.pressed(.toggleLiveText))
+        #expect(env.store.value(for: Settings.showLiveText))
+        env.hotkey.handle(.pressed(.toggleLiveText))
+        #expect(!env.store.value(for: Settings.showLiveText))
+        #expect(shown == [false, true, false])
+    }
+
+    @MainActor
+    @Test("toggling the live text mid-recording leaves the recording running")
+    func liveTextToggleMidRecording() async throws {
+        // Showing the text is not a stop: the dictation goes on and is typed at release.
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "still here"
+        env.session.handleActivate()
+        env.session.toggleLiveText()
+        #expect(env.session.currentState == .recording)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "still here")
+    }
+
+    @MainActor
     @Test("Paste last does nothing while a dictation records")
     func pasteLastWaitsOutRecording() async throws {
         // Typing into the app in front mid-dictation would mix two transcriptions.

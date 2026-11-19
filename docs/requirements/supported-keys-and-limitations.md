@@ -33,7 +33,7 @@ Fn cancels a recording ([0017](../planning/0017_cancel-recording.md)), so it is 
 
 ### Lone modifiers in Hold mode
 
-A lone modifier can't tell a hold meant for dictation from the same key held while typing a shortcut with it. A River hot key pressed during the hold is the one case River can see: that recording is discarded silently ([activation-key-and-mode.md](activation-key-and-mode.md)).
+A lone modifier can't tell a hold meant for dictation from the same key held while typing a shortcut with it. A River hot key pressed during the hold is the one case River can see: that recording is discarded silently ([activation-key-and-mode.md](activation-key-and-mode.md)). Toggle live text is the exception: the recording goes on, so pressing ⌃⌥L from idle with Right ⌥ as its ⌥ starts a short recording that types nothing ([0034](../planning/0034_live-text-and-microphone-settings.md), decision 4).
 
 ### Caps Lock — not supported
 

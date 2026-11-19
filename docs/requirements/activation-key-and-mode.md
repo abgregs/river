@@ -48,7 +48,7 @@ A non-modifier key plus one or more of ⌃ ⌥ ⇧ ⌘, registered with `Registe
 
 ### Another River shortcut during a lone-modifier press
 
-When a River hot key is pressed while the lone-modifier dictation key is down (Right ⌥ held, then a River ⌃⌥ shortcut), the modifier belongs to that shortcut. In Hold, the recording that press started is discarded with no notice and no cue. In a tap mode, that press is not a tap. River does not refuse such shortcuts when they are recorded.
+When a River hot key is pressed while the lone-modifier dictation key is down (Right ⌥ held, then a River ⌃⌥ shortcut), the modifier belongs to that shortcut. In Hold, the recording that press started is discarded with no notice and no cue, except for Toggle live text, which lets the recording go on: the user shows the text while dictating ([0034](../planning/0034_live-text-and-microphone-settings.md), decision 4). In a tap mode, that press is not a tap. River does not refuse such shortcuts when they are recorded.
 
 ## Persistence
 
@@ -60,6 +60,7 @@ Declared as typed keys on the `Settings` namespace (backed by `UserDefaults.stan
 | `Settings.activationMode` | `ActivationMode` | `.hold` |
 | `Settings.pasteLastShortcut` | `Shortcut` (a combination) | ⌃⌥V (`key:9:ctrl,opt`) |
 | `Settings.copyLastShortcut` | `Shortcut` (a combination) | ⌃⌥C (`key:8:ctrl,opt`) |
+| `Settings.liveTextShortcut` | `Shortcut` (a combination) | ⌃⌥L (`key:37:ctrl,opt`) |
 
 A shortcut is stored as one string so `@AppStorage` can bind it: `mod:61` for a lone modifier, `key:49:ctrl,opt` for a combination. No shortcut can be cleared, so an unreadable value reads as the default.
 
@@ -77,7 +78,7 @@ See [../architecture/settings-store.md](../architecture/settings-store.md) for t
 - **Recording in a tap mode** → the change applies **live** and the recording continues. The new shortcut or mode immediately becomes the stop gesture, and the session posts a notice confirming the user can use it to stop the current recording. No audio is lost, because nothing tears down the running tap.
 - **Recording in Hold mode, or processing** → the change is deferred and applied when the cycle returns to `.idle`. Hold defers because the user is physically holding the old shortcut, whose release must still stop the recording.
 
-Paste last's and Copy last's shortcuts apply at once, in any state: each change moves only that row's hot key, and neither drives a recording.
+Paste last's, Copy last's and Toggle live text's shortcuts apply at once, in any state: each change moves only that row's hot key, and none drives a recording.
 
 There is no path that tears down the event tap mid-cycle. See [../architecture/river-session.md](../architecture/river-session.md).
 
@@ -90,8 +91,9 @@ The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-sh
 3. **Cancel recording** — the keys that cancel a recording, fn or Esc, shown, not editable. Esc is River's only while a recording runs.
 4. **Paste last transcription** — types the last transcription again at the cursor, once every modifier is up, through the typing path, so the clipboard is never touched; default ⌃⌥V, writes `pasteLastShortcut`.
 5. **Copy last transcription** — copies it, as the menu item does; default ⌃⌥C, writes `copyLastShortcut`.
+6. **Toggle live text** — shows or hides the text above the indicator, during a recording or between recordings, and keeps the choice; default ⌃⌥L, writes `liveTextShortcut` ([0034](../planning/0034_live-text-and-microphone-settings.md)).
 
-Rows 4 and 5 take combinations only, since a hot key needs a key with its modifiers. No row can be cleared: a user who doesn't want a row's keys records keys nothing else uses. Every row refuses a shortcut another row already uses, naming that row.
+Rows 4 to 6 take combinations only, since a hot key needs a key with its modifiers. No row can be cleared: a user who doesn't want a row's keys records keys nothing else uses. Every row refuses a shortcut another row already uses, naming that row.
 
 Warnings inform and never block: the user knows their keyboard better than the app does. No shortcut and mode pair carries a warning.
 

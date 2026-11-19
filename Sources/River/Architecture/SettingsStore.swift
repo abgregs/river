@@ -30,6 +30,18 @@ enum Settings {
         name: "copyLastShortcut",
         defaultValue: Constants.defaultCopyLastShortcut
     )
+    // Shows or hides the live text (planning 0034, decision 4): a combination, which cannot be
+    // cleared, since it is the only way to show the text.
+    static let liveTextShortcut = SettingKey<Shortcut>(
+        name: "liveTextShortcut",
+        defaultValue: Constants.defaultLiveTextShortcut
+    )
+    // Whether the live text shows above the indicator (planning 0034, decision 2). Hidden by
+    // default, first run included; only its shortcut changes it, and the choice is kept.
+    static let showLiveText = SettingKey<Bool>(
+        name: "showLiveText",
+        defaultValue: false
+    )
     static let activationMode = SettingKey<ActivationMode>(
         name: "activationMode",
         defaultValue: Constants.defaultActivationMode
@@ -54,9 +66,10 @@ enum Settings {
         name: "playFeedbackSounds",
         defaultValue: false
     )
-    // Transcribe while the user speaks and show the text above the indicator (0025
-    // prototype). Insertion still happens once, at release. Read at the start of each
-    // recording. Off restores the one-shot decode, for comparison.
+    // Transcribe while the user speaks (0025). Insertion still happens once, at release. Read
+    // at the start of each recording. Streaming is the only pipeline (planning 0034, decision
+    // 1): no UI reaches this; off, set with `defaults write`, restores the one-shot decode as a
+    // fallback.
     static let streamingDictation = SettingKey<Bool>(
         name: "streamingDictation",
         defaultValue: true

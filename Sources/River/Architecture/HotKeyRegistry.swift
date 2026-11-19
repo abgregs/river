@@ -12,6 +12,7 @@ struct HotKeyID: Hashable, Sendable {
     static let copyLast = HotKeyID(rawValue: 3)
     // Esc, registered only while a recording runs.
     static let cancelRecording = HotKeyID(rawValue: 4)
+    static let toggleLiveText = HotKeyID(rawValue: 5)
     // The recorder's question to macOS, registered and released at once.
     static let probe = HotKeyID(rawValue: 0xFFFF)
 }

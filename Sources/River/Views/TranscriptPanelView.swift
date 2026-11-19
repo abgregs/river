@@ -7,9 +7,11 @@ struct TranscriptPanelView: View {
     let text: String
     @Environment(\.colorScheme) private var colorScheme
 
-    // Shown from the first decoded segment until the cycle returns to idle.
-    static func isVisible(state: RiverState, text: String) -> Bool {
-        state != .idle && !text.isEmpty
+    // Shown while the user has the live text on (planning 0034), for the whole cycle, as the
+    // mark is: empty at first, then filling in as the words are decoded. Waiting for text left
+    // a second or two in which the shortcut seemed to do nothing.
+    static func isVisible(state: RiverState, isShown: Bool) -> Bool {
+        isShown && state != .idle
     }
 
     var body: some View {

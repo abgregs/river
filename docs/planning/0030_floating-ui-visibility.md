@@ -42,7 +42,7 @@ Building the panel ahead of time preserves why the coordinators build at launch:
 
 - **Regression test:** `RecordingIndicatorCoordinatorTests` drives the real coordinator against real, transparent panels. It checks that a shown panel is replaced after the fade, and that a panel never shown is kept.
 - **What the test can't stage:** the window server's reassociation itself, so it checks the remedy, not the trigger.
-- **`TranscriptPanelCoordinator`:** has the same change and no test of its own, because its visibility needs streamed text that only the session publishes.
+- **`TranscriptPanelCoordinator`:** had the same change and no test of its own. [ADR 0003](../decisions/0003-floating-ui-one-window-stack.md) later deleted it: the transcript now shares `RecordingIndicatorCoordinator`'s one window.
 
 ## Not fixed here
 

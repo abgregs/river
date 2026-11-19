@@ -1,6 +1,6 @@
 # Planning: Where Models Are Saved, and Deleting Them (0038)
 
-**Status: signed off by the maintainer (2026-11-11) and built in PR 7b, `feat/model-storage`, awaiting his on-device smoke test.** Raised by the maintainer in the PR 7 smoke test (2026-11-11). It comes after PR 7 ([#92](https://github.com/abgregs/river/pull/92)) and before PR 7a ([0037](0037_fluidaudio-engine.md)), which adds its models to what this PR shows ([current-focus.md](current-focus.md)).
+**Status: signed off by the maintainer (2026-11-11) and built in PR 7b, `feat/model-storage`; merged as [#94](https://github.com/abgregs/river/pull/94) (2026-11-15).** Raised by the maintainer in the PR 7 smoke test (2026-11-11). It comes after PR 7 ([#92](https://github.com/abgregs/river/pull/92)) and before PR 7a ([0037](0037_fluidaudio-engine.md)), which adds its models to what this PR shows ([current-focus.md](current-focus.md)).
 
 ## Why
 

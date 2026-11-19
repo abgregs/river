@@ -37,7 +37,7 @@ Concerns that cut across categories, where two rules can each be accurate yet co
 - **User content privacy** — audio, transcripts, logs, the clipboard, the eval corpus, and release artifacts. *last audited: 2026-10-29*
 - **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: 2026-11-11*
 - **Bundle and release artifacts** — the Makefile, `make verify`, the release workflow's assets, the cask, and the appcast. *last audited: 2026-10-16*
-- **Keyboard ownership** — which keys River takes from other apps: exclusive hot keys, Esc while recording, the listen-only tap, and macOS's own shortcuts. *last audited: never*
+- **Keyboard ownership** — which keys River takes from other apps: exclusive hot keys, Esc while recording, the listen-only tap, and macOS's own shortcuts. *last audited: 2026-11-19*
 
 ## Conventions of these docs
 

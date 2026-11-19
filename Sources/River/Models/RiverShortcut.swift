@@ -9,6 +9,7 @@ enum RiverShortcut: CaseIterable, Hashable, Sendable {
     case cancelRecording
     case pasteLast
     case copyLast
+    case toggleLiveText
 
     /// The row's label, which a refusal names.
     var label: String {
@@ -17,12 +18,17 @@ enum RiverShortcut: CaseIterable, Hashable, Sendable {
         case .cancelRecording: "Cancel recording"
         case .pasteLast: "Paste last transcription"
         case .copyLast: "Copy last transcription"
+        case .toggleLiveText: "Toggle live text"
         }
     }
 
     /// Whether its row takes a lone modifier. Only dictation does: the event tap watches one,
     /// and a hot key needs a key with its modifiers.
     var allowsLoneModifier: Bool { self == .dictate }
+
+    /// Whether its row records a combination that runs an action as a hot key: every row but
+    /// Dictate, which drives a recording, and Cancel recording, whose keys are fixed.
+    var isAction: Bool { self == .pasteLast || self == .copyLast || self == .toggleLiveText }
 
     /// The fixed keys that cancel a recording: fn, and Esc while a recording runs.
     static let cancelKeys: [Shortcut] = [

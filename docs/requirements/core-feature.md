@@ -40,7 +40,7 @@ A `Skip (I've already granted permissions)` button exists in local/self-signed d
 - Multi-language UI (the app UI is English-only).
 - Mac App Store distribution.
 - iOS / iPadOS support.
-- Real-time streaming transcription (transcription happens after release, not during).
+- Typing while the user speaks. River transcribes during the recording and can show the text as it goes ([../planning/0034_live-text-and-microphone-settings.md](../planning/0034_live-text-and-microphone-settings.md)), but it types the text once, at release.
 
 ## Related
 

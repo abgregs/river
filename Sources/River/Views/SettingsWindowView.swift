@@ -28,7 +28,7 @@ final class SettingsWindowModel {
         self.updater = updater
         self.selectModel = selectModel
         self.deleteModel = deleteModel
-        recorders = Dictionary(uniqueKeysWithValues: [RiverShortcut.dictate, .pasteLast, .copyLast].map {
+        recorders = Dictionary(uniqueKeysWithValues: [RiverShortcut.dictate, .pasteLast, .copyLast, .toggleLiveText].map {
             ($0, ShortcutRecorderModel(row: $0, hooks: shortcutHooks($0)))
         })
     }
@@ -200,6 +200,8 @@ private struct ShortcutsPane: View {
     private var pasteLastShortcut: Shortcut = Settings.pasteLastShortcut.defaultValue
     @AppStorage(Settings.copyLastShortcut.name)
     private var copyLastShortcut: Shortcut = Settings.copyLastShortcut.defaultValue
+    @AppStorage(Settings.liveTextShortcut.name)
+    private var liveTextShortcut: Shortcut = Settings.liveTextShortcut.defaultValue
     @AppStorage(Settings.activationMode.name)
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
     @Environment(\.colorScheme) private var colorScheme
@@ -215,6 +217,7 @@ private struct ShortcutsPane: View {
             cancelRow
             ShortcutRow(recorder: recorders[.pasteLast]!, saved: pasteLastShortcut, appState: appState)
             ShortcutRow(recorder: recorders[.copyLast]!, saved: copyLastShortcut, appState: appState)
+            ShortcutRow(recorder: recorders[.toggleLiveText]!, saved: liveTextShortcut, appState: appState)
         }
         .onAppear { for (row, recorder) in recorders { recorder.refresh(saved: saved(row)) } }
         .onDisappear { for recorder in recorders.values { recorder.stop() } }
@@ -225,6 +228,7 @@ private struct ShortcutsPane: View {
         case .dictate: dictationShortcut
         case .pasteLast: pasteLastShortcut
         case .copyLast: copyLastShortcut
+        case .toggleLiveText: liveTextShortcut
         case .cancelRecording: nil
         }
     }
@@ -334,8 +338,6 @@ private struct DictationPane: View {
     private var playFeedbackSounds: Bool = Settings.playFeedbackSounds.defaultValue
     @AppStorage(Settings.keepMicrophoneReady.name)
     private var keepMicrophoneReady: Bool = Settings.keepMicrophoneReady.defaultValue
-    @AppStorage(Settings.streamingDictation.name)
-    private var streamingDictation: Bool = Settings.streamingDictation.defaultValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -345,11 +347,6 @@ private struct DictationPane: View {
             SettingsRow(label: "Keep the microphone ready",
                         description: Text("Your first word isn’t cut off. The microphone indicator stays on while River is open and able to dictate. When off, River opens the microphone only while you dictate.")) {
                 Toggle("Keep the microphone ready", isOn: $keepMicrophoneReady).labelsHidden()
-            }
-            // Interim until PR 10 removes it (planning 0034, decision 1).
-            SettingsRow(label: "Transcribe while I speak",
-                        description: Text("Shows the text above the indicator as you talk. It is typed when you stop, as before.")) {
-                Toggle("Transcribe while I speak", isOn: $streamingDictation).labelsHidden()
             }
         }
         .toggleStyle(RiverSwitchStyle())

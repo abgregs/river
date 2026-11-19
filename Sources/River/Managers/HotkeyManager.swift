@@ -41,6 +41,8 @@ final class HotkeyManager {
     var onPasteLast: (() -> Void)?
     /// Copy last transcription's shortcut.
     var onCopyLast: (() -> Void)?
+    /// Toggle live text's shortcut, on the press.
+    var onToggleLiveText: (() -> Void)?
     /// Whether a recording is live, read on each completed tap in the tap modes.
     /// `RiverSession` answers from its own state, the only "recording" there is.
     var isRecording: () -> Bool = { false }
@@ -140,9 +142,10 @@ final class HotkeyManager {
         register(.dictate)
     }
 
-    /// Live-apply for Paste last's or Copy last's shortcut. Applies at once.
+    /// Live-apply for an action row's shortcut (Paste last, Copy last, Toggle live text).
+    /// Applies at once.
     func setShortcut(_ newShortcut: Shortcut, for action: RiverShortcut) {
-        guard action == .pasteLast || action == .copyLast, actionShortcuts[action] != newShortcut else { return }
+        guard action.isAction, actionShortcuts[action] != newShortcut else { return }
         logger.info("\(action.label, privacy: .public) shortcut changed to \(newShortcut.rawValue, privacy: .public)")
         actionShortcuts[action] = newShortcut
         register(action)
@@ -219,7 +222,7 @@ final class HotkeyManager {
     private func ownShortcuts() -> [(owner: RiverShortcut, shortcut: Shortcut)] {
         [(.dictate, shortcut), (.cancelRecording, .modifier(keyCode: cancelKeyCode))]
             + RiverShortcut.cancelKeys.dropFirst().map { (.cancelRecording, $0) }
-            + [RiverShortcut.pasteLast, .copyLast].compactMap { row in actionShortcuts[row].map { (row, $0) } }
+            + RiverShortcut.allCases.filter(\.isAction).compactMap { row in actionShortcuts[row].map { (row, $0) } }
     }
 
     // A lone modifier needs no registration: the tap watches it. While River holds the row's
@@ -234,7 +237,7 @@ final class HotkeyManager {
     private func currentShortcut(of row: RiverShortcut) -> Shortcut? {
         switch row {
         case .dictate: shortcut
-        case .pasteLast, .copyLast: actionShortcuts[row]
+        case .pasteLast, .copyLast, .toggleLiveText: actionShortcuts[row]
         case .cancelRecording: nil
         }
     }
@@ -266,6 +269,7 @@ final class HotkeyManager {
         case .dictate: .dictation
         case .pasteLast: .pasteLast
         case .copyLast: .copyLast
+        case .toggleLiveText: .toggleLiveText
         case .cancelRecording: .cancelRecording
         }
     }
@@ -386,14 +390,17 @@ final class HotkeyManager {
 
     // Esc cancels. Any other River hot key runs its action; pressed while a lone-modifier
     // dictation key is held, that modifier is part of the shortcut, not a dictation, so a
-    // Hold recording it started is thrown away (spec 0036).
+    // Hold recording it started is thrown away (spec 0036). Toggle live text is the exception
+    // in Hold: it only changes what the panel shows, so the user can show the text while
+    // dictating, and the recording goes on (planning 0034).
     private func handleOtherHotKey(_ id: HotKeyID) {
         if id == .cancelRecording {
             logger.info("Cancel gesture (Esc)")
             onCancel?()
             return
         }
-        if case .modifier = shortcut, isKeyDown, !isKeyPressSpent {
+        let keepsHoldRecording = id == .toggleLiveText && mode == .hold
+        if case .modifier = shortcut, isKeyDown, !isKeyPressSpent, !keepsHoldRecording {
             isKeyPressSpent = true
             logger.info("Hot key \(id.rawValue, privacy: .public) pressed during the dictation key; that press is not a dictation")
             if mode == .hold { onDiscard?() }
@@ -401,6 +408,7 @@ final class HotkeyManager {
         switch id {
         case .pasteLast: pasteWhenKeysUp()
         case .copyLast: onCopyLast?()
+        case .toggleLiveText: onToggleLiveText?()
         default: break
         }
     }
