@@ -207,6 +207,12 @@ struct RiverIndicatorSnapshotTests {
                 state.apply(isLiveTextShown: true)
                 state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
             }),
+            // Shown before any words are decoded: the panel is there from the cycle's start.
+            ("recording-transcript-empty", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(isLiveTextShown: true)
+            }),
             // Hidden, the default: the same streamed text, and the panel shows the mark only.
             ("recording-transcript-hidden", { state in
                 state.apply(modelLoadState: .ready)

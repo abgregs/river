@@ -48,7 +48,6 @@ final class RecordingIndicatorCoordinator {
             _ = appState.toast
             _ = appState.modelLoadState
             _ = appState.notice
-            _ = appState.liveTranscript
             _ = appState.isLiveTextShown
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -74,8 +73,7 @@ final class RecordingIndicatorCoordinator {
         }
         // The transcript scrolls, so the window takes the mouse while it shows; otherwise it
         // stays out of the way of whatever is under it, as the indicator always has.
-        panel?.ignoresMouseEvents = !TranscriptPanelView.isVisible(state: appState.state, text: appState.liveTranscript,
-                                                                     isShown: appState.isLiveTextShown)
+        panel?.ignoresMouseEvents = !TranscriptPanelView.isVisible(state: appState.state, isShown: appState.isLiveTextShown)
     }
 
     private func showPanel() {
