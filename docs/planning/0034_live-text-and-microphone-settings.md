@@ -1,6 +1,6 @@
 # Live text and microphone settings (0034)
 
-**Status: PR 10 built (2026-11-18), awaiting the maintainer's smoke test.** Collects the maintainer's direction on what the user controls around streaming, the live text and the microphone, agreed in chat from 2026-10-16 to 2026-10-31 and amended for `v0.3.0` on 2026-11-04. The microphone switch shipped in PR #79 ([0033](0033_warm-microphone-pre-roll.md)); PR 10 builds the rest. Every other setting, and how shortcuts are registered and recorded, is in [0036](0036_settings-and-shortcuts.md).
+**Status: PR 10 built (2026-11-18), smoke-tested on device by the maintainer (2026-11-19).** Collects the maintainer's direction on what the user controls around streaming, the live text and the microphone, agreed in chat from 2026-10-16 to 2026-10-31 and amended for `v0.3.0` on 2026-11-04. The microphone switch shipped in PR #79 ([0033](0033_warm-microphone-pre-roll.md)); PR 10 builds the rest. Every other setting, and how shortcuts are registered and recorded, is in [0036](0036_settings-and-shortcuts.md).
 
 ## Problem
 
