@@ -1,6 +1,6 @@
 # Planning: A Second Speech Engine (FluidAudio)
 
-**Status: built for `v0.3.0` as PR 7a, `feat/fluidaudio-engine` (2026-11-19), and smoke-tested on device by the maintainer the same day.** Agreed with the maintainer on 2026-11-10, after a spike the same day. It adds the two new models in [0036](0036_settings-and-shortcuts.md)'s Model section, NVIDIA Parakeet TDT v2 and Fermion Research's Phonon-2, which WhisperKit cannot run. It is built alongside PRs 8 to 10 and lands before PR 11 (the preparing look) and PR 12 (the onboarding model step) ([current-focus.md](current-focus.md)).
+**Status: built for `v0.3.0` as PR 7a, `feat/fluidaudio-engine` (2026-11-19), and smoke-tested on device by the maintainer the same day; merged as [#97](https://github.com/abgregs/river/pull/97) (2026-11-20).** Agreed with the maintainer on 2026-11-10, after a spike the same day. It adds the two new models in [0036](0036_settings-and-shortcuts.md)'s Model section, NVIDIA Parakeet TDT v2 and Fermion Research's Phonon-2, which WhisperKit cannot run. It is built alongside PRs 8 to 10 and lands before PR 11 (the preparing look) and PR 12 (the onboarding model step) ([current-focus.md](current-focus.md)).
 
 ## What the spike showed
 
