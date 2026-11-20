@@ -10,9 +10,9 @@ Charcoal and ink carry everything, the mark included; one turquoise accent means
 
 | Token | Value | OKLCH | Role |
 |---|---|---|---|
-| `charcoal` | `#23262B` | 26.8% 0.010 261 | The app icon's ground; text and the mark on the light HUD |
+| `charcoal` | `#23262B` | 26.8% 0.010 261 | Text and the mark on the light HUD |
 | `raisedCharcoal` | `#2E3238` | 31.6% 0.012 258 | A fill nested on charcoal |
-| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The dark HUD's opaque tint: charcoal's hue, darker |
+| `deepCharcoal` | `#101215` | 18.0% 0.007 261 | The dark HUD's opaque tint and the app icon's ground: charcoal's hue, darker |
 | `mist` | `#F4F5F7` | 97.0% 0.003 265 | The light HUD's opaque tint: charcoal's cool hue at near white |
 | `ink` | `#ECEEF1` | 94.8% 0.005 258 | Every mark and all text on charcoal, the dark HUD included |
 | `accentDark` | `#00E7E9` | 84.1% 0.143 196 | The accent on dark surfaces |
@@ -37,7 +37,7 @@ The accent marks something that is **on right now**: a control you turned on. It
 - **River getting ready.** Preparing the model and any download stay neutral: in the panel the muted strokes held still, in the menu bar their SF Symbols. Nothing is being dictated yet.
 - **Status.** Errors, warnings, and success are not "on". See Status below.
 - **Confirmation flashes.** A setting that was just changed does not flash turquoise; the switch staying on is the confirmation.
-- **The menu bar, and the app icon.** Every menu bar glyph is the mark the system paints white or black like the icons beside it, with one exception, the recording dot (Status colors); the icon is ink on charcoal "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
+- **The menu bar, and the app icon.** Every menu bar glyph is the mark the system paints white or black like the icons beside it, with one exception, the recording dot (Status colors); the icon is ink on deep charcoal, with no accent "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
   **Why:** revised 2026-10-15. The Active bars shipped in the accent, an image per Light and Dark mode, but the menu bar takes its look from the wallpaper behind it, not from the mode: in Light mode over a dark wallpaper the bar turned a mid blue-grey, every other icon went white, and the light accent measured about 1.5:1 there (white: 3.0:1). The maintainer chose to match the other icons.
 - **Decoration.** No accent backgrounds, gradients, section headers, large fills, or static text. Accent text that does nothing reads as clickable.
 

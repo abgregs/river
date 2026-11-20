@@ -5,7 +5,7 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// Renders the app icon: 川 in ink on a charcoal squircle, from the same shapes as the panel
+/// Renders the app icon: 川 in ink on a deep charcoal squircle, from the same shapes as the panel
 /// and the menu bar (docs/design/kawa-identity.md). The checked-in script:
 /// `RIVER_WRITE_ICON=1 swift test --filter AppIcon` regenerates `River.icns`; the normal
 /// suite checks the shipped file still carries every size macOS asks for.
@@ -35,7 +35,7 @@ enum AppIconRenderer {
         let squircle = RoundedRectangle(cornerRadius: Constants.appIconCornerRadius, style: .continuous)
             .path(in: CGRect(x: inset, y: inset, width: side, height: side))
         context.addPath(squircle.cgPath)
-        context.setFillColor(Palette.charcoal.cgColor)
+        context.setFillColor(Palette.deepCharcoal.cgColor)
         context.fillPath()
 
         // 川 in ink, centred halfway like every surface: the icon carries no cycle state.

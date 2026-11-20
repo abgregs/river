@@ -527,8 +527,9 @@ enum Constants {
     // on the modelled light and dark bars (docs/design/color.md).
     static let menuBarMutedDotOpacity: Double = 0.55
 
-    // App icon: 川 in ink on a charcoal squircle (maintainer, 2026-10-29), drawn on
-    // Apple's 1024 grid where the rounded square occupies 824 of the canvas.
+    // App icon: 川 in ink on a deep charcoal squircle (maintainer, 2026-10-29; ground darkened
+    // 2026-11-19, docs/design/kawa-identity.md), drawn on Apple's 1024 grid where the
+    // rounded square occupies 824 of the canvas.
     static let appIconCanvas: Double = 1024
     static let appIconSquircleInset: Double = 100
     static let appIconCornerRadius: Double = 185.4
