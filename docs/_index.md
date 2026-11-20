@@ -1,6 +1,6 @@
 # River Docs
 
-A macOS menu bar dictation app. Hold (or tap) a configurable activation key → capture mic audio → transcribe locally with WhisperKit → type at cursor. Apple Silicon, macOS 14+.
+A macOS menu bar dictation app. Hold (or tap) a configurable activation key → capture mic audio → transcribe locally with WhisperKit or FluidAudio → type at cursor. Apple Silicon, macOS 14+.
 
 These docs are the source of truth for how River is built and maintained. The working convention: before a non-trivial change, surface the applicable conventions from these docs. Contributing requires no particular agent, harness, or tooling. Doc updates alongside a change are welcome, not a requirement — doc/code drift is caught by the maintainer's automated doc sync ([conventions/doc-maintenance.md](conventions/doc-maintenance.md)).
 
@@ -35,7 +35,7 @@ Concerns that cut across categories, where two rules can each be accurate yet co
 - **Permissions and signing identity** — TCC, the capabilities, onboarding, and the dev versus Developer ID signatures. *last audited: never*
 - **The cycle state seam** — `RiverState` transitions and every observer: menu bar, panel, sounds, hotkey. *last audited: 2026-11-16*
 - **User content privacy** — audio, transcripts, logs, the clipboard, the eval corpus, and release artifacts. *last audited: 2026-10-29*
-- **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: 2026-11-11*
+- **Model storage and lifecycle** — cache location, sizes, loading, switching, and cleanup. *last audited: 2026-11-19*
 - **Bundle and release artifacts** — the Makefile, `make verify`, the release workflow's assets, the cask, and the appcast. *last audited: 2026-10-16*
 - **Keyboard ownership** — which keys River takes from other apps: exclusive hot keys, Esc while recording, the listen-only tap, and macOS's own shortcuts. *last audited: 2026-11-19*
 

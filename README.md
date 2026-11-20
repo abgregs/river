@@ -2,7 +2,7 @@
 
 **Dictation that follows you wherever you go.**
 
-Hold (or tap) a key, speak, and your words appear at the cursor — in any app you can type into, transcribed entirely on your Mac with [WhisperKit](https://github.com/argmaxinc/WhisperKit).
+Hold (or tap) a key, speak, and your words appear at the cursor — in any app you can type into, transcribed entirely on your Mac with [WhisperKit](https://github.com/argmaxinc/WhisperKit) or [FluidAudio](https://github.com/FluidInference/FluidAudio).
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue?style=for-the-badge)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-lightgrey?style=for-the-badge)
@@ -44,10 +44,12 @@ Contributors: start at [docs/_index.md](docs/_index.md) — conventions, archite
 
 - [WhisperKit](https://github.com/argmaxinc/WhisperKit) (Argmax, MIT) — the on-device transcription engine
 - [Whisper](https://github.com/openai/whisper) (OpenAI, MIT) — the speech models; code and weights are both MIT
+- [FluidAudio](https://github.com/FluidInference/FluidAudio) (FluidInference, Apache-2.0) — the second on-device engine, for Parakeet and Phonon, with [text-processing-rs](https://github.com/FluidInference/text-processing-rs) (Apache-2.0) and [fastcluster](https://danifold.net) (BSD 2-Clause) built in
+- [Parakeet TDT v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (NVIDIA) and [Phonon-2](https://huggingface.co/FermionResearch/Phonon-2) (Fermion Research, based on NVIDIA [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)) — speech models under CC BY 4.0, converted to Core ML by FluidInference
 - [swift-transformers](https://github.com/huggingface/swift-transformers) and [swift-jinja](https://github.com/huggingface/swift-jinja) (Hugging Face, Apache-2.0) — tokenizer and model-hub plumbing
 - Apple's [swift-argument-parser](https://github.com/apple/swift-argument-parser), [swift-collections](https://github.com/apple/swift-collections), [swift-crypto](https://github.com/apple/swift-crypto), and [swift-asn1](https://github.com/apple/swift-asn1) (Apache-2.0), plus [yyjson](https://github.com/ibireme/yyjson) (MIT) — transitive via WhisperKit
 
-Models are downloaded at runtime from [argmaxinc/whisperkit-coreml](https://huggingface.co/argmaxinc/whisperkit-coreml); this repository redistributes no model weights.
+Models are downloaded at runtime from [argmaxinc/whisperkit-coreml](https://huggingface.co/argmaxinc/whisperkit-coreml) and FluidInference's Hugging Face repositories; this repository redistributes no model weights.
 
 ## License
 

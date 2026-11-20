@@ -253,7 +253,7 @@ final class RiverSession {
             if let stream, stream.cutCount > 0 {
                 // Streaming: the segments are already decoded; only the tail is left.
                 let outcome = await stream.finish()
-                logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s")
+                logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
                 if let error = outcome.error {
                     errorSubject.send(.transcription(underlying: error))
                 }
@@ -284,7 +284,7 @@ final class RiverSession {
                 }
                 do {
                     let text = try await transcription.transcribe(audioSamples: samples)
-                    logger.info("Transcribed \(text.count, privacy: .public) chars")
+                    logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
                     await deliver(text)
                 } catch TranscriptionError.noSpeechDetected {
                     // Decode heard only non-speech (breath, room tone, music the
@@ -468,9 +468,15 @@ final class RiverSession {
                     self.settings.setValue(selection.inUse, for: Settings.selectedModel)
                 }
                 // A model ready beside the one in use takes over at `.idle`; one that becomes
-                // ready mid-cycle takes over on the return to `.idle`.
+                // ready mid-cycle takes over on the return to `.idle`. The commit waits until
+                // this value has reached every subscriber: committing inside the delivery sends
+                // the switched selection first, and the rest then receive this older one last,
+                // which left the Model section reading "Waiting" after the switch (PR 7a smoke).
                 if selection.next?.phase == .ready, self.currentState == .idle {
-                    self.transcription.commitModelSwitch()
+                    Task { @MainActor [weak self] in
+                        guard let self, self.currentState == .idle else { return }
+                        self.transcription.commitModelSwitch()
+                    }
                 }
             }
             .store(in: &cancellables)

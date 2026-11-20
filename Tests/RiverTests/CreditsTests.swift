@@ -39,4 +39,19 @@ struct CreditsTests {
         }
         for package in Credits.software { #expect(text[software.upperBound...].contains(package.name)) }
     }
+
+    // CC BY 4.0 asks a derivative's credit to name every creator before it, so Phonon-2's
+    // credit names NVIDIA's model as well as Fermion Research (Phonon-2's NOTICE, 2026-11-19).
+    @Test("a derived model's credit names the model it was derived from, in the About text and notices")
+    func derivedModelsNameTheirBase() throws {
+        let text = Credits.aboutText(models: Constants.curatedModels)
+        let notices = try String(contentsOf: Self.repo.appendingPathComponent("Sources/River/Resources/\(Credits.noticesFileName)"),
+                                 encoding: .utf8)
+        let derived = Constants.curatedModels.compactMap(\.basedOn)
+        #expect(!derived.isEmpty)
+        for base in derived {
+            #expect(text.contains(base), "About text omits \(base)")
+            #expect(notices.contains(base), "notices omit \(base)")
+        }
+    }
 }

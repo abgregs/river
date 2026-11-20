@@ -19,7 +19,6 @@ struct ModelSectionView: View {
     @State private var modelsSize: Int64?
     @State private var hoveredRow: String?
     @FocusState private var focusedRow: String?
-    @State private var pendingDelete: PendingDelete?
     @State private var failedDelete: FailedDelete?
     @Environment(\.colorScheme) private var colorScheme
 
@@ -32,7 +31,6 @@ struct ModelSectionView: View {
         _hoveredRow = State(initialValue: hoveredRow)
     }
 
-    private struct PendingDelete { let model: ModelOption; let freed: Int64 }
     private struct FailedDelete { let model: ModelOption; let message: String }
 
     private let models = Constants.curatedModels
@@ -61,14 +59,6 @@ struct ModelSectionView: View {
         }
         .onAppear(perform: refreshDownloaded)
         .onChange(of: appState.modelSelection) { refreshDownloaded() }
-        .alert(pendingDelete.map { "Delete \($0.model.label)?" } ?? "",
-               isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-               presenting: pendingDelete) { pending in
-            Button("Delete model", role: .destructive) { delete(pending.model) }
-            Button("Cancel", role: .cancel) {}
-        } message: { pending in
-            Text("This frees \(ModelCatalogue.formattedSize(bytes: pending.freed)). You can download it again later.")
-        }
     }
 
     // The note under the table, and where the models are saved: the folder, the space every
@@ -245,13 +235,37 @@ struct ModelSectionView: View {
     @ViewBuilder
     private func rowMenu(_ model: ModelOption, status: ModelCatalogue.RowStatus) -> some View {
         Button("Show in Finder") {
-            NSWorkspace.shared.activateFileViewerSelecting([TranscriptionManager.modelFolder(downloadBase: downloadBase, modelName: model.name)])
+            NSWorkspace.shared.activateFileViewerSelecting([model.engine.loader.folder(of: model.name, downloadBase: downloadBase)])
         }
         if ModelCatalogue.offersDelete(status) {
             Divider()
-            Button("Delete…") {
-                pendingDelete = PendingDelete(model: model, freed: TranscriptionManager.diskUsage(downloadBase: downloadBase, modelName: model.name))
-            }
+            Button("Delete…") { confirmDelete(model) }
+        }
+    }
+
+    // The confirmation is AppKit's alert, not SwiftUI's, because only AppKit's takes an icon:
+    // the trash, where macOS would show River's own icon and read as deleting River (maintainer,
+    // 2026-11-19). It is a sheet on the Settings window.
+    private func confirmDelete(_ model: ModelOption) {
+        let freed = TranscriptionManager.diskUsage(of: model.engine.loader.files(of: model.name, downloadBase: downloadBase))
+        let alert = NSAlert()
+        alert.messageText = "Delete \(model.label)?"
+        alert.informativeText = "This frees \(ModelCatalogue.formattedSize(bytes: freed)). You can download it again later."
+        let config = NSImage.SymbolConfiguration(pointSize: 44, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.labelColor]))
+        alert.icon = NSImage(systemSymbolName: "trash", accessibilityDescription: "Delete")?.withSymbolConfiguration(config)
+        // Return never deletes: Delete model takes no key, and Cancel keeps Escape.
+        let deleteButton = alert.addButton(withTitle: "Delete model")
+        deleteButton.hasDestructiveAction = true
+        deleteButton.keyEquivalent = ""
+        alert.addButton(withTitle: "Cancel")
+        let handle = { (response: NSApplication.ModalResponse) in
+            if response == .alertFirstButtonReturn { delete(model) }
+        }
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window, completionHandler: handle)
+        } else {
+            handle(alert.runModal())
         }
     }
 
@@ -289,7 +303,7 @@ struct ModelSectionView: View {
     // Which models are downloaded, and the models folder's size: on showing, on every change
     // to the selection (a download or load moving on), and after a delete.
     private func refreshDownloaded() {
-        downloaded = Set(models.map(\.name).filter { TranscriptionManager.isModelCached(downloadBase: downloadBase, modelName: $0) })
+        downloaded = Set(models.filter { $0.engine.loader.isDownloaded($0.name, downloadBase: downloadBase) }.map(\.name))
         modelsSize = TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: downloadBase))
     }
 }

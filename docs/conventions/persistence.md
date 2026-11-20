@@ -76,7 +76,7 @@ There is no need to filter `UserDefaults.didChangeNotification` manually. The st
 
 - Transcribed text (transient, sensitive).
 - Audio buffers (transient, large).
-- Anything WhisperKit caches itself (it manages its own model storage).
+- Anything an engine caches itself: WhisperKit and FluidAudio manage their own model files, in the folder River gives them.
 - API keys or credentials. **Why:** UserDefaults is plaintext and inspectable via `defaults read`. Use Keychain when this becomes relevant (future).
 
 ## Future considerations

@@ -22,9 +22,9 @@ struct SettingsWindowSnapshotTests {
         let accessibility = AccessibilityCapability()
         accessibility.setStatusForTesting(.denied)
         let appState = AppState()
-        let transcription = TranscriptionManager()
+        let loader = FakeModelLoader()
+        let transcription = TranscriptionManager.withFake(loader)
         transcription.setModelLoadStateForTesting(.ready)
-        transcription.skipLoadForTesting = true
         appState.bind(transcription: transcription)
         let model = SettingsWindowModel(appState: appState, capabilities: [microphone, inputMonitoring, accessibility],
                                         updater: UpdaterManager(), shortcutHooks: { _ in .inert }, selectModel: { _ in },
@@ -42,7 +42,7 @@ struct SettingsWindowSnapshotTests {
                     next: ModelSwitch(target: "openai_whisper-base.en", phase: .ready)))
             }
             if shot == "model-switch-failed" {
-                transcription.stageFailsForTesting = true
+                loader.failing = ["openai_whisper-large-v3-v20240930_turbo"]
                 await transcription.switchModel(to: "openai_whisper-large-v3-v20240930_turbo")
             }
             let size = section == .model ? Constants.settingsModelWindowSize : Constants.settingsWindowSize

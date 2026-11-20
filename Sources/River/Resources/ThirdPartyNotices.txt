@@ -11,6 +11,13 @@ MODELS
   https://github.com/huggingface/distil-whisper
 - Core ML conversions of the models above by Argmax, MIT licence.
   https://huggingface.co/argmaxinc/whisperkit-coreml
+- NVIDIA Parakeet (Parakeet TDT v2), CC BY 4.0 licence.
+  https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+- Fermion Research Phonon (Phonon-2), based on NVIDIA Parakeet TDT 0.6B v3,
+  CC BY 4.0 licence. https://huggingface.co/FermionResearch/Phonon-2
+- Core ML conversions of Parakeet TDT v2 and Phonon-2 by FluidInference, CC BY 4.0 licence.
+  https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml
+  and https://huggingface.co/FluidInference/phonon-2-coreml
 
 SOFTWARE
 
@@ -22,6 +29,16 @@ SOFTWARE
 - yyjson, YaoYuan, MIT licence. https://github.com/ibireme/yyjson
 - Sparkle, the Sparkle Project, MIT licence and the licences of the code it includes.
   https://github.com/sparkle-project/Sparkle
+- FluidAudio, FluidInference, Apache-2.0. https://github.com/FluidInference/FluidAudio
+- text-processing-rs, FluidInference, Apache-2.0, with NVIDIA NeMo Text Processing,
+  rustfst, flate2 and the Rust crates they use, each under Apache-2.0 or MIT OR
+  Apache-2.0. https://github.com/FluidInference/text-processing-rs
+- fastcluster, Daniel Müllner and Google Inc., BSD 2-Clause licence.
+  https://danifold.net
+- Code that FluidAudio ports into its Japanese text frontend: misaki, hexgrad, Apache-2.0
+  (https://github.com/hexgrad/misaki); cutlet, Paul O'Leary McCann, MIT licence
+  (https://github.com/polm/cutlet); Convert-Numbers-to-Japanese, David Wilson, MIT licence
+  (https://github.com/Greatdane/Convert-Numbers-to-Japanese).
 
 ===============================================================================
 OpenAI Whisper
@@ -100,6 +117,40 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+===============================================================================
+NVIDIA Parakeet and Fermion Research Phonon, and their Core ML conversions
+===============================================================================
+
+Each model below is licensed under the Creative Commons Attribution 4.0 International
+licence (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+Parakeet TDT v2
+  (c) NVIDIA Corporation. https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+  Changes: converted to Core ML by FluidInference,
+  https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml
+
+Phonon-2
+  Copyright 2026 Fermion Research. https://huggingface.co/FermionResearch/Phonon-2
+  Derived from NVIDIA Parakeet TDT 0.6B v3, (c) NVIDIA Corporation, CC BY 4.0.
+  https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  Changes by Fermion Research, from its NOTICE: the encoder's linear weights were
+  re-trained and quantised to a five-value alphabet; the remaining parameters were
+  quantised to 6-bit integer tables. The FastConformer encoder architecture, the TDT
+  decoder, the tokenizer and the feature-extractor configuration derive from NVIDIA's
+  model and remain under CC BY 4.0.
+  Training data, from Fermion Research's NOTICE: CHiME-6, under the Creative Commons
+  Attribution-ShareAlike 4.0 International licence
+  (https://chimechallenge.github.io/chime6/, https://creativecommons.org/licenses/by-sa/4.0/),
+  and SPGISpeech, under Kensho's public terms
+  (https://datasets.kensho.com/datasets/spgispeech).
+  Further changes: converted to Core ML by FluidInference,
+  https://huggingface.co/FluidInference/phonon-2-coreml
+
+River downloads these Core ML models unchanged the first time you choose one.
+
+The licensors offer the models as-is and as-available, and make no representations or
+warranties of any kind concerning them, as set out in section 5 of the licence.
 
 ===============================================================================
 yyjson
@@ -314,8 +365,121 @@ This product contains a derivation of various files from SwiftNIO.
     * https://github.com/apple/swift-nio
 
 ===============================================================================
+FluidAudio's Japanese text frontend: cutlet and Convert-Numbers-to-Japanese
+===============================================================================
+
+FluidAudio's Japanese text frontend is a Swift port of misaki's cutlet.py (misaki is
+Apache-2.0; cutlet.py is adapted from polm/cutlet, MIT) and of misaki's num2kana.py (copied
+from Greatdane/Convert-Numbers-to-Japanese, MIT). River builds it in with FluidAudio and
+does not use it.
+
+cutlet (polm/cutlet)
+
+MIT License
+
+Copyright (c) 2020 Paul O'Leary McCann
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Convert-Numbers-to-Japanese (Greatdane)
+
+The MIT License (MIT)
+Copyright (c) 2018 David Wilson, https://github.com/Greatdane
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+===============================================================================
+fastcluster
+===============================================================================
+
+Copyright:
+  * Until package version 1.1.23: © 2011 Daniel Müllner <https://danifold.net>
+  * All changes from version 1.1.24 on: © Google Inc. <https://www.google.com>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+  * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+===============================================================================
+text-processing-rs: NOTICE
+===============================================================================
+
+text-processing-rs
+Copyright 2026 FluidInference
+
+This product is a Rust port of NVIDIA NeMo Text Processing
+(https://github.com/NVIDIA/NeMo-text-processing), which is licensed
+under the Apache License, Version 2.0.
+
+   Copyright (c) NVIDIA CORPORATION & AFFILIATES.
+   Licensed under the Apache License, Version 2.0.
+
+In addition, when built with the optional `fst-engine` feature, this
+product includes and redistributes artifacts derived from NVIDIA NeMo
+Text Processing (Apache-2.0, pinned commit
+1f1263579fe57ba7ed783cad3dddee710fcc5064):
+
+   * the compiled weighted-FST grammars under `grammars/` (exported from
+     NeMo's Pynini source), and
+   * the text-normalization test fixtures under `tests/fixtures/`
+     (copied from, or regenerated as the deterministic output of, NeMo's
+     `data_text_normalization` test cases).
+
+This product's binary distributions (e.g. the published xcframework) also
+statically link third-party libraries. See THIRD-PARTY-LICENSES.md for the
+full list and their licenses.
+
+Statically linked, each under Apache-2.0 or MIT OR Apache-2.0:
+
+  * NVIDIA NeMo Text Processing, Copyright (c) NVIDIA CORPORATION & AFFILIATES.
+    https://github.com/NVIDIA/NeMo-text-processing
+  * rustfst, Copyright (c) Alexandre Caulier and the rustfst contributors.
+    https://github.com/Garvys/rustfst
+  * flate2, Copyright (c) Alex Crichton and the flate2 contributors.
+    https://github.com/rust-lang/flate2-rs
+  * the Rust crates rustfst and flate2 use, such as nom, miniz_oxide, bitflags and
+    anyhow, listed in text-processing-rs's THIRD-PARTY-LICENSES.md.
+
+===============================================================================
 Apache License 2.0
-(swift-transformers, swift-jinja, Swift Collections, Swift Crypto)
+(swift-transformers, swift-jinja, Swift Collections, Swift Crypto, FluidAudio,
+text-processing-rs and the code it links, misaki)
 ===============================================================================
 
 Apache License

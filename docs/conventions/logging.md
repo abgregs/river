@@ -10,11 +10,11 @@ private let logger = Logger(subsystem: "com.river.app", category: "app")
 
 Categories in use:
 
-- `app` — `AppDelegate` lifecycle, `RiverSession` state transitions
+- `app` — `AppDelegate` lifecycle, `RiverSession` state transitions, and each dictation's release-to-text time with the model that transcribed it, so models compare from the log alone
 - `permissions` — `Capability` status checks and the onboarding grant flow
 - `hotkey` — `HotkeyManager` events, restart, tap status
 - `audio` — `MicrophoneCapability` capture-unit start/stop, device selection and input format; `AudioCaptureManager` capture lifecycle, sample count, and conversion failures
-- `transcribe` — `TranscriptionManager`: WhisperKit model-load lifecycle (start / loaded / failed), transcribe start (sample count), end (transcribed char count). **Never** log the transcribed text itself — that's user content (anti-pattern #4)
+- `transcribe` — `TranscriptionManager` and its engine loaders: model-load lifecycle (start / loaded / failed), transcribe start (sample count and model name), end (transcribed char count). **Never** log the transcribed text itself — that's user content (anti-pattern #4)
 - `insert` — `TextInsertionManager` keystroke injection (typing the transcription at the cursor)
 
 Pick the category that matches where the code lives. Adding new categories is fine; reusing categories across files is fine when they share a concern.
@@ -45,7 +45,7 @@ logger.info("Transcribed \(text.count, privacy: .public) chars")   // length OK
 The failure *reason* is the most valuable line in a bug report, so error strings are logged `privacy: .public` to stay visible in the field. But an opaque third-party/OS `error.localizedDescription` can embed a filesystem path like `/Users/<name>/...` that carries the macOS account name. Pass every logged error string through `LogRedaction.redactUserPaths(_:)`, which strips it deterministically:
 
 ```swift
-logger.error("WhisperKit load failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+logger.error("Model load failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
 ```
 
 `redactUserPaths` is idempotent and a no-op on app-authored error strings, so it's applied uniformly at *every* error-string log site — no per-site judgment about whether a value is "opaque enough." App-authored error descriptions (e.g. `AudioCaptureError`) carry no PII, but they pass through the same call so the rule stays mechanical.

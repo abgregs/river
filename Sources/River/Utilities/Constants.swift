@@ -68,12 +68,12 @@ enum Constants {
     static let defaultModel: String = "openai_whisper-small.en"
 
     // The Model section's catalogue (planning 0036), in no particular order: the table groups
-    // and sorts it. The two new English models join it with their engine in PR 7a (planning
-    // 0037). Names are the exact `argmaxinc/whisperkit-coreml` repo folders WhisperKit
-    // downloads (verified against WhisperKit 0.18's model tables). Sizes are the Hugging Face
-    // file sizes of what WhisperKit downloads, Whisper Base measured from River's cache
-    // (2026-11-09). Descriptions are the settings panel study's (round 13). Still provisional:
-    // each entry must earn its place via a 0022 scorecard.
+    // and sorts it. Whisper names are the exact `argmaxinc/whisperkit-coreml` repo folders
+    // WhisperKit downloads (verified against WhisperKit 0.18's model tables); Parakeet and
+    // Phonon names are the FluidAudio 0.18.3 repo names `FluidAudioLoader` maps (planning
+    // 0037). Sizes are the Hugging Face file sizes of what each engine downloads, Whisper Base
+    // measured from River's cache (2026-11-09). Descriptions are the settings panel study's
+    // (round 13). Still provisional: each entry must earn its place via a 0022 scorecard.
     static let curatedModels: [ModelOption] = [
         ModelOption(
             name: "openai_whisper-base.en", label: "Whisper Base", provider: "OpenAI", family: "Whisper",
@@ -96,6 +96,17 @@ enum Constants {
             family: "Distil-Whisper",
             summary: "Close to Whisper Large v3 accuracy with less work per word. The first load takes minutes.",
             downloadMegabytes: 1515, engine: .whisperKit, minimumMacOS: 14, licence: .mit
+        ),
+        ModelOption(
+            name: "parakeet-tdt-0.6b-v2-coreml", label: "Parakeet TDT v2", provider: "NVIDIA", family: "Parakeet",
+            summary: "Fast and accurate English with punctuation. The first load takes a while.",
+            downloadMegabytes: 464, engine: .fluidAudio, minimumMacOS: 14, licence: .ccBy4
+        ),
+        ModelOption(
+            name: "phonon-2-coreml", label: "Phonon-2", provider: "Fermion Research", family: "Phonon",
+            summary: "A compact retraining of Parakeet for English, with punctuation.",
+            downloadMegabytes: 378, engine: .fluidAudio, minimumMacOS: 15, licence: .ccBy4,
+            basedOn: "NVIDIA Parakeet TDT 0.6B v3"
         ),
     ]
 
@@ -131,7 +142,7 @@ enum Constants {
     // dBFS (AGENTS.md rule #5). First-pass value: an on-device probe with
     // ad-hoc clips showed real room tone peaks ABOVE it (~0.02 RMS windows), so
     // the trim only catches near-digital silence; realistic near-silence is
-    // handled by `TranscriptionManager.isNonSpeechAnnotation` instead. Tune
+    // handled by `WhisperKitModel.isNonSpeechAnnotation` instead. Tune
     // against the 0022 silence corpus once it's recorded.
     static let silenceTrimEnergyThreshold: Float = 0.01
     // Quiet recordings get a lower gate: the cut sits `silenceTrimPeakRatio` below the
@@ -516,8 +527,9 @@ enum Constants {
     // on the modelled light and dark bars (docs/design/color.md).
     static let menuBarMutedDotOpacity: Double = 0.55
 
-    // App icon: 川 in ink on a charcoal squircle (maintainer, 2026-10-29), drawn on
-    // Apple's 1024 grid where the rounded square occupies 824 of the canvas.
+    // App icon: 川 in ink on a deep charcoal squircle (maintainer, 2026-10-29; ground darkened
+    // 2026-11-19, docs/design/kawa-identity.md), drawn on Apple's 1024 grid where the
+    // rounded square occupies 824 of the canvas.
     static let appIconCanvas: Double = 1024
     static let appIconSquircleInset: Double = 100
     static let appIconCornerRadius: Double = 185.4
