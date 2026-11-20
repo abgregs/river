@@ -15,7 +15,7 @@ A model is a 140 MB to 1.6 GB download, and River keeps every model the user has
 - **Only the model's own folder, and its download records** (decision 3). The tokenizer folders under `models/openai` are a few MB and shared between models, so they stay.
 - **After a delete** the row returns to Select without "Downloaded", and the total drops. Choosing the model again downloads it.
 - **Not automatic.** Switching keeps the previous model: switching back would download up to 1.6 GB again, and trying a model and returning is what the Model section is for. An opt-in setting can come later if users ask.
-- **Testable without real models.** The delete takes the models folder as a parameter, so tests delete from a temporary folder and never touch the user's models.
+- **Testable without real models.** `TranscriptionManager` reads the models folder from the `ModelStore` it is given, so tests pass a store with a temporary folder and never touch the user's models. **Why:** the folder was first a parameter of the delete alone, while the Model section read the real folder on its own (2026-11-20, [#98](https://github.com/abgregs/river/pull/98)).
 
 ## Decisions (maintainer, 2026-11-11)
 

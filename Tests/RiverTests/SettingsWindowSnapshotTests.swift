@@ -22,13 +22,16 @@ struct SettingsWindowSnapshotTests {
         let accessibility = AccessibilityCapability()
         accessibility.setStatusForTesting(.denied)
         let appState = AppState()
+        // The rows that read as downloaded, whatever this Mac has: the default, in use, and
+        // Whisper Base, whose ⋯ the hovered shot shows.
         let loader = FakeModelLoader()
+        loader.downloaded = [Constants.defaultModel, "openai_whisper-base.en"]
         let transcription = TranscriptionManager.withFake(loader)
         transcription.setModelLoadStateForTesting(.ready)
         appState.bind(transcription: transcription)
         let model = SettingsWindowModel(appState: appState, capabilities: [microphone, inputMonitoring, accessibility],
                                         updater: UpdaterManager(), shortcutHooks: { _ in .inert }, selectModel: { _ in },
-                                        deleteModel: { _ in })
+                                        deleteModel: { _ in }, modelStore: transcription.store)
         model.permissionMissing = true
         // Each section, then the Model section with a choice waiting for a dictation to end,
         // and with a switch that failed.
@@ -54,7 +57,7 @@ struct SettingsWindowSnapshotTests {
         // models folder line (planning 0038). The menu and the confirmation are windows of
         // their own, which this harness does not draw.
         appState.apply(modelSelection: ModelSelection(inUse: Constants.defaultModel, inUseState: .ready, next: nil))
-        let section = ModelSectionView(appState: appState, selectModel: { _ in }, deleteModel: { _ in },
+        let section = ModelSectionView(appState: appState, store: transcription.store, selectModel: { _ in }, deleteModel: { _ in },
                                        hoveredRow: "openai_whisper-base.en")
         let size = CGSize(width: Constants.settingsModelWindowSize.width - Constants.settingsRailWidth, height: 490)
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
@@ -121,7 +124,8 @@ struct SettingsWindowSnapshotTests {
                 let appState = AppState()
                 shot.prepare(appState)
                 let model = SettingsWindowModel(appState: appState, capabilities: [], updater: UpdaterManager(),
-                                                shortcutHooks: { _ in shot.hooks }, selectModel: { _ in }, deleteModel: { _ in })
+                                                shortcutHooks: { _ in shot.hooks }, selectModel: { _ in }, deleteModel: { _ in },
+                                                modelStore: ModelStore())
                 try write(model, size: Constants.settingsWindowSize, appearance: appearance, steps: shot.steps, wait: shot.wait,
                           to: directory.appendingPathComponent("settings-shortcuts-\(shot.name)-\(appearance.name).png"))
                 for recorder in model.recorders.values { recorder.stop() }

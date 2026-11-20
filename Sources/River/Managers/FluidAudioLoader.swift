@@ -6,9 +6,11 @@ import Foundation
 /// 0038) under `models/FluidInference`, so the Model section's folder total, Show in Finder
 /// and Delete cover it like a Whisper model.
 struct FluidAudioLoader: ModelLoader {
-    // The FluidAudio 0.18.3 version and repo for each model River lists. `AsrModelVersion.repo`
-    // is internal to FluidAudio, so River pairs them itself.
-    private static let models: [String: (version: AsrModelVersion, repo: Repo)] = [
+    // internal for testability — the FluidAudio 0.18.3 version and repo for each model River
+    // lists. `AsrModelVersion.repo` is internal to FluidAudio, so River pairs them itself, and
+    // the catalogue can't hold FluidAudio's types without importing it: a test checks that
+    // every FluidAudio model in the catalogue is here.
+    static let models: [String: (version: AsrModelVersion, repo: Repo)] = [
         "parakeet-tdt-0.6b-v2-coreml": (.v2, .parakeetV2),
         "phonon-2-coreml": (.phonon2, .phonon2),
     ]

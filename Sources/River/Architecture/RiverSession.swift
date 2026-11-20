@@ -547,7 +547,7 @@ final class RiverSession {
     /// The Model section's Delete model (planning 0038): deletes a downloaded model's files.
     /// `TranscriptionManager` refuses the model in use and one loading beside it.
     func deleteModel(_ name: String) throws {
-        try transcription.deleteModel(named: name, downloadBase: TranscriptionManager.modelDownloadBase())
+        try transcription.deleteModel(named: name)
     }
 
     // The ready microphone (planning 0033, decision 5): the capture unit runs between

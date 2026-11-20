@@ -111,8 +111,10 @@ final class TranscriptionManager {
     // The model in use drives `loadModel` and the cache path; `switchModel(to:)` changes it.
     private var modelName: String { selectionSubject.value.inUse }
 
-    // Each engine's loader (planning 0037): the real ones in the app, a fake in tests.
-    private let loaders: @MainActor (SpeechEngine) -> any ModelLoader
+    /// The models on this Mac and the loaders that run them (planning 0037, 0038): the real
+    /// folder and loaders in the app, a temporary folder or a fake loader in tests. The Model
+    /// section reads it too.
+    let store: ModelStore
 
     private var model: (any LoadedModel)?
     private var loadTask: Task<any LoadedModel, Error>?
@@ -160,13 +162,13 @@ final class TranscriptionManager {
     private var customDictionaryTerms: [String] = []
 
     /// `modelName` is the saved choice; one this Mac can't run falls back to the default
-    /// (`runnableModel`). `loaders` picks each engine's loader; tests pass a fake.
-    init(modelName: String = Constants.defaultModel, loaders: @escaping @MainActor (SpeechEngine) -> any ModelLoader = { $0.loader }) {
-        self.loaders = loaders
+    /// (`runnableModel`). Tests pass a `store` with a temporary folder or a fake loader.
+    init(modelName: String = Constants.defaultModel, store: ModelStore = ModelStore()) {
+        self.store = store
         let modelName = Self.runnableModel(modelName, macOSMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
         // Synchronous disk check: if the model files are already on disk the user
         // will see "Preparing model…" (warm launch); otherwise "Downloading model…" (cold).
-        let isCached = Self.loader(for: modelName, in: loaders).isDownloaded(modelName, downloadBase: Self.modelDownloadBase())
+        let isCached = store.isDownloaded(modelName)
         selectionSubject = CurrentValueSubject(
             ModelSelection(inUse: modelName, inUseState: isCached ? .loading : .downloading, next: nil))
     }
@@ -176,20 +178,12 @@ final class TranscriptionManager {
     // catalogue, or Phonon-2 on macOS 14, has no engine to load it here. Once the default is
     // ready the session saves it as the selected model.
     static func runnableModel(_ name: String, macOSMajor: Int) -> String {
-        guard let option = Constants.curatedModels.first(where: { $0.name == name }), option.minimumMacOS <= macOSMajor
+        guard let option = ModelCatalogue.option(named: name), option.minimumMacOS <= macOSMajor
         else { return Constants.defaultModel }
         return name
     }
 
-    private static func loader(for name: String, in loaders: @MainActor (SpeechEngine) -> any ModelLoader) -> any ModelLoader {
-        loaders(Constants.curatedModels.first { $0.name == name }?.engine ?? .whisperKit)
-    }
-
-    private func loader(for name: String) -> any ModelLoader { Self.loader(for: name, in: loaders) }
-
-    private func isDownloaded(_ name: String) -> Bool {
-        loader(for: name).isDownloaded(name, downloadBase: Self.modelDownloadBase())
-    }
+    private func isDownloaded(_ name: String) -> Bool { store.isDownloaded(name) }
 
     // internal for testability — drives the load state without touching the real
     // model, so session tests can exercise the model-readiness gate.
@@ -197,52 +191,17 @@ final class TranscriptionManager {
         update { $0.inUseState = state }
     }
 
-    // internal for testability — the model download root. Application Support
-    // (not WhisperKit's ~/Documents default) so model downloads never trip the
-    // Documents-folder TCC prompt (planning 0010). Pure (no I/O); each loader
-    // creates the folders it downloads into.
-    static func modelDownloadBase() -> URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent(Constants.modelCacheFolderName, isDirectory: true)
-    }
-
-    /// The folder every model's files live in, whatever its engine (planning 0037): what the
-    /// Model section names and shows in Finder.
-    static func modelsFolder(downloadBase: URL) -> URL {
-        downloadBase.appendingPathComponent("models", isDirectory: true)
-    }
-
-    /// The space `url` takes on disk, as Finder counts it: the blocks allocated to every file
-    /// under it, in bytes. `nil` when nothing is there.
-    static func diskUsage(of url: URL) -> Int64? {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: url.path) else { return nil }
-        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .isRegularFileKey]
-        func size(_ file: URL) -> Int64 {
-            guard let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { return 0 }
-            return Int64(values.totalFileAllocatedSize ?? 0)
-        }
-        guard let files = fm.enumerator(at: url, includingPropertiesForKeys: keys) else { return size(url) }
-        return files.reduce(size(url)) { total, file in total + ((file as? URL).map(size) ?? 0) }
-    }
-
-    /// What deleting a model frees: its loader's `files`, measured on disk.
-    static func diskUsage(of files: [URL]) -> Int64 {
-        files.compactMap(diskUsage(of:)).reduce(0, +)
-    }
-
-    /// Deletes a downloaded model's files (planning 0038): what its loader names, so its
+    /// Deletes a downloaded model's files (planning 0038): what `store` names for it, so its
     /// space is freed and choosing it again downloads it. Refuses the model in use, the one
     /// loading beside it, and any model a load is still reading, so a delete never races a
-    /// load of the same model. `downloadBase` is a parameter so tests delete from a temporary
-    /// folder.
-    func deleteModel(named name: String, downloadBase: URL) throws {
-        guard Constants.curatedModels.contains(where: { $0.name == name }) else { throw ModelDeletionError.notInCatalogue }
+    /// load of the same model. Tests delete from a store with a temporary folder.
+    func deleteModel(named name: String) throws {
+        guard ModelCatalogue.option(named: name) != nil else { throw ModelDeletionError.notInCatalogue }
         let selection = currentSelection
         guard name != selection.inUse else { throw ModelDeletionError.inUse }
         guard name != selection.next?.target, modelsLoading[name] == nil else { throw ModelDeletionError.loading }
         let fm = FileManager.default
-        for folder in loader(for: name).files(of: name, downloadBase: downloadBase) where fm.fileExists(atPath: folder.path) {
+        for folder in store.files(of: name) where fm.fileExists(atPath: folder.path) {
             try fm.removeItem(at: folder)
         }
         logger.info("Deleted model \(name, privacy: .public)")
@@ -296,13 +255,13 @@ final class TranscriptionManager {
         }
     }
 
-    // A load of `modelName` by its engine's loader, counted in `modelsLoading` from now until
+    // A load of `modelName` through `store`, counted in `modelsLoading` from now until
     // it ends, cancelled or not. Shared by the model in use and a staged switch.
     private func makeLoadTask(
         modelName: String, phase: @escaping @MainActor (ModelLoadState) -> Void
     ) -> Task<any LoadedModel, Error> {
         modelsLoading[modelName, default: 0] += 1
-        let loader = loader(for: modelName)
+        let store = store
         return Task { [weak self] in
             defer {
                 if let self {
@@ -310,7 +269,7 @@ final class TranscriptionManager {
                     if self.modelsLoading[modelName] == 0 { self.modelsLoading[modelName] = nil }
                 }
             }
-            return try await loader.load(modelName, downloadBase: Self.modelDownloadBase(), phase: phase)
+            return try await store.load(modelName, phase: phase)
         }
     }
 

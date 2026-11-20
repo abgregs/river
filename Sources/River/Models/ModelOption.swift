@@ -29,7 +29,7 @@ struct ModelOption: Identifiable, Equatable {
     var id: String { name }
 }
 
-/// The library that downloads and runs a model (planning 0037). `loader` maps each to its
+/// The library that downloads and runs a model (planning 0037). `ModelStore` maps each to its
 /// `ModelLoader`.
 enum SpeechEngine: Equatable {
     case whisperKit

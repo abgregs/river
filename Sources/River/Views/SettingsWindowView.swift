@@ -15,6 +15,8 @@ final class SettingsWindowModel {
     @ObservationIgnored let updater: UpdaterManager
     @ObservationIgnored let selectModel: (String) -> Void
     @ObservationIgnored let deleteModel: (String) throws -> Void
+    /// The models on this Mac, which the Model section reads (planning 0038).
+    @ObservationIgnored let modelStore: ModelStore
     /// One recorder per row that records a shortcut.
     @ObservationIgnored let recorders: [RiverShortcut: ShortcutRecorderModel]
     /// The Dictate row's recorder.
@@ -22,12 +24,13 @@ final class SettingsWindowModel {
 
     init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
          shortcutHooks: (RiverShortcut) -> ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
-         deleteModel: @escaping (String) throws -> Void) {
+         deleteModel: @escaping (String) throws -> Void, modelStore: ModelStore) {
         self.appState = appState
         self.capabilities = capabilities
         self.updater = updater
         self.selectModel = selectModel
         self.deleteModel = deleteModel
+        self.modelStore = modelStore
         recorders = Dictionary(uniqueKeysWithValues: [RiverShortcut.dictate, .pasteLast, .copyLast, .toggleLiveText].map {
             ($0, ShortcutRecorderModel(row: $0, hooks: shortcutHooks($0)))
         })
@@ -73,7 +76,8 @@ struct SettingsWindowView: View {
             switch model.section {
             case .shortcuts: ShortcutsPane(appState: model.appState, recorders: model.recorders)
             case .dictation: DictationPane()
-            case .model: ModelSectionView(appState: model.appState, selectModel: model.selectModel, deleteModel: model.deleteModel)
+            case .model: ModelSectionView(appState: model.appState, store: model.modelStore, selectModel: model.selectModel,
+                                          deleteModel: model.deleteModel)
             case .general: GeneralPane(updater: model.updater)
             case .permissions: PermissionsPane(capabilities: model.capabilities)
             }

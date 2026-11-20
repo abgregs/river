@@ -10,6 +10,9 @@ import SwiftUI
 /// 820 × 540 for this section, and the table scrolls inside it.
 struct ModelSectionView: View {
     let appState: AppState
+    /// The models on this Mac: what reads as downloaded, each model's folder and files, and
+    /// the folder's total (planning 0038).
+    let store: ModelStore
     let selectModel: (String) -> Void
     let deleteModel: (String) throws -> Void
     @State private var query = ""
@@ -22,9 +25,10 @@ struct ModelSectionView: View {
     @State private var failedDelete: FailedDelete?
     @Environment(\.colorScheme) private var colorScheme
 
-    init(appState: AppState, selectModel: @escaping (String) -> Void, deleteModel: @escaping (String) throws -> Void,
-         hoveredRow: String? = nil) {
+    init(appState: AppState, store: ModelStore, selectModel: @escaping (String) -> Void,
+         deleteModel: @escaping (String) throws -> Void, hoveredRow: String? = nil) {
         self.appState = appState
+        self.store = store
         self.selectModel = selectModel
         self.deleteModel = deleteModel
         // internal for testability — the snapshot harness shows a row's ⋯ as the pointer would.
@@ -34,7 +38,6 @@ struct ModelSectionView: View {
     private struct FailedDelete { let model: ModelOption; let message: String }
 
     private let models = Constants.curatedModels
-    private let downloadBase = TranscriptionManager.modelDownloadBase()
     // The status column fits "Downloaded" beside Select, its widest content. The ⋯ menu
     // follows it, 4 pt after, in its own column, so the status column keeps its layout; the
     // name column gives up the width it takes, so descriptions keep theirs, and the longest
@@ -64,8 +67,7 @@ struct ModelSectionView: View {
     // The note under the table, and where the models are saved: the folder, the space every
     // model in it takes as measured on disk, and Show in Finder.
     private func footer(_ ink: SettingsInk) -> some View {
-        let folder = TranscriptionManager.modelsFolder(downloadBase: downloadBase)
-        let path = (folder.path as NSString).abbreviatingWithTildeInPath
+        let path = (store.modelsFolder.path as NSString).abbreviatingWithTildeInPath
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Sizes are downloads. Each model works entirely on this Mac once it is downloaded.")
@@ -79,7 +81,7 @@ struct ModelSectionView: View {
             .foregroundStyle(ink.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             if modelsSize != nil {
-                Button("Show in Finder") { NSWorkspace.shared.open(folder) }
+                Button("Show in Finder") { NSWorkspace.shared.open(store.modelsFolder) }
                     .buttonStyle(RiverBezelButtonStyle(height: 20, fontSize: 12))
             }
         }
@@ -234,8 +236,8 @@ struct ModelSectionView: View {
     // Delete… where `ModelCatalogue.offersDelete` allows it, absent rather than dimmed.
     @ViewBuilder
     private func rowMenu(_ model: ModelOption, status: ModelCatalogue.RowStatus) -> some View {
-        Button("Show in Finder") {
-            NSWorkspace.shared.activateFileViewerSelecting([model.engine.loader.folder(of: model.name, downloadBase: downloadBase)])
+        if let folder = store.folder(of: model.name) {
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
         }
         if ModelCatalogue.offersDelete(status) {
             Divider()
@@ -247,7 +249,7 @@ struct ModelSectionView: View {
     // the trash, where macOS would show River's own icon and read as deleting River (maintainer,
     // 2026-11-19). It is a sheet on the Settings window.
     private func confirmDelete(_ model: ModelOption) {
-        let freed = TranscriptionManager.diskUsage(of: model.engine.loader.files(of: model.name, downloadBase: downloadBase))
+        let freed = store.spaceFreed(byDeleting: model.name)
         let alert = NSAlert()
         alert.messageText = "Delete \(model.label)?"
         alert.informativeText = "This frees \(ModelCatalogue.formattedSize(bytes: freed)). You can download it again later."
@@ -303,8 +305,8 @@ struct ModelSectionView: View {
     // Which models are downloaded, and the models folder's size: on showing, on every change
     // to the selection (a download or load moving on), and after a delete.
     private func refreshDownloaded() {
-        downloaded = Set(models.filter { $0.engine.loader.isDownloaded($0.name, downloadBase: downloadBase) }.map(\.name))
-        modelsSize = TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: downloadBase))
+        downloaded = Set(models.map(\.name).filter(store.isDownloaded))
+        modelsSize = store.totalSize()
     }
 }
 
@@ -359,9 +361,7 @@ private struct CurrentModelBlock: View {
         }
     }
 
-    private func model(_ name: String) -> ModelOption? {
-        Constants.curatedModels.first { $0.name == name }
-    }
+    private func model(_ name: String) -> ModelOption? { ModelCatalogue.option(named: name) }
 }
 
 /// The status beside the current model and the next one: Ready, Waiting, a load in progress

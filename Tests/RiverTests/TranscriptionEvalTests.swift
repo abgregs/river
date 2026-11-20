@@ -156,7 +156,7 @@ private struct EvalCorpus {
     /// accuracy/latency numbers can be weighed against download cost.
     @MainActor
     static func modelSizeOnDisk(modelName: String) -> Int64 {
-        let base = TranscriptionManager.modelDownloadBase()
+        let base = ModelStore.defaultDownloadBase()
         guard let modelDir = findModelDirectory(named: modelName, under: base) else { return 0 }
         return directorySize(at: modelDir)
     }
