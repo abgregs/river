@@ -42,8 +42,10 @@ final class FakeModel: LoadedModel {
 }
 
 extension TranscriptionManager {
-    /// A manager whose every engine loads through `loader`.
-    static func withFake(_ loader: FakeModelLoader, modelName: String = Constants.defaultModel) -> TranscriptionManager {
-        TranscriptionManager(modelName: modelName, loaders: { _ in loader })
+    /// A manager whose every engine loads through `loader`, in River's real models folder
+    /// unless the test passes its own.
+    static func withFake(_ loader: FakeModelLoader, modelName: String = Constants.defaultModel,
+                         downloadBase: URL = ModelStore.defaultDownloadBase()) -> TranscriptionManager {
+        TranscriptionManager(modelName: modelName, store: ModelStore(downloadBase: downloadBase, loaders: { _ in loader }))
     }
 }

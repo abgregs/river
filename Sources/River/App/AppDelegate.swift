@@ -63,7 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appState: appState, capabilities: capabilities, updater: updater,
             shortcutHooks: { [unowned self] row in self.shortcutHooks(for: row) },
             selectModel: { [weak self] model in self?.session.selectModel(model) },
-            deleteModel: { [weak self] model in try self?.session.deleteModel(model) }
+            deleteModel: { [weak self] model in try self?.session.deleteModel(model) },
+            modelStore: transcription.store
         )
     }()
 

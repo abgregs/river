@@ -224,9 +224,9 @@ struct TranscriptionCacheLocationTests {
     // prompt and clutters the user's Documents (planning 0010). This pins the
     // location so a regression to WhisperKit's ~/Documents default fails loudly.
     @MainActor
-    @Test("modelDownloadBase resolves under Application Support, not Documents")
+    @Test("the default download base resolves under Application Support, not Documents")
     func downloadBaseUnderApplicationSupport() {
-        let path = TranscriptionManager.modelDownloadBase().path
+        let path = ModelStore.defaultDownloadBase().path
         #expect(path.contains("/Library/Application Support/\(Constants.modelCacheFolderName)"))
         #expect(!path.contains("/Documents"))
     }
@@ -632,8 +632,8 @@ struct TranscriptionManagerDeleteModelTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Self.other)
-        let manager = TranscriptionManager(modelName: Self.inUse)
-        try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+        let manager = TranscriptionManager(modelName: Self.inUse, store: ModelStore(downloadBase: fixture.base))
+        try manager.deleteModel(named: Self.other)
         #expect(!fixture.exists(fixture.modelFolder(Self.other)))
         #expect(!fixture.exists(fixture.records.appendingPathComponent(Self.other)))
         #expect(!WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.other))
@@ -648,8 +648,8 @@ struct TranscriptionManagerDeleteModelTests {
         try fixture.writeModel(Self.other)
         try fixture.writeModel("distil-whisper_distil-large-v3")
         try fixture.writeTokenizer()
-        let manager = TranscriptionManager(modelName: Self.inUse)
-        try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+        let manager = TranscriptionManager(modelName: Self.inUse, store: ModelStore(downloadBase: fixture.base))
+        try manager.deleteModel(named: Self.other)
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: "distil-whisper_distil-large-v3"))
         #expect(fixture.exists(fixture.records.appendingPathComponent(Self.inUse)))
@@ -662,10 +662,10 @@ struct TranscriptionManagerDeleteModelTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Self.inUse)
-        let manager = TranscriptionManager(modelName: Self.inUse)
+        let manager = TranscriptionManager(modelName: Self.inUse, store: ModelStore(downloadBase: fixture.base))
         manager.setModelLoadStateForTesting(state)
         #expect(throws: ModelDeletionError.inUse) {
-            try manager.deleteModel(named: Self.inUse, downloadBase: fixture.base)
+            try manager.deleteModel(named: Self.inUse)
         }
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.inUse))
     }
@@ -678,12 +678,12 @@ struct TranscriptionManagerDeleteModelTests {
         try fixture.writeModel(Self.other)
         let loader = FakeModelLoader()
         if fails { loader.failing = [Self.other] }
-        let manager = TranscriptionManager.withFake(loader, modelName: Self.inUse)
+        let manager = TranscriptionManager.withFake(loader, modelName: Self.inUse, downloadBase: fixture.base)
         manager.setModelLoadStateForTesting(.ready)
         await manager.switchModel(to: Self.other)
         #expect(manager.currentModelSwitch?.target == Self.other)
         #expect(throws: ModelDeletionError.loading) {
-            try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
+            try manager.deleteModel(named: Self.other)
         }
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Self.other))
     }
@@ -694,9 +694,9 @@ struct TranscriptionManagerDeleteModelTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeTokenizer()
-        let manager = TranscriptionManager(modelName: Self.inUse)
+        let manager = TranscriptionManager(modelName: Self.inUse, store: ModelStore(downloadBase: fixture.base))
         #expect(throws: ModelDeletionError.notInCatalogue) {
-            try manager.deleteModel(named: "../../openai", downloadBase: fixture.base)
+            try manager.deleteModel(named: "../../openai")
         }
         #expect(fixture.exists(fixture.tokenizer.appendingPathComponent("tokenizer.json")))
     }
@@ -707,14 +707,14 @@ struct TranscriptionManagerDeleteModelTests {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
         try fixture.writeModel(Self.other, bytes: 100_000)
-        let freed = TranscriptionManager.diskUsage(of: WhisperKitLoader().files(of: Self.other, downloadBase: fixture.base))
+        let freed = ModelStore(downloadBase: fixture.base).spaceFreed(byDeleting: Self.other)
         // 17 files of 100 kB, plus 17 one-byte records, each taking at least a block.
         #expect(freed >= 17 * 100_000)
-        #expect(freed == TranscriptionManager.diskUsage(of: fixture.modelFolder(Self.other))! + TranscriptionManager.diskUsage(of: fixture.records.appendingPathComponent(Self.other))!)
-        let before = try #require(TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: fixture.base)))
-        let manager = TranscriptionManager(modelName: Self.inUse)
-        try manager.deleteModel(named: Self.other, downloadBase: fixture.base)
-        let after = TranscriptionManager.diskUsage(of: TranscriptionManager.modelsFolder(downloadBase: fixture.base)) ?? 0
+        #expect(freed == ModelStore.diskUsage(of: fixture.modelFolder(Self.other))! + ModelStore.diskUsage(of: fixture.records.appendingPathComponent(Self.other))!)
+        let before = try #require(ModelStore.diskUsage(of: ModelStore(downloadBase: fixture.base).modelsFolder))
+        let manager = TranscriptionManager(modelName: Self.inUse, store: ModelStore(downloadBase: fixture.base))
+        try manager.deleteModel(named: Self.other)
+        let after = ModelStore.diskUsage(of: ModelStore(downloadBase: fixture.base).modelsFolder) ?? 0
         #expect(before - after == freed)
     }
 }
@@ -740,7 +740,7 @@ struct CachedModelOfflineLoadTests {
     func cachedModelLoadsOffline() async throws {
         let model = ProcessInfo.processInfo.environment["RIVER_OFFLINE_LOAD_MODEL"] ?? "openai_whisper-base.en"
         try #require(
-            WhisperKitLoader.isModelCached(downloadBase: TranscriptionManager.modelDownloadBase(), modelName: model),
+            WhisperKitLoader.isModelCached(downloadBase: ModelStore.defaultDownloadBase(), modelName: model),
             "\(model) is not downloaded; pick it in River once, then rerun"
         )
         let manager = TranscriptionManager(modelName: model)
@@ -755,13 +755,16 @@ struct TranscriptionManagerEngineTests {
     // engine's loader, picked from its catalogue entry.
     private static let parakeet = "parakeet-tdt-0.6b-v2-coreml"
     private static let phonon = "phonon-2-coreml"
+    // Every FluidAudio model the catalogue lists, so one added to the catalogue alone fails
+    // the tests below rather than shipping a row that never downloads or loads.
+    private static let fluidAudioModels = Constants.curatedModels.filter { $0.engine == .fluidAudio }.map(\.name)
 
     @MainActor
     @Test("a model loads through its own engine's loader, and transcribes once it takes over")
     func modelLoadsThroughItsEngine() async throws {
         let whisper = FakeModelLoader()
         let fluid = FakeModelLoader()
-        let mgr = TranscriptionManager(modelName: Constants.defaultModel) { $0 == .fluidAudio ? fluid : whisper }
+        let mgr = TranscriptionManager(modelName: Constants.defaultModel, store: ModelStore(loaders: { $0 == .fluidAudio ? fluid : whisper }))
         try await mgr.loadModel()
         #expect(whisper.loads == [Constants.defaultModel])
 
@@ -793,10 +796,12 @@ struct TranscriptionManagerEngineTests {
     @Test("every catalogue model's files sit inside the one models folder")
     func everyModelIsInsideTheModelsFolder() {
         let base = URL(fileURLWithPath: "/tmp/river-base", isDirectory: true)
-        let models = TranscriptionManager.modelsFolder(downloadBase: base).path + "/"
+        let store = ModelStore(downloadBase: base)
+        let models = store.modelsFolder.path + "/"
         for option in Constants.curatedModels {
-            let loader = option.engine.loader
-            let paths = [loader.folder(of: option.name, downloadBase: base)] + loader.files(of: option.name, downloadBase: base)
+            let folder = store.folder(of: option.name)
+            #expect(folder != nil, "\(option.name) has no folder")
+            let paths = [folder].compactMap { $0 } + store.files(of: option.name)
             for path in paths.map(\.path) { #expect(path.hasPrefix(models), "\(option.name): \(path)") }
         }
     }
@@ -810,6 +815,33 @@ struct TranscriptionManagerEngineTests {
         try fixture.write(loader.folder(of: Self.parakeet, downloadBase: fixture.base).appendingPathComponent("Encoder.mlmodelc/model.mil.partial"), bytes: 1)
         #expect(!loader.isDownloaded(Self.parakeet, downloadBase: fixture.base))
         #expect(!loader.isDownloaded("parakeet-tdt-0.6b-v3-coreml", downloadBase: fixture.base))
+    }
+
+    // planning 0037: `FluidAudioLoader` keeps its own table of FluidAudio's versions and repos,
+    // since the catalogue can't name FluidAudio's types. A catalogue entry missing from it
+    // would read as never downloaded and fail every load.
+    @MainActor
+    @Test("every FluidAudio model in the catalogue is one FluidAudioLoader knows")
+    func catalogueFluidAudioModelsAreKnown() {
+        #expect(!Self.fluidAudioModels.isEmpty)
+        for name in Self.fluidAudioModels { #expect(FluidAudioLoader.models[name] != nil, "\(name)") }
+    }
+
+    // A name the catalogue doesn't list reaches no loader, so no engine guesses at it: it has
+    // no folder for Show in Finder, nothing for a delete to remove, and its load fails.
+    @MainActor
+    @Test("a name the catalogue doesn't list has no folder or files, isn't downloaded, and fails to load")
+    func unlistedNameReachesNoLoader() async {
+        let loader = FakeModelLoader()
+        loader.downloaded = ["openai_whisper-tiny.en"]
+        let store = ModelStore(loaders: { _ in loader })
+        #expect(store.folder(of: "openai_whisper-tiny.en") == nil)
+        #expect(store.files(of: "openai_whisper-tiny.en").isEmpty)
+        #expect(!store.isDownloaded("openai_whisper-tiny.en"))
+        await #expect(throws: ModelStoreError.notInCatalogue) {
+            _ = try await store.load("openai_whisper-tiny.en") { _ in }
+        }
+        #expect(loader.loads.isEmpty)
     }
 
     // The files FluidAudio 0.18.3 writes for each model, as on the maintainer's Mac
@@ -832,7 +864,7 @@ struct TranscriptionManagerEngineTests {
     // repo's `-coreml` name, so a guessed folder left Show in Finder and Delete pointing at
     // nothing. FluidAudio's own check reading the files where River says they are ties the two.
     @MainActor
-    @Test("FluidAudio finds a model in the folder River shows and deletes", arguments: [parakeet, phonon])
+    @Test("FluidAudio finds a model in the folder River shows and deletes", arguments: fluidAudioModels)
     func fluidAudioFolderIsWhereFluidAudioLooks(model: String) throws {
         let fixture = try ModelFixture()
         defer { fixture.remove() }
@@ -848,8 +880,8 @@ struct TranscriptionManagerEngineTests {
         defer { fixture.remove() }
         try fixture.writeModel(Constants.defaultModel)
         let folder = try writeFluidAudioModel(Self.parakeet, in: fixture)
-        let mgr = TranscriptionManager(modelName: Constants.defaultModel)
-        try mgr.deleteModel(named: Self.parakeet, downloadBase: fixture.base)
+        let mgr = TranscriptionManager(modelName: Constants.defaultModel, store: ModelStore(downloadBase: fixture.base))
+        try mgr.deleteModel(named: Self.parakeet)
         #expect(!fixture.exists(folder))
         #expect(!FluidAudioLoader().isDownloaded(Self.parakeet, downloadBase: fixture.base))
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Constants.defaultModel))

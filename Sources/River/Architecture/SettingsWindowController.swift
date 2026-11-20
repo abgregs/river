@@ -18,9 +18,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     init(appState: AppState, capabilities: [any Capability], updater: UpdaterManager,
          shortcutHooks: (RiverShortcut) -> ShortcutRecorderHooks, selectModel: @escaping (String) -> Void,
-         deleteModel: @escaping (String) throws -> Void) {
+         deleteModel: @escaping (String) throws -> Void, modelStore: ModelStore) {
         model = SettingsWindowModel(appState: appState, capabilities: capabilities, updater: updater,
-                                    shortcutHooks: shortcutHooks, selectModel: selectModel, deleteModel: deleteModel)
+                                    shortcutHooks: shortcutHooks, selectModel: selectModel, deleteModel: deleteModel,
+                                    modelStore: modelStore)
     }
 
     /// Follows the permissions for the rail's badge. Idempotent.

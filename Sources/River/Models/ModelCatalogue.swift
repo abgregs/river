@@ -37,6 +37,12 @@ enum ModelCatalogue {
         case selectable(downloaded: Bool)
     }
 
+    /// The catalogue entry a model name stands for: the one lookup from a saved or chosen name
+    /// to its engine, its macOS minimum and its row. `nil` for a name the catalogue doesn't list.
+    static func option(named name: String, in models: [ModelOption] = Constants.curatedModels) -> ModelOption? {
+        models.first { $0.name == name }
+    }
+
     /// Providers in catalogue order, for the filter's pop-up.
     static func providers(_ models: [ModelOption]) -> [String] {
         distinct(models.map(\.provider))

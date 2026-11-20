@@ -9,10 +9,10 @@ protocol LoadedModel: AnyObject {
     func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String
 }
 
-/// One engine's models on disk and in memory (planning 0037, ADR 0001): beneath
-/// `TranscriptionManager`'s switching logic, which picks a loader by the model's catalogue
-/// entry and never imports an engine. Each conformer is the only file that imports its engine;
-/// tests use a fake.
+/// One engine's models on disk and in memory (planning 0037, ADR 0001). `ModelStore` is the
+/// only caller: it picks a loader by the model's catalogue entry and hands it the download
+/// folder, so nothing above it imports an engine or reaches a loader. Each conformer is the
+/// only file that imports its engine; tests use a fake.
 @MainActor
 protocol ModelLoader {
     /// Whether the model's whole file set is on disk, so it loads without the network.
@@ -31,14 +31,4 @@ protocol ModelLoader {
 
 extension ModelLoader {
     func files(of model: String, downloadBase: URL) -> [URL] { [folder(of: model, downloadBase: downloadBase)] }
-}
-
-extension SpeechEngine {
-    /// The loader that downloads and runs this engine's models.
-    @MainActor var loader: any ModelLoader {
-        switch self {
-        case .whisperKit: WhisperKitLoader()
-        case .fluidAudio: FluidAudioLoader()
-        }
-    }
 }
