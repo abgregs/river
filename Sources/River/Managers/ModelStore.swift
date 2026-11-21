@@ -71,9 +71,12 @@ struct ModelStore {
     func totalSize() -> Int64? { Self.diskUsage(of: modelsFolder) }
 
     /// Downloads the model if it is not on disk, then loads it (`ModelLoader.load`).
-    @MainActor func load(_ model: String, phase: @escaping @MainActor (ModelLoadState) -> Void) async throws -> any LoadedModel {
+    @MainActor func load(
+        _ model: String, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
+    ) async throws -> any LoadedModel {
         guard let loader = loader(for: model) else { throw ModelStoreError.notInCatalogue }
-        return try await loader.load(model, downloadBase: downloadBase, phase: phase)
+        return try await loader.load(model, downloadBase: downloadBase, phase: phase, progress: progress)
     }
 
     // internal for testability — the space `url` takes on disk, as Finder counts it: the

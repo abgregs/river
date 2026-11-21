@@ -144,6 +144,16 @@ final class TranscriptionManager {
     var selection: AnyPublisher<ModelSelection, Never> { selectionSubject.eraseToAnyPublisher() }
     var currentSelection: ModelSelection { selectionSubject.value }
 
+    // How far each downloading model has got, kept apart from `selectionSubject`: it changes a
+    // few times a second, and the Model section reads the models folder on every selection
+    // change. An entry lasts only while the selection says its model is downloading.
+    private let progressSubject = CurrentValueSubject<[String: Double], Never>([:])
+
+    /// How far each downloading model has got, 0 to 1, by name (planning 0004): the model in use
+    /// and the one loading beside it. A model's fraction only rises.
+    var downloadProgress: AnyPublisher<[String: Double], Never> { progressSubject.eraseToAnyPublisher() }
+    var currentDownloadProgress: [String: Double] { progressSubject.value }
+
     /// The in-use model's load lifecycle: the menu bar shows an honest "Downloading…" /
     /// "Preparing…" / "Ready" from it.
     var modelLoadState: AnyPublisher<ModelLoadState, Never> {
@@ -227,7 +237,7 @@ final class TranscriptionManager {
         logger.info("Loading model \(self.modelName, privacy: .public)")
         let modelName = self.modelName
 
-        let task = makeLoadTask(modelName: modelName) { [weak self] state in
+        let task = makeLoadTask(modelName: modelName, phase: { [weak self] state in
             // Generation-guarded like the completion paths: a superseded load finishing
             // its download must not mislabel the *newer* switch's published state (e.g.
             // flip "Downloading model…" to "Preparing model…" while another model's
@@ -235,7 +245,9 @@ final class TranscriptionManager {
             if let self, self.loadGeneration == generation {
                 self.emitLoadState(state)
             }
-        }
+        }, progress: { [weak self] fraction in
+            if let self, self.loadGeneration == generation { self.setProgress(fraction, of: modelName) }
+        })
         loadTask = task
         do {
             let loaded = try await task.value
@@ -256,20 +268,25 @@ final class TranscriptionManager {
     }
 
     // A load of `modelName` through `store`, counted in `modelsLoading` from now until
-    // it ends, cancelled or not. Shared by the model in use and a staged switch.
+    // it ends, cancelled or not. Shared by the model in use and a staged switch. Its reports
+    // pass only while it runs: a loader can send one from another queue that lands after the
+    // load has returned, and it must not reopen the state the load settled.
     private func makeLoadTask(
-        modelName: String, phase: @escaping @MainActor (ModelLoadState) -> Void
+        modelName: String, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) -> Task<any LoadedModel, Error> {
         modelsLoading[modelName, default: 0] += 1
         let store = store
         return Task { [weak self] in
+            let reports = LoadReports(phase: phase, progress: progress)
             defer {
+                reports.end()
                 if let self {
                     self.modelsLoading[modelName, default: 1] -= 1
                     if self.modelsLoading[modelName] == 0 { self.modelsLoading[modelName] = nil }
                 }
             }
-            return try await store.load(modelName, phase: phase)
+            return try await store.load(modelName, phase: reports.phase, progress: reports.progress)
         }
     }
 
@@ -284,7 +301,26 @@ final class TranscriptionManager {
     private func update(_ change: (inout ModelSelection) -> Void) {
         var selection = selectionSubject.value
         change(&selection)
-        if selection != selectionSubject.value { selectionSubject.send(selection) }
+        guard selection != selectionSubject.value else { return }
+        selectionSubject.send(selection)
+        let progress = progressSubject.value.filter { Self.isDownloading($0.key, in: selection) }
+        if progress != progressSubject.value { progressSubject.send(progress) }
+    }
+
+    // Keeps the highest fraction a load has reported for `model`, while the selection says the
+    // model is downloading: a report that lands after it has moved on is dropped.
+    private func setProgress(_ fraction: Double, of model: String) {
+        guard Self.isDownloading(model, in: selectionSubject.value) else { return }
+        var progress = progressSubject.value
+        let value = max(progress[model] ?? 0, min(max(fraction, 0), 1))
+        guard value != progress[model] else { return }
+        progress[model] = value
+        progressSubject.send(progress)
+    }
+
+    private static func isDownloading(_ model: String, in selection: ModelSelection) -> Bool {
+        (selection.inUse == model && selection.inUseState == .downloading)
+            || (selection.next?.target == model && selection.next?.phase == .downloading)
     }
 
     // internal for testability — the model picker's current selection, so session
@@ -367,10 +403,12 @@ final class TranscriptionManager {
         let generation = stageGeneration
         update { $0.next = ModelSwitch(target: target, phase: isDownloaded(target) ? .preparing : .downloading) }
         logger.info("Loading model \(target, privacy: .public) beside the one in use")
-        let task = makeLoadTask(modelName: target) { [weak self] state in
+        let task = makeLoadTask(modelName: target, phase: { [weak self] state in
             guard let self, self.stageGeneration == generation else { return }
             self.update { $0.next = ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing) }
-        }
+        }, progress: { [weak self] fraction in
+            if let self, self.stageGeneration == generation { self.setProgress(fraction, of: target) }
+        })
         stagedTask = task
         do {
             let loaded = try await task.value
@@ -434,5 +472,28 @@ final class TranscriptionManager {
         guard !samples.isEmpty, Double(samples.count) < Constants.shortClipSeconds * sampleRate else { return samples }
         let silence = [Float](repeating: 0, count: Int(Constants.shortClipPadSeconds * sampleRate))
         return silence + samples + silence
+    }
+}
+
+// A load's reports to the manager, passed on only until the load ends (`end()`).
+@MainActor
+private final class LoadReports {
+    private var running = true
+    private let onPhase: @MainActor (ModelLoadState) -> Void
+    private let onProgress: @MainActor (Double) -> Void
+
+    init(phase: @escaping @MainActor (ModelLoadState) -> Void, progress: @escaping @MainActor (Double) -> Void) {
+        onPhase = phase
+        onProgress = progress
+    }
+
+    func end() { running = false }
+
+    var phase: @MainActor (ModelLoadState) -> Void {
+        { [self] state in if running { onPhase(state) } }
+    }
+
+    var progress: @MainActor (Double) -> Void {
+        { [self] fraction in if running { onProgress(fraction) } }
     }
 }

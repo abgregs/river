@@ -30,21 +30,43 @@ struct FluidAudioLoader: ModelLoader {
     }
 
     func load(
-        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
+        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) async throws -> any LoadedModel {
         guard let version = Self.models[model]?.version else { throw FluidAudioLoaderError.unknownModel }
         // FluidAudio puts a repo in the parent of the folder it is given, under the repo's own
         // folder name, which is this folder.
         let folder = folder(of: model, downloadBase: downloadBase)
         // A downloaded model loads from disk with no network request. FluidAudio's download
-        // also compiles each model once to check it, so the first preparation is part of
-        // Downloading.
+        // ends by compiling each model once to check it, so its first compile starts Preparing.
         if !isDownloaded(model, downloadBase: downloadBase) {
-            try await AsrModels.download(to: folder, version: version)
-            phase(.loading)
+            let reports = DownloadProgressThrottle()
+            // Called on a queue FluidAudio picks, as often as each chunk of bytes arrives.
+            try await AsrModels.download(to: folder, version: version, progressHandler: { report in
+                switch report.phase {
+                case .downloading(_, let totalFiles):
+                    guard let share = Self.downloadFraction(report.fractionCompleted, filesToDownload: totalFiles),
+                          let fraction = reports.report(share) else { return }
+                    Task { @MainActor in progress(fraction) }
+                case .compiling:
+                    if reports.markPreparing() { Task { @MainActor in phase(.loading) } }
+                case .listing:
+                    break
+                }
+            })
+            if reports.markPreparing() { phase(.loading) }
         }
         let models = try await AsrModels.load(from: folder, version: version)
         return FluidAudioModel(manager: AsrManager(config: .default, models: models), decoderLayers: version.decoderLayers)
+    }
+
+    // internal for testability — the download's fraction in one FluidAudio 0.18.3 report of the
+    // repo download. Each model call reports its download as the first `fluidAudioDownloadShare`
+    // of its own fraction, and only the first call fetches files: a later call, with nothing to
+    // fetch, reports none, which says nothing about the download.
+    nonisolated static func downloadFraction(_ fractionCompleted: Double, filesToDownload: Int) -> Double? {
+        guard filesToDownload > 0 else { return nil }
+        return min(max(fractionCompleted / Constants.fluidAudioDownloadShare, 0), 1)
     }
 }
 

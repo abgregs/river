@@ -110,6 +110,21 @@ enum Constants {
         ),
     ]
 
+    // A download's fraction is passed on only once it has risen this much since the last one
+    // passed on, so a handler called for every chunk of bytes sends the main actor 200 updates
+    // at most, finer than the whole percents Settings and the menu show (planning 0004).
+    static let downloadProgressStep: Double = 0.005
+    // How often a Whisper download's bytes on disk are measured. WhisperKit's own progress
+    // counts files, and two weight files hold nearly all of a model, so its fraction jumps.
+    static let downloadProgressSampleSeconds: Double = 0.5
+    // A fraction measured from bytes on disk stops short of 1 until the download ends: the
+    // catalogue's size is a measurement, and a model's files can come to a little more.
+    static let downloadProgressCeiling: Double = 0.99
+    // The share of each FluidAudio 0.18.3 model call's fraction that is the repo download: its
+    // ModelHub reports the download as 0 to 0.5 and the Core ML compile as 0.5 to 1. The weight
+    // is FluidAudio's own, so check it when raising the pin (Package.swift).
+    static let fluidAudioDownloadShare: Double = 0.5
+
     // Seed for the user-editable custom dictionary. Empty by default; the user
     // curates terms in Settings (M8). A curated starter list could be added here
     // later. See requirements/custom-dictionary.md.
