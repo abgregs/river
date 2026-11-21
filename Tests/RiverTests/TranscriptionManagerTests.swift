@@ -1189,7 +1189,7 @@ struct TranscriptionManagerWaitTests {
         #expect(mgr.currentModelLoadState == .downloading)
 
         loader.finishLoad(of: Self.small)
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<200 where mgr.currentModelLoadState != .ready { try? await Task.sleep(nanoseconds: 5_000_000) }
         #expect(mgr.currentModelLoadState == .ready)
     }
 }
