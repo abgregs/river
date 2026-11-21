@@ -62,7 +62,7 @@ Glass reads one smoothed level (`KawaIndicatorEngine`: rises over about 0.05 s, 
 
 ## Preparing, Reduce Motion, Reduce Transparency
 
-- **Preparing the model:** the muted strokes held still at 20 %, and the timeline stops redrawing; the label above speaks. The full preparing and downloading treatment is deferred.
+- **Preparing the model:** the muted strokes held still at 20 %, and the timeline stops redrawing; the label above speaks. The full preparing and downloading treatment is PR 11's design round: a small mark beside the indicator, opening into a one-line status on hover, while a dictation waits for the model ([0004](../planning/0004_model-loading-indicator.md)).
 - **Reduce Motion:** every envelope becomes a 0.2 s linear fade with no rise, and the level has no jitter. Glass has no ripples, and the level clears the frost directly, held at its value from the release, so the frost never fills back in while it lifts.
 - **Reduce Transparency:** nothing changes. The panel's surface is opaque in every case since 2026-11-04 ([color.md](color.md)).
 
@@ -72,7 +72,7 @@ The panel draws the mark and Glass in the HUD's text color (`ink` on the dark su
 
 ## Deferred and open
 
-- **Deferred:** the full preparing and downloading treatment; a model-selection onboarding step.
+- **Deferred:** the full preparing and downloading treatment (PR 11); a model-selection onboarding step (PR 12).
 - **Done: Glass contrast and the panel's surface** (asked 2026-11-03, settled on the Glass study 2026-11-03 and 2026-11-04). Smoke round 2 found the ripples hard to see at a normal voice and frosted and cleared too alike; the retune above answers it with per-tier windows and stronger rings. Every floating surface became an opaque sheet lit from the upper left ([color.md](color.md)).
 - **Open:** Glass's frosted ink (45 %) measures 2.65:1 on the light tint before the frost's blur and veil, below 3:1 ([color.md](color.md)).
 - **Open:** whether the 20 % muted strokes need a lift under Increase Contrast.

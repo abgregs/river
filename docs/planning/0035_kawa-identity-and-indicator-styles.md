@@ -57,8 +57,8 @@ Tuned on the study page and approved on 2026-11-02, then ported as is. Values ch
 
 ## Deferred to the next PR
 
-- The full preparing and downloading treatment in the panel.
-- A model-selection step in onboarding, so the first model is chosen by the user and never downloaded silently.
+- The full preparing and downloading treatment in the panel: PR 11, a mark beside the indicator while a dictation waits for the model ([0004](0004_model-loading-indicator.md), 2026-11-20).
+- A model-selection step in onboarding, so the first model is chosen by the user and never downloaded silently: PR 12.
 
 ## Acceptance criteria
 
