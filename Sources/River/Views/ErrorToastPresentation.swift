@@ -40,18 +40,7 @@ enum ErrorToastPresentation {
                 headline: "\(capability) permission needed",
                 hint: "Open Permissions… from the menu bar to grant it, then try again."
             )
-        case .transcription(let underlying):
-            // The most common "transcription error" is no failure at all: the user
-            // dictated before the model was warm (the 0004 activation gate). The
-            // generic speak-louder hint would misdirect there — say what is
-            // actually happening and what unblocks it.
-            if let transcriptionError = underlying as? TranscriptionError,
-               case .modelNotLoaded = transcriptionError {
-                return ErrorToast(
-                    headline: "Model still loading",
-                    hint: "Dictation unlocks as soon as the model finishes loading."
-                )
-            }
+        case .transcription:
             return ErrorToast(
                 headline: "Couldn't transcribe",
                 hint: "No text was produced. Speak a little louder or check your input device."

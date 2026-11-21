@@ -38,8 +38,8 @@ enum MenuBarPresentation {
     //
     // During the model load window (planning 0004), the idle state shows the load
     // progress ("Downloading model…" / "Preparing model…") instead of "Ready". Active cycle
-    // states (.recording / .processing) are never masked — the model is ready before
-    // recording is permitted, so the load state only affects the idle presentation.
+    // states (.recording / .processing) keep their own presentation, so the load state only
+    // affects the idle presentation.
     static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState = .ready) -> Visual {
         // Non-idle states are unaffected by model load state.
         guard state == .idle else {

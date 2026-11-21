@@ -19,6 +19,14 @@ final class FakeModelLoader: ModelLoader {
     /// Every load asked for, in order.
     private(set) var loads: [String] = []
 
+    /// Whether each transcription waits for `finishTranscriptions()`, so a test can hold one
+    /// open and see what else runs meanwhile.
+    var holdsTranscriptions = false
+    /// The most transcriptions that ran at once: the engines take one decode at a time.
+    private(set) var mostTranscriptionsAtOnce = 0
+    private var transcriptionsRunning = 0
+    private var heldTranscriptions: [CheckedContinuation<Void, Never>] = []
+
     private var waiting: [String: CheckedContinuation<Void, Never>] = [:]
     // The last load of each model's reports, kept once it has ended so a test can send one late.
     private var reporters: [String: (phase: @MainActor (ModelLoadState) -> Void, progress: @MainActor (Double) -> Void)] = [:]
@@ -39,8 +47,26 @@ final class FakeModelLoader: ModelLoader {
             await withCheckedContinuation { waiting[model] = $0 }
         }
         if failing.contains(model) { throw LoadFailed() }
-        return FakeModel(name: model)
+        return FakeModel(name: model, loader: self)
     }
+
+    /// How many transcriptions are waiting for `finishTranscriptions()`.
+    var heldTranscriptionCount: Int { heldTranscriptions.count }
+
+    /// Lets every held transcription run on.
+    func finishTranscriptions() {
+        let held = heldTranscriptions
+        heldTranscriptions.removeAll()
+        for transcription in held { transcription.resume() }
+    }
+
+    fileprivate func transcriptionStarted() async {
+        transcriptionsRunning += 1
+        mostTranscriptionsAtOnce = max(mostTranscriptionsAtOnce, transcriptionsRunning)
+        if holdsTranscriptions { await withCheckedContinuation { heldTranscriptions.append($0) } }
+    }
+
+    fileprivate func transcriptionEnded() { transcriptionsRunning -= 1 }
 
     /// Waits until a held load of `model` has started. Gives up after about a second, so a load
     /// that never starts fails the test's next expectation rather than hanging it.
@@ -65,10 +91,18 @@ final class FakeModelLoader: ModelLoader {
 @MainActor
 final class FakeModel: LoadedModel {
     let name: String
+    private weak var loader: FakeModelLoader?
 
-    init(name: String) { self.name = name }
+    init(name: String, loader: FakeModelLoader? = nil) {
+        self.name = name
+        self.loader = loader
+    }
 
-    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String { name }
+    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String {
+        await loader?.transcriptionStarted()
+        loader?.transcriptionEnded()
+        return name
+    }
 }
 
 extension TranscriptionManager {

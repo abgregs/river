@@ -413,9 +413,10 @@ final class TranscriptionManager {
     // transcript retention, insertion) without a loaded model.
     var transcribeResultForTesting: String?
 
-    /// Chooses a model (planning 0036, Model). Called from `RiverSession` at any time: a
-    /// dictation only starts with a ready model, so a choice made during one always loads
-    /// beside it and never replaces the model a recording is using.
+    /// Chooses a model (planning 0036, Model). Called from `RiverSession` at any time. A ready
+    /// model is never replaced mid-dictation: a choice made during one loads beside it. A
+    /// dictation that started before the model was ready waits for whichever model is in use
+    /// when it ends (`waitUntilReady`).
     /// - While the model in use is ready, the new one loads beside it and the session commits
     ///   the switch once it is ready (`commitModelSwitch`); dictation keeps the current model
     ///   until then.
@@ -513,8 +514,9 @@ final class TranscriptionManager {
     }
 
     /// Returns the transcribed text or throws. Throws `.modelNotLoaded` if
-    /// `loadModel` hasn't completed (the fail-fast surface — the session logs
-    /// and still returns the cycle to `.idle`).
+    /// `loadModel` hasn't completed: the session waits for the model first
+    /// (`waitUntilReady`), so only a live-text segment decoded mid-recording meets it,
+    /// and the stream then decodes from there in one piece at release.
     func transcribe(audioSamples: [Float]) async throws -> String {
         if let result = transcribeResultForTesting { return result }
         guard let model else { throw TranscriptionError.modelNotLoaded }

@@ -11,12 +11,13 @@ struct SystemAvailability: Equatable {
 }
 
 /// Decides whether the capture unit should run between recordings (planning 0033,
-/// decision 5). Pure, so the rule is tested without a unit or a session.
+/// decision 5). Pure, so the rule is tested without a unit or a session. The model's load
+/// state is not an input: a dictation can start while the model downloads or gets ready
+/// (planning 0004), and its first word needs the ready microphone as much as any other.
 enum MicrophoneReadiness {
     static func shouldListen(
         keepMicrophoneReady: Bool,
         onboardingComplete: Bool,
-        model: ModelLoadState,
         system: SystemAvailability
     ) -> Bool {
         // Onboarding complete means every permission is `.granted`, by `OnboardingGate`'s
@@ -26,7 +27,6 @@ enum MicrophoneReadiness {
         // comes from a press, not from idle.
         keepMicrophoneReady
             && onboardingComplete
-            && model == .ready
             && system == .available
     }
 }

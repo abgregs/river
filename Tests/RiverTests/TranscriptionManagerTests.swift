@@ -207,9 +207,10 @@ struct TranscriptionManagerGateTests {
         // Per ADR 0001, success-path transcription is integration-tested
         // manually (a real WhisperKit load is too heavy for the unit suite).
         // The fail-fast surface — calling transcribe before the model is
-        // loaded — is what `RiverSession` relies on to keep the cycle
-        // moving when the user dictates before the model has finished
-        // downloading. That contract belongs to a fast unit test.
+        // loaded — is what stops the live text's stream when the user
+        // dictates before the model has finished downloading: it then decodes
+        // from there in one piece at release. That contract belongs to a fast
+        // unit test.
         let service = TranscriptionManager()
         await #expect(throws: TranscriptionError.self) {
             _ = try await service.transcribe(audioSamples: [0.0, 0.1, 0.2])
