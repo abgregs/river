@@ -27,7 +27,9 @@ enum Palette {
     }
 
     // Akaneiro (茜色), madder red: River recording, the menu bar's dot while the microphone
-    // records and the Settings recorder's outline and dot while it records a shortcut. On a
+    // records and the Settings recorder's outline and dot while it records a shortcut; and a
+    // dictation River couldn't finish, the status ring of a model that couldn't load (planning
+    // 0004). On a
     // light bar the madder itself, 3.05:1 even on a mid-gray ground; on a dark bar the same hue
     // lifted (OKLCH 0.66 0.147 17), 3.36:1 on the lightest dark ground.
     static let akane = NSColor(srgbHex: 0xB13546)

@@ -441,6 +441,50 @@ enum Constants {
     // Reduce Motion: every envelope becomes a linear fade this long.
     static let kawaReducedFadeSeconds: Double = 0.2
 
+    // The model's status ring (planning 0004), from the preparing status study, round ten
+    // (docs/design/studies/preparing/preparing-status-r10.html, its spec table), on the mark's
+    // 14 pt grid. `StatusRing` reads them.
+    static let statusRingRadius: Double = 4.9
+    static let statusRingStroke: Double = 1.1
+    // Strengths, as opacity of the ring's colour: the track still to come, the arc that has
+    // arrived and the ring while it gets ready, and done (the head, the light, ready's ring, the
+    // check and the exclamation mark). A load that fails after the download shows its whole
+    // ring at the failed strength.
+    static let statusRingTrack: Double = 0.2
+    static let statusRingUnderWay: Double = 0.45
+    static let statusRingDone: Double = 0.9
+    static let statusRingFailedRing: Double = 0.62
+    // The arc follows the real fraction on a critically damped spring this fast, per second:
+    // each rise settles in about 0.6 s. A step this old has settled and folds into the base.
+    static let statusRingGlideRate: Double = 7
+    static let statusRingSettledSeconds: Double = 2
+    // While downloading, the head dims by this much and back every period. Under Reduce Motion
+    // the head holds, and preparing's ring pulses up by `statusRingReducedPulse` instead, over
+    // the same period.
+    static let statusRingBreathSeconds: Double = 2.8
+    static let statusRingBreathDepth: Double = 0.2
+    static let statusRingReducedPulse: Double = 0.17
+    // Preparing's light: from rest at the top, up to a turn every `statusRingLightTurnSeconds`
+    // over `statusRingLightRampSeconds`. The closed arc hands over to it over the hand-off.
+    static let statusRingLightTurnSeconds: Double = 2.4
+    static let statusRingLightRampSeconds: Double = 0.8
+    static let statusRingHandOffSeconds: Double = 0.6
+    // Ready: the ring rises to done and the light fades, and the check is revealed after the delay.
+    static let statusRingReadyRingSeconds: Double = 0.45
+    static let statusRingReadyLightOutSeconds: Double = 0.35
+    static let statusRingCheckDelaySeconds: Double = 0.15
+    static let statusRingCheckSeconds: Double = 0.4
+    // A failed load: the breath (or the light) settles, then the ring turns akane, then the
+    // exclamation mark is revealed, each from the failure.
+    static let statusRingSettleSeconds: Double = 0.25
+    static let statusRingAkaneDelaySeconds: Double = 0.35
+    static let statusRingAkaneSeconds: Double = 0.5
+    static let statusRingSignDelaySeconds: Double = 0.85
+    static let statusRingSignSeconds: Double = 0.45
+    // A reveal wipes behind a soft edge this wide, clearing from a blur this strong, in grid points.
+    static let statusRingRevealEdge: Double = 1.5
+    static let statusRingRevealBlur: Double = 0.45
+
     // The voice: one shared level, stepped at a fixed rate so it is the same at any frame rate.
     // It rises fast and falls slowly, with a ±18 % jitter re-drawn on its own clock so it never
     // sits perfectly still while you speak.
