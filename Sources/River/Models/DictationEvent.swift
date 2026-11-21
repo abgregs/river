@@ -1,6 +1,6 @@
 import Foundation
 
-/// What became of a dictation that ended before the model was ready (planning 0004). The
+/// What became of a dictation River couldn't type as soon as it ended (planning 0004). The
 /// session sends each while River is still `.processing`, so the panel can show it before it
 /// leaves.
 enum DictationEvent: Equatable {
@@ -9,4 +9,7 @@ enum DictationEvent: Equatable {
     /// The model failed to load. The recording is kept, and the next load that succeeds
     /// transcribes it.
     case recordingKept
+    /// The app in front at the release is no longer in front once the text is ready: River
+    /// typed nothing and holds the text as the last transcript.
+    case textHeld
 }

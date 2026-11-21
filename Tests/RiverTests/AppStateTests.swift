@@ -292,7 +292,8 @@ struct AppStateTests {
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
             audio: AudioCaptureManager(microphone: microphone),
-            textInsertion: TextInsertionManager(accessibility: accessibility),
+            // One app in front throughout: a switch of app would hold the text, not type it.
+            textInsertion: TextInsertionManager(accessibility: accessibility, frontmostApp: { 1 }),
             transcription: transcription,
             settings: store,
             system: SystemAvailabilityMonitor()

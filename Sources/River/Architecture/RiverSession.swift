@@ -98,7 +98,7 @@ final class RiverSession {
     // Fires just before a silent discard's `.idle`, so `AppState` can tell it from a
     // cancel, which looks the same as a state change.
     var discards: AnyPublisher<Void, Never> { discardSubject.eraseToAnyPublisher() }
-    // What became of a dictation that ended before the model was ready, sent before `.idle`
+    // What became of a dictation River couldn't type as soon as it ended, sent before `.idle`
     // so the panel can show it (planning 0004).
     var dictationEvents: AnyPublisher<DictationEvent, Never> { eventSubject.eraseToAnyPublisher() }
     // How many recordings a failed load kept, for Settings' "1 recording kept".
@@ -276,6 +276,9 @@ final class RiverSession {
         logger.info("State -> processing")
         // Every way out returns to `.idle`: a failed load and Cancel Dictation end it early.
         defer { returnToIdle() }
+        // The app dictated into: the one in front at the release, so in a tap mode a click into
+        // another app before the stop types there (planning 0004).
+        let app = textInsertion.appInFront()
         let stream = self.stream
         self.stream = nil
         let released = ContinuousClock.now
@@ -297,7 +300,7 @@ final class RiverSession {
                     logger.info("Stream found no speech; skipping paste")
                 } else {
                     liveTranscriptSubject.send(outcome.text)
-                    await deliver(outcome.text)
+                    await deliver(outcome.text, into: app)
                 }
             } else if samples.isEmpty {
                 stream?.cancel()
@@ -322,7 +325,7 @@ final class RiverSession {
                 do {
                     let text = try await transcribeInTurn(samples)
                     logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
-                    await deliver(text)
+                    await deliver(text, into: app)
                 } catch TranscriptionError.noSpeechDetected {
                     // Decode heard only non-speech (breath, room tone, music the
                     // trim didn't catch): same policy as the all-silence branch
@@ -351,7 +354,7 @@ final class RiverSession {
                     if !outcome.text.isEmpty {
                         logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
                         liveTranscriptSubject.send(outcome.text)
-                        await deliver(outcome.text)
+                        await deliver(outcome.text, into: app)
                     }
                 } else {
                     stream.cancel()
@@ -451,8 +454,15 @@ final class RiverSession {
     // Retains the transcript, then types it at the cursor. Retained before the paste
     // attempt: recovery is available even when insertion fails (planning 0019 AC1).
     // Content is never logged — only its count is; see logging.md anti-pattern #4.
-    private func deliver(_ text: String) async {
+    // When `app`, the app in front at the release, is no longer in front, River types nothing
+    // and holds the text: it would land in an app the user never dictated into (planning 0004).
+    private func deliver(_ text: String, into app: pid_t?) async {
         lastTranscript = text
+        if let app, textInsertion.appInFront() != app {
+            logger.info("The app in front changed after the release; holding \(text.count, privacy: .public) chars")
+            eventSubject.send(.textHeld)
+            return
+        }
         do {
             try await textInsertion.insertText(text)
         } catch {

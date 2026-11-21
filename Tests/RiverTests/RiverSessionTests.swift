@@ -843,6 +843,50 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("a switch of app after the release holds the text and types none")
+    func switchAfterReleaseHoldsTheText() async throws {
+        // The text would land in an app the user never dictated into.
+        let env = makeSession()
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
+        let release = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+
+        env.appInFront.pid = 200
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await release.value
+        await load.value
+        #expect(events.events == [.waitingForModel, .textHeld])
+        #expect(events.states == [.processing, .processing])
+
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        env.session.copyLastTranscript(to: pasteboard)
+        let held = pasteboard.string(forType: .string)
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(held == Constants.defaultModel)
+        #expect(typed.isEmpty)
+    }
+
+    @MainActor
+    @Test("a click into another app before the release types there: the app dictated into is the one in front at the release")
+    func appAtTheReleaseIsTheTarget() async throws {
+        // In a tap mode the user can start, click into the field they want, and stop there.
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "hello world"
+        let events = EventLog(env.session)
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+
+        env.appInFront.pid = 200
+        await env.session.handleDeactivate()
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(typed == "hello world")
+        #expect(events.events.isEmpty)
+    }
+
+    @MainActor
     @Test("the live text stays hidden for a dictation that started before the model was ready")
     func liveTextHiddenUntilTheModelIsReady() async throws {
         // It would sit empty through the wait, and while it shows the panel takes the mouse.
@@ -1110,6 +1154,13 @@ struct RiverSessionTests {
         let accessibility: AccessibilityCapability
         let audio: AudioCaptureManager
         let system: SystemAvailabilityMonitor
+        let appInFront: AppInFront
+    }
+
+    // The app in front, which a test moves to switch apps.
+    @MainActor
+    private final class AppInFront {
+        var pid: pid_t? = 100
     }
 
     @MainActor
@@ -1148,13 +1199,14 @@ struct RiverSessionTests {
         // audio, which the capture-gap check would report as lost audio. The gap check and
         // its watchdog have their own suites; the session test drives the callback directly.
         let audio = AudioCaptureManager(microphone: microphone, now: { 100 })
+        let appInFront = AppInFront()
         let session = RiverSession(
             accessibility: accessibility,
             microphone: microphone,
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
             audio: audio,
-            textInsertion: TextInsertionManager(accessibility: accessibility),
+            textInsertion: TextInsertionManager(accessibility: accessibility, frontmostApp: { appInFront.pid }),
             transcription: transcription,
             settings: store,
             system: system
@@ -1170,7 +1222,8 @@ struct RiverSessionTests {
             loader: loader,
             accessibility: accessibility,
             audio: audio,
-            system: system
+            system: system,
+            appInFront: appInFront
         )
     }
 
