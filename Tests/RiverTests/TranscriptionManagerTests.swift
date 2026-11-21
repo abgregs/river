@@ -199,7 +199,7 @@ struct CuratedModelListTests {
     }
 }
 
-@Suite("TranscriptionManager model gate")
+@Suite("TranscriptionManager with no model loaded")
 struct TranscriptionManagerGateTests {
     @MainActor
     @Test("transcribe throws .modelNotLoaded when loadModel has not completed")

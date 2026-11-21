@@ -283,8 +283,8 @@ struct AppStateTests {
         )
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
         let transcription = TranscriptionManager()
-        // Unit tests never load the real model — mark ready so handleActivate
-        // exercises the recording path rather than the model-gate decline.
+        // Unit tests never load the real model — mark ready so a dictation
+        // never waits for one.
         transcription.setModelLoadStateForTesting(.ready)
         let session = RiverSession(
             accessibility: accessibility,

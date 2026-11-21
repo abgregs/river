@@ -1140,7 +1140,7 @@ struct RiverSessionTests {
         let loader = FakeModelLoader()
         let transcription = TranscriptionManager.withFake(loader)
         // Unit tests never load a real model, so mark the model as ready to exercise the
-        // normal recording path without triggering the model gate. A model switch (planning
+        // normal recording path without waiting for the model. A model switch (planning
         // 0021) loads through the fake, so the session's routing runs without a download.
         transcription.setModelLoadStateForTesting(.ready)
         // The clock is frozen: these tests are about the cycle, and with suites running

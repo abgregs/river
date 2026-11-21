@@ -168,7 +168,8 @@ final class TranscriptionManager {
         selectionSubject.map(\.inUseState).removeDuplicates().eraseToAnyPublisher()
     }
 
-    /// Synchronous accessor for the session's model-readiness gate.
+    /// Synchronous accessor: the session reads it to decide whether a dictation waits for the
+    /// model.
     var currentModelLoadState: ModelLoadState { selectionSubject.value.inUseState }
     // internal for testability — the model loading beside the one in use.
     var currentModelSwitch: ModelSwitch? { selectionSubject.value.next }
@@ -204,7 +205,7 @@ final class TranscriptionManager {
     private func isDownloaded(_ name: String) -> Bool { store.isDownloaded(name) }
 
     // internal for testability — drives the load state without touching the real
-    // model, so session tests can exercise the model-readiness gate.
+    // model, so session tests can drive a dictation's wait for the model.
     func setModelLoadStateForTesting(_ state: ModelLoadState) {
         update { $0.inUseState = state }
     }
