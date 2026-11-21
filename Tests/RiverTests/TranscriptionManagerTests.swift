@@ -1061,3 +1061,134 @@ struct FluidAudioLoaderDownloadProgressTests {
         #expect(FluidAudioLoader.downloadFraction(0.5, filesToDownload: 0) == nil)
     }
 }
+
+@Suite("TranscriptionManager waiting for the model")
+struct TranscriptionManagerWaitTests {
+    // planning 0004: a dictation that ends before the model is ready waits for it, then types.
+    // The wait follows the published state: ready ends it, a failed load ends it with an error,
+    // and downloading, preparing or a newer choice keep it waiting.
+    private static let small = Constants.defaultModel
+    private static let base = "openai_whisper-base.en"
+
+    private enum Outcome: Equatable { case ready, failed, cancelled, other }
+
+    // How the wait ended. One still open after 200 turns of the main actor, a second when it is
+    // idle, is cancelled, so a wait that never ends fails the test rather than hanging the run.
+    // Turns, not a clock: in a parallel run other suites hold the main actor too.
+    @MainActor
+    private static func outcome(of wait: Task<Void, Error>) async -> Outcome {
+        let deadline = Task { @MainActor in
+            for _ in 0..<200 { try await Task.sleep(nanoseconds: 5_000_000) }
+            wait.cancel()
+        }
+        defer { deadline.cancel() }
+        do {
+            try await wait.value
+            return .ready
+        } catch TranscriptionError.modelLoadFailed {
+            return .failed
+        } catch is CancellationError {
+            return .cancelled
+        } catch {
+            return .other
+        }
+    }
+
+    // A wait that has started, and a held load of `model` running under it.
+    @MainActor
+    private static func waitDuringLoad(_ loader: FakeModelLoader, _ mgr: TranscriptionManager, of model: String) async -> Task<Void, Error> {
+        loader.held.insert(model)
+        Task { try? await mgr.loadModel() }
+        await loader.loadStarted(model)
+        let wait = Task { try await mgr.waitUntilReady() }
+        for _ in 0..<200 where mgr.openWaitCount == 0 { try? await Task.sleep(nanoseconds: 5_000_000) }
+        return wait
+    }
+
+    @MainActor
+    @Test("a ready model ends the wait at once, and a failed one fails it at once")
+    func settledStateEndsTheWaitAtOnce() async {
+        let mgr = TranscriptionManager.withFake(FakeModelLoader())
+        mgr.setModelLoadStateForTesting(.ready)
+        #expect(await Self.outcome(of: Task { try await mgr.waitUntilReady() }) == .ready)
+        mgr.setModelLoadStateForTesting(.failed)
+        #expect(await Self.outcome(of: Task { try await mgr.waitUntilReady() }) == .failed)
+        #expect(mgr.openWaitCount == 0)
+    }
+
+    @MainActor
+    @Test("the wait lasts through downloading and preparing, and ends once the model is ready")
+    func waitEndsWhenReady() async {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        #expect(mgr.openWaitCount == 1)
+        loader.report(.loading, of: Self.small)
+        #expect(mgr.openWaitCount == 1)
+
+        loader.finishLoad(of: Self.small)
+        #expect(await Self.outcome(of: wait) == .ready)
+        #expect(mgr.currentModelLoadState == .ready)
+        #expect(mgr.openWaitCount == 0)
+    }
+
+    @MainActor
+    @Test("a load that fails ends the wait with modelLoadFailed, so the dictation can keep its recording")
+    func failedLoadFailsTheWait() async {
+        let loader = FakeModelLoader()
+        loader.failing = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        loader.finishLoad(of: Self.small)
+        #expect(await Self.outcome(of: wait) == .failed)
+        #expect(mgr.currentModelLoadState == .failed)
+    }
+
+    @MainActor
+    @Test("a model chosen during the wait is waited for in place of the one it replaced")
+    func waitFollowsANewChoice() async {
+        let loader = FakeModelLoader()
+        loader.failing = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        loader.held.insert(Self.base)
+        let choice = Task { await mgr.switchModel(to: Self.base) }
+        await loader.loadStarted(Self.base)
+
+        // The replaced load failing is not the new model failing.
+        loader.finishLoad(of: Self.small)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(mgr.openWaitCount == 1)
+
+        loader.finishLoad(of: Self.base)
+        await choice.value
+        #expect(await Self.outcome(of: wait) == .ready)
+        #expect(mgr.currentModelName == Self.base)
+    }
+
+    @MainActor
+    @Test("a wait with no load running starts one, so it can never wait forever")
+    func waitStartsAMissingLoad() async {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        #expect(mgr.currentModelLoadState == .downloading)
+        #expect(await Self.outcome(of: Task { try await mgr.waitUntilReady() }) == .ready)
+        #expect(loader.loads == [Self.small])
+    }
+
+    @MainActor
+    @Test("cancelling the waiting task ends the wait, and the model keeps loading")
+    func cancelEndsTheWait() async {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        wait.cancel()
+        #expect(await Self.outcome(of: wait) == .cancelled)
+        #expect(mgr.openWaitCount == 0)
+        #expect(mgr.currentModelLoadState == .downloading)
+
+        loader.finishLoad(of: Self.small)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(mgr.currentModelLoadState == .ready)
+    }
+}

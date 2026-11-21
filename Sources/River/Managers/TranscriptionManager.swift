@@ -54,6 +54,8 @@ enum TranscriptionError: Error, LocalizedError {
     /// surfaces this in the log; M7 will fold it into the user-visible error
     /// surface alongside paste failures.
     case modelNotLoaded
+    /// The model a dictation waited for failed to load (`waitUntilReady`, planning 0004).
+    case modelLoadFailed
     case transcriptionFailed(underlying: Error)
     /// The engine returned no text for a non-empty audio buffer. Distinct from
     /// the no-audio path (`AudioCaptureError.noAudioCaptured` in M5) so the
@@ -77,6 +79,8 @@ enum TranscriptionError: Error, LocalizedError {
         switch self {
         case .modelNotLoaded:
             return "Transcription model is not loaded yet."
+        case .modelLoadFailed:
+            return "The transcription model failed to load."
         case .transcriptionFailed(let underlying):
             return "Transcription failed: \(underlying.localizedDescription)"
         case .emptyTranscription:
@@ -133,6 +137,10 @@ final class TranscriptionManager {
     // cancels it, but cancellation is cooperative and the Core ML load runs on, so
     // `deleteModel` asks this as well as the selection.
     private var modelsLoading: [String: Int] = [:]
+
+    // The waits for the model in use (`waitUntilReady`), ended by `update` once its state settles.
+    private var readyWaiters: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var nextWaiterID = 0
 
     // The one record of the model in use, its load state and the model loading beside it.
     // Every change sends a whole value, so no reader sees a half-made switch. Initialized from
@@ -305,6 +313,58 @@ final class TranscriptionManager {
         selectionSubject.send(selection)
         let progress = progressSubject.value.filter { Self.isDownloading($0.key, in: selection) }
         if progress != progressSubject.value { progressSubject.send(progress) }
+        endWaits(at: selection.inUseState)
+    }
+
+    /// Returns once the model in use is ready, or throws `TranscriptionError.modelLoadFailed`
+    /// once its load fails (planning 0004): a dictation that ends before the model is ready
+    /// waits here. A model chosen during the wait is waited for in its place. It waits on the
+    /// published state, not on `loadModel()`, which would start a failed load again.
+    /// Cancelling the waiting task ends the wait with `CancellationError`.
+    func waitUntilReady() async throws {
+        try Task.checkCancellation()
+        if try isSettled(currentModelLoadState) { return }
+        // A state that says the model is loading, with no load running, would never settle.
+        if model == nil, loadTask == nil {
+            Task { [weak self] in try? await self?.loadModel() }
+        }
+        let id = nextWaiterID
+        nextWaiterID += 1
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (waiter: CheckedContinuation<Void, Error>) in
+                do {
+                    if try isSettled(currentModelLoadState) { waiter.resume() } else { readyWaiters[id] = waiter }
+                } catch {
+                    waiter.resume(throwing: error)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.readyWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError())
+            }
+        }
+    }
+
+    // internal for testability — how many waits for the model in use are open.
+    var openWaitCount: Int { readyWaiters.count }
+
+    // Whether a wait for the model ends at `state`: `true` once ready, throws once failed.
+    // Downloading and Preparing keep it waiting.
+    private func isSettled(_ state: ModelLoadState) throws -> Bool {
+        switch state {
+        case .ready: return true
+        case .failed: throw TranscriptionError.modelLoadFailed
+        case .downloading, .loading: return false
+        }
+    }
+
+    private func endWaits(at state: ModelLoadState) {
+        guard !readyWaiters.isEmpty, state == .ready || state == .failed else { return }
+        let waiters = readyWaiters.values
+        readyWaiters.removeAll()
+        for waiter in waiters {
+            if state == .ready { waiter.resume() } else { waiter.resume(throwing: TranscriptionError.modelLoadFailed) }
+        }
     }
 
     // Keeps the highest fraction a load has reported for `model`, while the selection says the
