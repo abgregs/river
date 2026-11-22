@@ -228,10 +228,12 @@ final class AppState {
     // once the model loads after all.
     func apply(modelLoadState: ModelLoadState) {
         self.modelLoadState = modelLoadState
+        // A wait ends once the model is ready or has failed, whether or not its row has shown:
+        // the session has nothing left to cancel, so Cancel Dictation leaves the menu.
+        if modelLoadState == .ready || modelLoadState == .failed { isDictationWaiting = false }
         switch dictationStatus {
         case .model(.downloading), .model(.preparing):
             if modelLoadState == .ready {
-                isDictationWaiting = false
                 show(.model(.ready))
             } else if let phase = waitingPhase {
                 dictationStatus = .model(phase)
