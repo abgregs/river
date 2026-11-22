@@ -38,9 +38,9 @@ struct StatusRowWordsTests {
     @Test("each status says why the text hasn't typed yet")
     func wordsPerStatus() {
         let downloading = StatusRowWords.of(.model(.downloading), frame: Self.downloadingAt(0.62), pasteLast: Self.pasteLast)
-        #expect(downloading.main == "Typing after the download")
+        #expect(downloading.main == "Typing after model download")
         #expect(downloading.detail == "62%")
-        #expect(StatusRowWords.of(.model(.preparing), frame: nil, pasteLast: Self.pasteLast).main == "Typing when it’s ready")
+        #expect(StatusRowWords.of(.model(.preparing), frame: nil, pasteLast: Self.pasteLast).main == "Typing once model is ready")
         #expect(StatusRowWords.of(.model(.ready), frame: nil, pasteLast: Self.pasteLast).main == "Ready")
         let failed = StatusRowWords.of(.model(.failed), frame: StatusRingFrame(layers: [], akane: 1), pasteLast: Self.pasteLast)
         #expect(failed.main == "Couldn’t load the model")
@@ -58,7 +58,7 @@ struct StatusRowWordsTests {
         // The words change with the colour, so the row never says "couldn't load" over a ring
         // that hasn't turned yet.
         let turning = StatusRingFrame(layers: [.init(opacity: 1, marks: StatusRing.download(0.4, breath: 0))], akane: 0.3)
-        #expect(StatusRowWords.of(.model(.failed), frame: turning, pasteLast: Self.pasteLast).main == "Typing after the download")
+        #expect(StatusRowWords.of(.model(.failed), frame: turning, pasteLast: Self.pasteLast).main == "Typing after model download")
         let turned = StatusRingFrame(layers: turning.layers, akane: 0.6)
         #expect(StatusRowWords.of(.model(.failed), frame: turned, pasteLast: Self.pasteLast).main == "Couldn’t load the model")
     }
@@ -66,16 +66,16 @@ struct StatusRowWordsTests {
     @Test("held text names the Paste last shortcut, or the menu when the shortcut doesn't work")
     func heldWords() {
         let held = StatusRowWords.of(.held, frame: nil, pasteLast: Self.pasteLast)
-        #expect(held.main == "Not typed")
+        #expect(held.main == "App switched")
         #expect(held.detail == "⌃⌥V pastes it")
-        #expect(held.spoken == "Not typed. Control-Option-V pastes it.")
+        #expect(held.spoken == "App switched. Control-Option-V pastes it.")
         #expect(StatusRowWords.of(.held, frame: nil, pasteLast: nil).detail == "Copy it from the menu")
     }
 
     @Test("VoiceOver hears each change of status, never a percentage")
     func spokenWordsHaveNoPercentage() {
         let spoken = StatusRowWords.of(.model(.downloading), frame: Self.downloadingAt(0.62), pasteLast: Self.pasteLast).spoken
-        #expect(spoken == "Typing after the download")
+        #expect(spoken == "Typing after model download")
         #expect(StatusRowWords.of(.model(.downloading), frame: Self.downloadingAt(0.7), pasteLast: Self.pasteLast).spoken == spoken)
     }
 

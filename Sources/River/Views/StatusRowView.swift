@@ -15,9 +15,9 @@ struct StatusRowWords: Equatable {
     static func of(_ status: DictationStatus, frame: StatusRingFrame?,
                    pasteLast: (display: String, spoken: String)?) -> StatusRowWords {
         let arc = frame?.layers.flatMap(\.marks).lazy.compactMap { if case .arc(let fraction, _) = $0 { fraction } else { nil } }.first
-        let downloading = StatusRowWords(main: "Typing after the download", detail: "\(Int(((arc ?? 0) * 100).rounded(.down)))%",
-                                         spoken: "Typing after the download")
-        let preparing = StatusRowWords(main: "Typing when it’s ready", detail: nil, spoken: "Typing when it’s ready")
+        let downloading = StatusRowWords(main: "Typing after model download", detail: "\(Int(((arc ?? 0) * 100).rounded(.down)))%",
+                                         spoken: "Typing after model download")
+        let preparing = StatusRowWords(main: "Typing once model is ready", detail: nil, spoken: "Typing once model is ready")
         switch status {
         case .model(.downloading):
             return downloading
@@ -31,10 +31,10 @@ struct StatusRowWords: Equatable {
                                   spoken: "Couldn’t load the model. Recording kept.")
         case .held:
             guard let pasteLast else {
-                return StatusRowWords(main: "Not typed", detail: "Copy it from the menu", spoken: "Not typed. Copy it from the menu.")
+                return StatusRowWords(main: "App switched", detail: "Copy it from the menu", spoken: "App switched. Copy it from the menu.")
             }
-            return StatusRowWords(main: "Not typed", detail: "\(pasteLast.display) pastes it",
-                                  spoken: "Not typed. \(pasteLast.spoken) pastes it.")
+            return StatusRowWords(main: "App switched", detail: "\(pasteLast.display) pastes it",
+                                  spoken: "App switched. \(pasteLast.spoken) pastes it.")
         }
     }
 
