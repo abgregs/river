@@ -76,6 +76,8 @@ final class AppState {
     private(set) var downloadProgress: [String: Double] = [:]
     /// How many recordings a failed load kept, for Settings' "1 recording kept".
     private(set) var keptRecordingCount = 0
+    /// Whether a dictation that has ended waits for the model, for the menu's Cancel Dictation.
+    private(set) var isDictationWaiting = false
     // Set by the session's `discards` signal, which arrives just before that
     // recording's `.idle`; consumed as the state leaves `.recording`.
     @ObservationIgnored private var isDiscardPending = false
@@ -88,7 +90,6 @@ final class AppState {
     @ObservationIgnored private var statusReveal: AnyCancellable?
     @ObservationIgnored private var statusHold: AnyCancellable?
     @ObservationIgnored private var isRevealDue = false
-    @ObservationIgnored private var dictationWaits = false
     @ObservationIgnored private var recordingKept = false
 
     // `nil` default (resolved to `liveScheduler` in this isolated init body)
@@ -230,6 +231,7 @@ final class AppState {
         switch dictationStatus {
         case .model(.downloading), .model(.preparing):
             if modelLoadState == .ready {
+                isDictationWaiting = false
                 show(.model(.ready))
             } else if let phase = waitingPhase {
                 dictationStatus = .model(phase)
@@ -245,9 +247,10 @@ final class AppState {
     func apply(dictationEvent event: DictationEvent) {
         switch event {
         case .waitingForModel:
-            dictationWaits = true
+            isDictationWaiting = true
             showWaitIfDue()
         case .recordingKept:
+            isDictationWaiting = false
             recordingKept = true
             // The panel stays up for the failure, even when River is idle before it shows.
             holdsPanel = true
@@ -279,7 +282,7 @@ final class AppState {
         statusReveal = nil
         statusHold = nil
         isRevealDue = false
-        dictationWaits = false
+        isDictationWaiting = false
         recordingKept = false
     }
 
@@ -300,7 +303,7 @@ final class AppState {
         if recordingKept {
             // The model loaded after all before the row showed: there is nothing to say.
             if modelLoadState == .ready { endHold() } else { show(.model(.failed)) }
-        } else if dictationWaits, state == .processing, let phase = waitingPhase {
+        } else if isDictationWaiting, state == .processing, let phase = waitingPhase {
             show(.model(phase))
         }
     }
@@ -354,7 +357,7 @@ final class AppState {
         case nil:
             if !recordingKept { statusReveal = nil }
         }
-        dictationWaits = false
+        isDictationWaiting = false
     }
 
     // internal for testability — the level entry point (also used by

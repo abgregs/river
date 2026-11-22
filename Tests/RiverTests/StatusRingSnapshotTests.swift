@@ -66,4 +66,49 @@ struct StatusRingSnapshotTests {
             }
         }
     }
+
+    @Test("write the menu bar's ring icons and the menu's status glyphs, at 2x, on a light and a dark bar")
+    func writeMenuBarSnapshots() throws {
+        let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let rings: [(String, MenuBarPresentation.Ring)] = [
+            ("downloading", .init(phase: .downloading, eighths: 5)), ("preparing", .init(phase: .preparing, eighths: nil)),
+            ("failed-download", .init(phase: .failed, eighths: 5)), ("failed-after-download", .init(phase: .failed, eighths: nil)),
+        ]
+        for (name, ring) in rings {
+            for (bar, dark) in [("light", false), ("dark", true)] {
+                // The bar paints a template in its text colour, as it paints the icons beside it.
+                let icon = MenuBarRingImages.icon(for: ring), status = MenuBarRingImages.statusGlyph(for: ring, dark: dark)
+                let ink = dark ? NSColor.white : NSColor.black
+                let image = NSImage(size: NSSize(width: 44, height: 22), flipped: false) { rect in
+                    (dark ? NSColor(white: 0.16, alpha: 1) : NSColor(white: 0.93, alpha: 1)).setFill()
+                    rect.fill()
+                    for (glyph, origin) in [(icon, NSPoint(x: 2, y: 2)), (status, NSPoint(x: 26, y: 5))] {
+                        let box = NSRect(origin: origin, size: glyph.size)
+                        if glyph.isTemplate {
+                            let tinted = NSImage(size: glyph.size, flipped: false) { r in
+                                ink.setFill(); r.fill()
+                                glyph.draw(in: r, from: .zero, operation: .destinationIn, fraction: 1)
+                                return true
+                            }
+                            tinted.draw(in: box)
+                        } else {
+                            glyph.draw(in: box)
+                        }
+                    }
+                    return true
+                }
+                let rep = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 88, pixelsHigh: 44, bitsPerSample: 8,
+                                                        samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+                rep.size = image.size
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+                image.draw(in: NSRect(origin: .zero, size: image.size))
+                NSGraphicsContext.restoreGraphicsState()
+                let data = try #require(rep.representation(using: .png, properties: [:]))
+                try data.write(to: directory.appendingPathComponent("menu-ring-\(name)-\(bar).png"))
+            }
+        }
+    }
 }

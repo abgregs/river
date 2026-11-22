@@ -485,6 +485,20 @@ struct AppStateDictationStatusTests {
         #expect(timers.pendingDelays.isEmpty)
     }
 
+    @Test("a dictation waits from the session's word until the model is ready, its load fails, or it is cancelled")
+    func waitingForTheMenu() {
+        // The menu offers Cancel Dictation for exactly this span.
+        let (state, _) = waiting()
+        #expect(state.isDictationWaiting)
+        state.apply(modelLoadState: .ready)
+        #expect(state.isDictationWaiting)   // nothing showed yet: the wait ends with the text typed
+        state.apply(.idle)
+        #expect(!state.isDictationWaiting)
+        let (failing, _) = waiting()
+        failing.apply(dictationEvent: .recordingKept)
+        #expect(!failing.isDictationWaiting)
+    }
+
     @Test("the download fraction is the model in use's")
     func fractionOfTheModelInUse() {
         let (state, _) = make(.downloading)

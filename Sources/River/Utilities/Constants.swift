@@ -608,6 +608,10 @@ enum Constants {
     // Transcribing's dot: the bar's text color at this strength, the least that still holds 3:1
     // on the modelled light and dark bars (docs/design/color.md).
     static let menuBarMutedDotOpacity: Double = 0.55
+    // The model's status ring (planning 0004): its 14 pt grid drawn this size, centred in the
+    // menu bar glyph's box, and beside the menu's status line, as the study draws them.
+    static let menuBarRingSize: Double = 16
+    static let menuStatusRingSize: Double = 12
 
     // App icon: 川 in ink on a deep charcoal squircle (maintainer, 2026-10-29; ground darkened
     // 2026-11-19, docs/design/kawa-identity.md), drawn on Apple's 1024 grid where the

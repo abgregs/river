@@ -193,3 +193,62 @@ private extension NSColor {
             && abs(blueComponent - other.blueComponent) < 0.02
     }
 }
+
+@Suite("Menu bar ring images")
+@MainActor
+struct MenuBarRingImageTests {
+    // planning 0004: the menu bar's icon takes the status ring, still and in one tone, as a
+    // template the bar paints as it paints the icons beside it; the menu's status line shows the
+    // same ring, a failure in akane.
+
+    @Test("the menu bar's ring is a template at the glyph's size, drawn at both screen scales")
+    func iconIsATemplate() {
+        let image = MenuBarRingImages.icon(for: .init(phase: .downloading, eighths: 4))
+        #expect(image.isTemplate)
+        #expect(image.size == NSSize(width: Constants.menuBarGlyphSize, height: Constants.menuBarGlyphSize))
+        #expect(Set(image.representations.map(\.pixelsWide)) == [Int(Constants.menuBarGlyphSize), 2 * Int(Constants.menuBarGlyphSize)])
+    }
+
+    @Test("more of the download draws more of the arc")
+    func arcGrowsWithTheDownload() throws {
+        let quarter = try pixels(MenuBarRingImages.icon(for: .init(phase: .downloading, eighths: 2))).reduce(0) { $0 + $1.a }
+        let most = try pixels(MenuBarRingImages.icon(for: .init(phase: .downloading, eighths: 6))).reduce(0) { $0 + $1.a }
+        #expect(quarter > 0)
+        #expect(quarter < most)
+    }
+
+    @Test("a failure's sign is in the menu bar's one tone, and akane beside the menu's status line")
+    func failureColours() throws {
+        #expect(MenuBarRingImages.icon(for: .init(phase: .failed, eighths: 4)).isTemplate)
+        let status = MenuBarRingImages.statusGlyph(for: .init(phase: .failed, eighths: 4), dark: true)
+        #expect(!status.isTemplate)
+        // The most opaque pixel lies on the exclamation mark or the ring, both akane.
+        let densest = try #require(try pixels(status).max { $0.a < $1.a })
+        let akane = Palette.akaneOnDark.usingColorSpace(.sRGB)!
+        #expect(densest.a > 0.5)
+        #expect(abs(densest.r - akane.redComponent) < 0.03)
+        #expect(abs(densest.g - akane.greenComponent) < 0.03)
+        #expect(abs(densest.b - akane.blueComponent) < 0.03)
+    }
+
+    // The 2x representation's pixels, read as 8-bit sRGB and unpremultiplied.
+    private func pixels(_ image: NSImage) throws -> [(r: Double, g: Double, b: Double, a: Double)] {
+        let rep = try #require(image.representations.compactMap { $0 as? NSBitmapImageRep }.max { $0.pixelsWide < $1.pixelsWide })
+        let cgImage = try #require(rep.cgImage)
+        let width = cgImage.width, height = cgImage.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                          bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        try #require(drawn)
+        return stride(from: 0, to: bytes.count, by: 4).map { i in
+            let a = Double(bytes[i + 3]) / 255
+            guard a > 0 else { return (0, 0, 0, 0) }
+            return (Double(bytes[i]) / 255 / a, Double(bytes[i + 1]) / 255 / a, Double(bytes[i + 2]) / 255 / a, a)
+        }
+    }
+}
