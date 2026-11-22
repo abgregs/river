@@ -5,8 +5,9 @@ import Foundation
 /// clock, which starts as the ring appears (planning 0004). A moment that has not happened yet
 /// is `.infinity`, so every change that waits on it holds.
 struct StatusRingEvents: Equatable {
-    /// What the ring showed as it appeared.
-    enum Start: Equatable { case downloading, preparing, failed }
+    /// What the ring showed as it appeared. One that appears ready or failed shows its sign at
+    /// once: Settings, opened long after the load ended, has nothing to animate.
+    enum Start: Equatable { case downloading, preparing, ready, failed }
 
     /// One rise of the real download fraction, which the arc glides through.
     struct Step: Equatable {
@@ -30,10 +31,11 @@ struct StatusRingEvents: Equatable {
         case .downloading:
             start = .downloading
             base = min(max(fraction ?? 0, 0), 1)
-        case .preparing, .ready:
+        case .preparing:
             start = .preparing
             preparing = 0
-            if phase == .ready { ready = 0 }
+        case .ready:
+            start = .ready
         case .failed:
             start = .failed
             base = fraction.map { min(max($0, 0), 1) }
@@ -260,6 +262,9 @@ enum StatusRing {
         let sign = StatusRingFrame.Reveal(progress: tween(ev.failed + C.statusRingSignDelaySeconds, C.statusRingSignSeconds, .easeOut),
                                           wipes: !rm)
 
+        if ev.start == .ready {
+            return StatusRingFrame(layers: [layer([.ring(alpha: C.statusRingDone), .check(.init(progress: 1, wipes: !rm))])], akane: 0)
+        }
         if ev.start == .failed {
             // Failed before it appeared: the sign shows at once.
             let marks: [StatusRingFrame.Mark] = ev.base.map { download($0, breath: 0) } ?? [.ring(alpha: C.statusRingFailedRing)]

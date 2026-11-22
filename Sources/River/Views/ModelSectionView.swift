@@ -195,7 +195,8 @@ struct ModelSectionView: View {
                 .foregroundStyle(unavailable ? ink.opacity(0.7) : ink.opacity(0.86))
                 .frame(width: Self.columnWidths.size, alignment: .trailing)
             HStack(spacing: Self.menuGap) {
-                ModelRowAction(model: model, status: status, selectModel: selectModel, focusedRow: $focusedRow)
+                ModelRowAction(model: model, status: status, fraction: appState.downloadProgress[model.name],
+                               selectModel: selectModel, focusedRow: $focusedRow)
                     .frame(width: Self.columnWidths.status, alignment: .trailing)
                 rowMenuButton(model, status: status, isDownloaded: isDownloaded, ink: ink)
                     .frame(width: Self.columnWidths.menu)
@@ -326,14 +327,16 @@ private struct CurrentModelBlock: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(current?.label ?? selection.inUse).fontWeight(.semibold)
                     if let current {
-                        Text("\(current.provider) · \(ModelCatalogue.formattedSize(megabytes: current.downloadMegabytes))")
+                        Text("\(current.provider) · \(ModelCatalogue.formattedSize(megabytes: current.downloadMegabytes))\(kept)")
                             .font(.system(size: 11).monospacedDigit())
                             .foregroundStyle(ink.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let status = ModelCatalogue.status(ofModelNamed: selection.inUse, in: selection) {
-                    ModelPhaseStatus(status: status, barWidth: 96) { selectModel(selection.inUse) }
+                    ModelPhaseStatus(model: selection.inUse, status: status, fraction: appState.downloadProgress[selection.inUse]) {
+                        selectModel(selection.inUse)
+                    }
                 }
             }
             if let next = selection.next, let target = model(next.target),
@@ -343,7 +346,9 @@ private struct CurrentModelBlock: View {
                         .font(.system(size: 11))
                         .foregroundStyle(ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ModelPhaseStatus(status: status, barWidth: 96) { selectModel(next.target) }
+                    ModelPhaseStatus(model: next.target, status: status, fraction: appState.downloadProgress[next.target]) {
+                        selectModel(next.target)
+                    }
                 }
                 .padding(.top, 10)
                 .overlay(alignment: .top) { Rectangle().fill(ink.opacity(0.08)).frame(height: 1) }
@@ -362,13 +367,23 @@ private struct CurrentModelBlock: View {
     }
 
     private func model(_ name: String) -> ModelOption? { ModelCatalogue.option(named: name) }
+
+    // The recordings a failed load kept (planning 0004), until a load succeeds and holds their text.
+    private var kept: String {
+        switch appState.keptRecordingCount {
+        case 0: ""
+        case 1: " · 1 recording kept"
+        case let count: " · \(count) recordings kept"
+        }
+    }
 }
 
-/// The status beside the current model and the next one: Ready, Waiting, a load in progress
-/// (an indeterminate bar: River gets no download percentage), or a failure with Try Again.
+/// The status beside the current model and the next one: the status ring and its words while
+/// it downloads, gets ready, is ready or couldn't load (with Try Again), or Waiting.
 private struct ModelPhaseStatus: View {
+    let model: String
     let status: ModelCatalogue.RowStatus
-    let barWidth: Double
+    let fraction: Double?
     let retry: () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
@@ -376,18 +391,15 @@ private struct ModelPhaseStatus: View {
         let ink = SettingsInk(colorScheme)
         HStack(spacing: 8) {
             switch status {
-            case .inUse:
-                Image(systemName: "checkmark").font(.system(size: 11, weight: .medium))
-                Text("Ready")
             case .waiting:
                 Text("Waiting")
-            case .downloading, .preparing:
-                IndeterminateBar(width: barWidth)
-                Text(status == .downloading ? "Downloading…" : "Preparing…")
-            case .failed:
-                Image(systemName: "exclamationmark.triangle").font(.system(size: 11))
-                Text("Couldn’t load")
-                Button("Try Again", action: retry).buttonStyle(RiverBezelButtonStyle())
+            case .inUse, .downloading, .preparing, .failed:
+                if let phase = ModelStatusLabel.phase(of: status) {
+                    ModelStatusLabel(model: model, phase: phase, fraction: fraction)
+                }
+                if status == .failed {
+                    Button("Try Again", action: retry).buttonStyle(RiverBezelButtonStyle())
+                }
             case .needsMacOS, .selectable:
                 EmptyView()
             }
@@ -397,10 +409,79 @@ private struct ModelPhaseStatus: View {
     }
 }
 
+/// A model's load in Settings (planning 0004): the status ring at 12 pt, animated as it is
+/// beside the indicator and in its label's colour (akane for a failure), and its words; the
+/// percentage counts with the arc. A load that starts again starts the ring again.
+private struct ModelStatusLabel: View {
+    let model: String
+    let phase: StatusRing.Phase
+    let fraction: Double?
+    @State private var cycle: StatusRingCycle?
+    @State private var shownPhase: StatusRing.Phase?
+    // A ready or failed ring is still once its sign is drawn, so the timeline stops redrawing it.
+    @State private var isStill = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+
+    static func phase(of status: ModelCatalogue.RowStatus) -> StatusRing.Phase? {
+        switch status {
+        case .inUse: .ready
+        case .downloading: .downloading
+        case .preparing: .preparing
+        case .failed: .failed
+        case .waiting, .needsMacOS, .selectable: nil
+        }
+    }
+
+    var body: some View {
+        TimelineView(.animation(paused: isStill)) { context in
+            let frame = cycle.map { StatusRing.frame(at: $0.time(at: context.date), events: $0.events, reduceMotion: reduceMotion) }
+                ?? StatusRing.frame(at: 0, events: StatusRingEvents(appearing: phase, fraction: fraction), reduceMotion: reduceMotion)
+            HStack(spacing: 6) {
+                StatusRingGlyph(frame: frame, size: 12, ink: Palette.HUD.for(colorScheme).text)
+                    .opacity(phase == .failed ? 1 : Constants.hudSecondaryTextOpacity)
+                words(frame)
+            }
+        }
+        .onChange(of: phase, initial: true) { update() }
+        .onChange(of: fraction) { update() }
+        .task(id: phase) {
+            isStill = false
+            guard phase == .ready || phase == .failed else { return }
+            try? await Task.sleep(for: .seconds(Constants.statusRingSignDelaySeconds + Constants.statusRingSignSeconds))
+            if !Task.isCancelled { isStill = true }
+        }
+    }
+
+    @ViewBuilder private func words(_ frame: StatusRingFrame) -> some View {
+        switch phase {
+        case .downloading:
+            let arc = frame.layers.flatMap(\.marks).lazy.compactMap { if case .arc(let q, _) = $0 { q } else { nil } }.first ?? 0
+            HStack(spacing: 4) {
+                Text("Downloading…")
+                Text("100%").monospacedDigit().hidden()
+                    .overlay(alignment: .leading) { Text("\(Int((arc * 100).rounded(.down)))%").monospacedDigit() }
+            }
+        case .preparing: Text("Getting ready…")
+        case .ready: Text("Ready")
+        case .failed: Text("Couldn’t load")
+        }
+    }
+
+    // A phase that goes back (Try Again, or the model chosen again) is a new load.
+    private func update() {
+        let rank: [StatusRing.Phase: Int] = [.downloading: 0, .preparing: 1, .ready: 2, .failed: 2]
+        let restarts = shownPhase.map { rank[phase, default: 0] < rank[$0, default: 0] } ?? false
+        cycle = StatusRingCycle.next(restarts ? nil : cycle, phase: phase, model: model, fraction: fraction, at: Date())
+        shownPhase = phase
+    }
+}
+
 /// A row's trailing cell: In use, Waiting, a load in progress, a macOS requirement, or Select.
 private struct ModelRowAction: View {
     let model: ModelOption
     let status: ModelCatalogue.RowStatus
+    let fraction: Double?
     let selectModel: (String) -> Void
     // Select shares the row's focus value with its ⋯ menu, so a keyboard-focused row shows it.
     let focusedRow: FocusState<String?>.Binding
@@ -418,11 +499,12 @@ private struct ModelRowAction: View {
                 .foregroundStyle(ink.color)
             case .waiting:
                 Text("Waiting")
-            case .downloading, .preparing:
-                IndeterminateBar(width: 36)
-                Text(status == .downloading ? "Downloading…" : "Preparing…")
+            case .downloading:
+                ModelStatusLabel(model: model.name, phase: .downloading, fraction: fraction)
+            case .preparing:
+                ModelStatusLabel(model: model.name, phase: .preparing, fraction: fraction)
             case .failed:
-                Image(systemName: "exclamationmark.triangle").font(.system(size: 11))
+                ModelStatusLabel(model: model.name, phase: .failed, fraction: fraction)
                 selectButton("Try Again")
             case .needsMacOS(let major):
                 Text("Needs macOS \(major)")
@@ -442,36 +524,6 @@ private struct ModelRowAction: View {
             .buttonStyle(RiverBezelButtonStyle(height: 20, fontSize: 12))
             .focused(focusedRow, equals: model.name)
             .accessibilityLabel("\(title) \(model.label)")
-    }
-}
-
-/// An indeterminate progress bar in ink: a short segment sliding along a faint track. Still,
-/// at a faint full width, with Reduce Motion.
-private struct IndeterminateBar: View {
-    let width: Double
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let ink = SettingsInk(colorScheme)
-        Capsule()
-            .fill(ink.opacity(0.12))
-            .frame(width: width, height: 4)
-            .overlay(alignment: .leading) {
-                if reduceMotion {
-                    Capsule().fill(ink.opacity(0.35))
-                } else {
-                    TimelineView(.animation) { context in
-                        let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
-                        Capsule().fill(ink.opacity(0.7))
-                            .frame(width: width * 0.34)
-                            .offset(x: width * (-0.34 + 1.34 * t))
-                    }
-                }
-            }
-            .clipShape(Capsule())
-            .accessibilityElement()
-            .accessibilityLabel("In progress")
     }
 }
 

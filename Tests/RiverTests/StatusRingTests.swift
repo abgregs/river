@@ -146,6 +146,14 @@ struct StatusRingTests {
         #expect(Self.rings(after) == [0.62])
     }
 
+    @Test("a ring that appears ready shows its check at once, since Settings opens long after the load")
+    func appearsReady() {
+        let ready = StatusRing.frame(at: 0, events: StatusRingEvents(appearing: .ready, fraction: nil), reduceMotion: false)
+        #expect(Self.rings(ready) == [0.9])
+        #expect(Self.check(ready)!.progress == 1)
+        #expect(ready.akane == 0)
+    }
+
     @Test("under Reduce Motion nothing travels: preparing pulses between 45 % and 62 % every 2.8 s, and every change is a 0.2 s fade")
     func reduceMotion() {
         let preparing = StatusRingEvents(appearing: .preparing, fraction: nil)

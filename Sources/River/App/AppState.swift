@@ -71,9 +71,11 @@ final class AppState {
     /// Whether the status keeps the panel up once River is idle: a failed load or held text for
     /// 4 s after it shows, and a ready check until it has been revealed.
     private(set) var holdsPanel = false
-    /// How far the model in use has downloaded, 0 to 1, for the status ring: while it downloads,
-    /// and where a failed download stopped. Nil otherwise.
-    private(set) var downloadFraction: Double?
+    /// How far each downloading model has got, 0 to 1, by name, and where a failed download
+    /// stopped (planning 0004): the status ring beside the indicator and in Settings.
+    private(set) var downloadProgress: [String: Double] = [:]
+    /// How many recordings a failed load kept, for Settings' "1 recording kept".
+    private(set) var keptRecordingCount = 0
     // Set by the session's `discards` signal, which arrives just before that
     // recording's `.idle`; consumed as the state leaves `.recording`.
     @ObservationIgnored private var isDiscardPending = false
@@ -88,7 +90,6 @@ final class AppState {
     @ObservationIgnored private var isRevealDue = false
     @ObservationIgnored private var dictationWaits = false
     @ObservationIgnored private var recordingKept = false
-    @ObservationIgnored private var downloadProgress: [String: Double] = [:]
 
     // `nil` default (resolved to `liveScheduler` in this isolated init body)
     // rather than a default-argument reference to the main-actor static, which
@@ -124,6 +125,9 @@ final class AppState {
             .store(in: &cancellables)
         session.dictationEvents
             .sink { [weak self] event in self?.apply(dictationEvent: event) }
+            .store(in: &cancellables)
+        session.keptRecordingCount
+            .sink { [weak self] count in self?.apply(keptRecordingCount: count) }
             .store(in: &cancellables)
     }
 
@@ -254,10 +258,18 @@ final class AppState {
     }
 
     // internal for testability — each model's download fraction (also used by
-    // `bind(transcription:)`); the row reads the model in use's.
+    // `bind(transcription:)`).
     func apply(downloadProgress progress: [String: Double]) {
         downloadProgress = progress
-        downloadFraction = progress[modelSelection.inUse]
+    }
+
+    /// How far the model in use has downloaded, for the row beside the indicator: while it
+    /// downloads, and where a failed download stopped. Nil otherwise.
+    var downloadFraction: Double? { downloadProgress[modelSelection.inUse] }
+
+    // internal for testability — the session's kept recordings (also used by `bind`).
+    func apply(keptRecordingCount count: Int) {
+        keptRecordingCount = count
     }
 
     // A fresh dictation starts with nothing beside the indicator.
@@ -387,7 +399,6 @@ final class AppState {
     // `bind(transcription:)`), so a snapshot can show a switch without loading a model.
     func apply(modelSelection selection: ModelSelection) {
         modelSelection = selection
-        downloadFraction = downloadProgress[selection.inUse]
     }
 
     // internal for testability — clears the toast when its timer fires. Separate so
