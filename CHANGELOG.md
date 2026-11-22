@@ -22,20 +22,26 @@ show as raw text. -->
 
 - A switch in Settings, "Only use the microphone while dictating", restores the previous behaviour: the microphone opens on the key press and closes after the recording. Off by default.
 - A new recording indicator, Glass: a pane of frost over 川 that your voice ripples and clears, with stronger ripples when you speak louder.
+- You can dictate before the speech model is ready. River records as usual and types your words once the model has downloaded and is ready. If you finish speaking first, a line beside the recording indicator shows what it is waiting for: the download with its percentage, then the preparation, then a check as the text types.
+- If the model fails to load, River keeps your recording and transcribes it the next time the model loads, holding the text for Paste last instead of typing it. Settings shows how many recordings it kept. Kept recordings stay in memory only, so quitting River discards them.
+- While a dictation waits for the model, the menu offers Cancel Dictation, which discards it. The model keeps loading.
 
 ### Changed
 
 - A new mark: River is now 川, in the menu bar and in the app icon. While River records, a red dot sits beside 川 in the menu bar; while it transcribes, the dot turns a muted gray.
-- The recording indicator draws 川 and is monochrome. When you press, the panel appears, then 川's strokes, faint, then the frosted glass once the microphone hears you; on release the glass leaves, the strokes stay while River transcribes, then the panel leaves. While River prepares its model, the panel shows the faint strokes, still.
+- The recording indicator draws 川 and is monochrome. When you press, the panel appears, then 川's strokes, faint, then the frosted glass once the microphone hears you; on release the glass leaves, the strokes stay while River transcribes, then the panel leaves. Nothing shows while River loads its model at launch.
+- The model's download and preparation show as a ring, with the real download percentage, beside the recording indicator, in Settings and in the menu bar, in place of Settings' sliding bar and the menu bar's arrow and ellipsis. A model that couldn't load shows the ring in red with an exclamation mark.
 - The floating panels (the indicator, messages and the live transcript) are now solid, lit from the upper left with a bright edge, so they look the same over any desktop.
 - The recording indicator reads your voice on a scale measured from real speech on the built-in microphone: a quiet room keeps it still, and soft, normal and raised speech look different. Before, normal speech already filled it.
 
-- The microphone stays ready while River can take a dictation (permissions granted, the model loaded, the Mac awake and unlocked), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
+- The microphone stays ready while River can take a dictation (permissions granted, the Mac awake and unlocked, including while the model loads), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
 - With AirPods or another Bluetooth headset selected as the input, River records from the Mac's built-in microphone instead, on Macs that have one. The headset is never switched into call mode, so music and calls keep their quality while you dictate, and the recording is at the Mac microphone's full rate. A Mac without a built-in microphone keeps using the headset.
 
 ### Fixed
 
 - A word spoken the instant you press no longer loses its first sound (the microphone is already open; see Changed above).
+- A dictation no longer lands in the wrong app when you switch apps after you stop speaking and before the text is ready. River holds the text instead; Paste last or Copy Last Transcription puts it where you want it.
+- Pressing to dictate while the model is still loading no longer shows "Model still loading" and drops the press: the dictation records and waits (see Added above).
 - A recording no longer stops hearing you when the audio device changes part-way, for example when a microphone is unplugged. The first recording with AirPods connected used to come back empty for this reason.
 - A recording whose audio stops arriving part-way now ends on its own within a couple of seconds, types the words heard before the loss, and says so, instead of running on and typing the fragment as if it were the whole dictation.
 
