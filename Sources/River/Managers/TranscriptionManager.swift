@@ -154,11 +154,13 @@ final class TranscriptionManager {
 
     // How far each downloading model has got, kept apart from `selectionSubject`: it changes a
     // few times a second, and the Model section reads the models folder on every selection
-    // change. An entry lasts only while the selection says its model is downloading.
+    // change. An entry lasts while the selection says its model is downloading, and stays once
+    // that download fails, so the failed ring shows how far it got (planning 0004).
     private let progressSubject = CurrentValueSubject<[String: Double], Never>([:])
 
     /// How far each downloading model has got, 0 to 1, by name (planning 0004): the model in use
-    /// and the one loading beside it. A model's fraction only rises.
+    /// and the one loading beside it, and where a failed download stopped. A model's fraction
+    /// only rises.
     var downloadProgress: AnyPublisher<[String: Double], Never> { progressSubject.eraseToAnyPublisher() }
     var currentDownloadProgress: [String: Double] { progressSubject.value }
 
@@ -312,7 +314,9 @@ final class TranscriptionManager {
         change(&selection)
         guard selection != selectionSubject.value else { return }
         selectionSubject.send(selection)
-        let progress = progressSubject.value.filter { Self.isDownloading($0.key, in: selection) }
+        let progress = progressSubject.value.filter {
+            Self.isDownloading($0.key, in: selection) || Self.hasFailed($0.key, in: selection)
+        }
         if progress != progressSubject.value { progressSubject.send(progress) }
         endWaits(at: selection.inUseState)
     }
@@ -382,6 +386,12 @@ final class TranscriptionManager {
     private static func isDownloading(_ model: String, in selection: ModelSelection) -> Bool {
         (selection.inUse == model && selection.inUseState == .downloading)
             || (selection.next?.target == model && selection.next?.phase == .downloading)
+    }
+
+    // Only a download adds a fraction, so a failed model keeps one only if it failed downloading.
+    private static func hasFailed(_ model: String, in selection: ModelSelection) -> Bool {
+        (selection.inUse == model && selection.inUseState == .failed)
+            || (selection.next?.target == model && selection.next?.phase == .failed)
     }
 
     // internal for testability — the model picker's current selection, so session

@@ -1,6 +1,6 @@
 # ADR 0003: One window and one bottom-anchored stack for the floating UI
 
-**Status:** Accepted — 2026-10-12
+**Status:** Accepted — 2026-10-12. Amended 2026-11-21: the model's status row beside the mark.
 
 ## Context
 
@@ -46,9 +46,20 @@ The window is sized for the tallest stack (`RiverIndicatorView.contentSize` plus
 - **Clicks stop passing through the window's transparent areas** while the transcript shows, for example after a macOS change. Then shrink the window's mouse region to the transcript, or move the transcript back to a window of its own.
 - **The stack's fixed frame grows** past what fits above the Dock on small displays. Then cap the transcript's height, or let the window size follow its content.
 
+## Amendment — 2026-11-21: the status row beside the mark
+
+Planning [0004](../planning/0004_model-loading-indicator.md) puts the model's status in a one-line row 8 pt to the right of the mark's panel, once a dictation ends before the model is ready. That is the first case under **Revisit if**: a surface beside the mark, outside the vertical stack.
+
+It stays in this window. The row hangs off the mark as an overlay, not as a member of the stack, and leaves on the mark's own clock: it fades and drops with the panel's exit, read from the same cycle's timeline. That clock is view state. One window shares it; a second window would have to copy it and keep the two exits in step, which is the coupling this decision removed.
+
+The window widens so the widest row fits on either side of the centred mark: `RiverIndicatorView.contentSize` is at least 2 × (24 + 8 + `statusRowMaxWidth`) = 664 pt wide, 856 pt with the shadow margin, and a test measures every row River writes against it. The window still ignores the mouse outside the transcript's lifetime, so the row is never clickable and covers nothing it could take a click from.
+
+The model-loading label above the mark is gone: nothing shows while the model loads at launch.
+
 ## Related
 
 - [../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md) — the indicator's original window: non-activating, fixed position, never key.
+- [../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md) — the status row the amendment places beside the mark.
 - [../planning/0030_floating-ui-visibility.md](../planning/0030_floating-ui-visibility.md) — the panel-replacement fix this keeps, now in one coordinator.
 - [../architecture/app-state-and-menu-bar.md](../architecture/app-state-and-menu-bar.md) — `AppState`, the one seam the stack observes.
 - [../design/color.md](../design/color.md) — the shared `HUDSurface` every surface in the stack uses.

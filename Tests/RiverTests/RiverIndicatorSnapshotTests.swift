@@ -21,7 +21,7 @@ struct RiverIndicatorSnapshotTests {
     }
 
     // The study's scripts: a dictation; three phrases held soft, normal and raised; a phrase
-    // then quiet, for the frost's return; a dead microphone; and preparing.
+    // then quiet, for the frost's return; and a dead microphone.
     static let steps: (Double) -> Double = {
         let soft = sentence(1.3, 2.8, pauseAt: 9, pauseLength: 0, seed: 31, low: 0.26, span: 0.08)
         let normal = sentence(3.15, 4.65, pauseAt: 9, pauseLength: 0, seed: 37, low: 0.58, span: 0.1)
@@ -34,7 +34,6 @@ struct RiverIndicatorSnapshotTests {
     static let stopLast = stride(from: 4.0, to: 1.3, by: -1 / Constants.kawaEngineStepsPerSecond).first { stop($0) > 0 }!
     static let stopEvents = KawaIndicatorEvents(press: 0.3, audio: 0.32, release: stopLast + 2.6, typed: stopLast + 3.2)
     static let dead = KawaIndicatorEvents(press: 0.3, release: 4.2, typed: 4.45)
-    static let preparing = KawaIndicatorEvents(press: 0.3, release: 2.6, typed: 2.6)
 
     // The study's Glass filmstrip, then the soft, normal and loud steps and the edge cases.
     static let frames: [Held] = {
@@ -49,7 +48,6 @@ struct RiverIndicatorSnapshotTests {
             Held(name: "returning", events: stopEvents, voice: stop, time: stopLast + 1.2),
             Held(name: "returned", events: stopEvents, voice: stop, time: stopLast + 2.2),
             Held(name: "dead-microphone", events: dead, voice: dictationVoice, time: 2.4),
-            Held(name: "preparing", events: preparing, voice: { _ in 0 }, time: 1.2),
             Held(name: "reduce-motion", events: dictation, voice: dictationVoice, time: 2.45, reduceMotion: true),
         ]
     }()
@@ -200,7 +198,6 @@ struct RiverIndicatorSnapshotTests {
                 state.apply(modelLoadState: .ready)
                 state.apply(RiverError.transcription(underlying: Failure()))
             }),
-            ("idle-loading", { state in state.apply(modelLoadState: .loading) }),
             ("recording-transcript", { state in
                 state.apply(modelLoadState: .ready)
                 state.apply(.recording)
@@ -236,11 +233,11 @@ struct RiverIndicatorSnapshotTests {
             }),
         ]
         for scenario in scenarios {
-            let appState = AppState(scheduleToastDismiss: { _, _ in AnyCancellable {} })
+            let appState = AppState(schedule: { _, _ in AnyCancellable {} })
             scenario.configure(appState)
             // A single render shows one moment, so the mark's cycle is handed in already under
             // way: pressed two seconds ago, as the view would have built it.
-            let activity = MarkActivity.of(state: appState.state, isModelPreparing: RecordingIndicatorPresentation.loadingLabel(for: appState.modelLoadState) != nil)
+            let activity = MarkActivity.of(state: appState.state, holdsPanel: appState.holdsPanel)
             let start = Date().addingTimeInterval(-2)
             var cycle = KawaIndicatorCycle.next(nil, activity: activity == .transcribing ? .listening : activity, isAudioFlowing: true,
                                                 reduceMotion: false, at: start)
@@ -257,6 +254,49 @@ struct RiverIndicatorSnapshotTests {
                 let image = try #require(renderer.cgImage)
                 let data = try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
                 try data.write(to: directory.appendingPathComponent("stack-\(scenario.name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+    }
+
+    // The status row beside the mark (planning 0004), at the moments the preparing status study
+    // draws it (docs/design/studies/preparing/preparing-status-r11.html, "On the mark"), for the
+    // side-by-side check against its two views.
+    @Test("write the indicator with its status row in each state, 2x, on light and dark appearance")
+    func writeStatusSnapshots() throws {
+        let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let now = Date(), model = Constants.defaultModel
+        func ring(_ steps: [(StatusRing.Phase, Double?, Double)]) -> StatusRingCycle? {
+            steps.reduce(nil) { cycle, step in
+                StatusRingCycle.next(cycle, phase: step.0, model: model, fraction: step.1, at: now.addingTimeInterval(-step.2))
+            }
+        }
+        let rows: [(name: String, status: DictationStatus, ring: StatusRingCycle?)] = [
+            ("downloading", .model(.downloading), ring([(.downloading, 0.62, 1.4)])),
+            ("preparing", .model(.preparing), ring([(.preparing, nil, 1.6)])),
+            ("ready", .model(.ready), ring([(.preparing, nil, 3), (.ready, nil, 1)])),
+            ("failed-download", .model(.failed), ring([(.downloading, 0.62, 3), (.failed, nil, 1.5)])),
+            ("failed-after-download", .model(.failed), ring([(.preparing, nil, 3), (.failed, nil, 1.5)])),
+            ("held", .held, nil),
+        ]
+        for row in rows {
+            let appState = AppState(schedule: { _, _ in AnyCancellable {} })
+            appState.apply(.recording)
+            appState.apply(.processing)
+            let start = now.addingTimeInterval(-4)
+            var cycle = KawaIndicatorCycle.next(nil, activity: .listening, isAudioFlowing: true, reduceMotion: false, at: start)
+            cycle = KawaIndicatorCycle.next(cycle, activity: .transcribing, isAudioFlowing: false, reduceMotion: false,
+                                            at: start.addingTimeInterval(1))
+            let shown = ShownStatus(status: row.status, appeared: now.addingTimeInterval(-1))
+            for scheme in [ColorScheme.light, .dark] {
+                let view = RiverIndicatorView(appState: appState, markCycle: cycle, shown: shown, statusRing: row.ring)
+                    .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
+                    .environment(\.colorScheme, scheme)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                let image = try #require(renderer.cgImage)
+                let data = try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                try data.write(to: directory.appendingPathComponent("status-\(row.name)-\(scheme == .dark ? "dark" : "light").png"))
             }
         }
     }

@@ -973,7 +973,8 @@ struct TranscriptionManagerDownloadProgressTests {
     }
 
     @MainActor
-    @Test("a load's fraction ends with it, and a report landing after it never reopens the state", arguments: [false, true])
+    @Test("a load's fraction ends with it, or stays where a failed download stopped, and a late report changes nothing",
+          arguments: [false, true])
     func loadEndsItsReports(fails: Bool) async {
         let loader = FakeModelLoader()
         loader.held = [Self.small]
@@ -985,14 +986,39 @@ struct TranscriptionManagerDownloadProgressTests {
         loader.finishLoad(of: Self.small)
         await load.value
         let settled: ModelLoadState = fails ? .failed : .ready
+        // The failed ring shows how far the download got.
+        let kept: [String: Double] = fails ? [Self.small: 0.5] : [:]
         #expect(mgr.currentModelLoadState == settled)
-        #expect(mgr.currentDownloadProgress.isEmpty)
+        #expect(mgr.currentDownloadProgress == kept)
 
         // FluidAudio reports from a queue of its own, so a report can reach the main actor after
         // its load has returned. Taken, it would show Preparing for a model that is ready.
         loader.report(.loading, of: Self.small)
         loader.report(progress: 0.6, of: Self.small)
         #expect(mgr.currentModelLoadState == settled)
+        #expect(mgr.currentDownloadProgress == kept)
+    }
+
+    @MainActor
+    @Test("a failed download's fraction goes once its model loads again, or another replaces it")
+    func failedFractionGoesWithTheNextLoad() async {
+        let loader = FakeModelLoader()
+        loader.held = [Self.small]
+        loader.failing = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        let load = Task { try? await mgr.loadModel() }
+        await loader.loadStarted(Self.small)
+        loader.report(progress: 0.4, of: Self.small)
+        loader.finishLoad(of: Self.small)
+        await load.value
+        #expect(mgr.currentDownloadProgress == [Self.small: 0.4])
+
+        // Chosen again with its files now on disk: preparing, which has no fraction.
+        loader.downloaded = [Self.small]
+        loader.failing = []
+        loader.held = []
+        await mgr.switchModel(to: Self.small)
+        #expect(mgr.currentModelLoadState == .ready)
         #expect(mgr.currentDownloadProgress.isEmpty)
     }
 }

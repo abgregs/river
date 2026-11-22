@@ -485,6 +485,29 @@ enum Constants {
     static let statusRingRevealEdge: Double = 1.5
     static let statusRingRevealBlur: Double = 0.45
 
+    // The status row beside the indicator (planning 0004, round eleven's "On the mark"): it
+    // appears this long after a dictation ends with the model not ready, and a failed load or
+    // held text stays this long after it shows, then leaves with the panel.
+    static let statusRevealDelaySeconds: Double = 0.5
+    static let statusHoldSeconds: Double = 4
+    // The row, as round ten draws it: 8 pt right of the mark's panel, 26 pt tall with the
+    // tile's corner; the ring in a 26 pt tile, inset 6 pt, with a hairline inset 2.25 pt at
+    // radius 3.75; the words 30 pt in, at 12 pt, the detail 6 pt after them, 10 pt to the end.
+    static let statusRowGap: Double = 8
+    static let statusRowHeight: Double = 26
+    static let statusRowCornerRadius: Double = 6
+    static let statusRowGlyphInset: Double = 6
+    static let statusRowHairlineInset: Double = 2.25
+    static let statusRowHairlineRadius: Double = 3.75
+    static let statusRowHairlineOpacity: Double = 0.1
+    static let statusRowTextInset: Double = 30
+    static let statusRowFontSize: Double = 12
+    static let statusRowDetailGap: Double = 6
+    static let statusRowTrailingPadding: Double = 10
+    // Room for the widest row River writes (a test measures each); the window keeps this much
+    // on each side of the mark, so the row is never cut off.
+    static let statusRowMaxWidth: Double = 300
+
     // The voice: one shared level, stepped at a fixed rate so it is the same at any frame rate.
     // It rises fast and falls slowly, with a ±18 % jitter re-drawn on its own clock so it never
     // sits perfectly still while you speak.

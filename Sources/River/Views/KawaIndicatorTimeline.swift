@@ -31,14 +31,14 @@ struct CubicBezier {
 /// What has happened in one indicator cycle, in seconds on the cycle's clock. A moment that has
 /// not happened yet is `.infinity`, so every envelope that waits on it holds.
 struct KawaIndicatorEvents: Equatable {
-    /// The panel leaves rest: a recording starts, or the model starts preparing.
+    /// The panel leaves rest: a recording starts.
     var press: Double
-    /// The first level reading of the recording. Never, for a dead microphone or while preparing.
+    /// The first level reading of the recording. Never, for a dead microphone.
     var audio: Double = .infinity
-    /// The recording ends (or preparing does).
+    /// The recording ends.
     var release: Double = .infinity
-    /// The text is typed and River is idle again. The same moment as `release` for a cancel or
-    /// the end of preparing.
+    /// The text is typed and River is idle again, and no status holds the panel (planning
+    /// 0004). The same moment as `release` for a cancel.
     var typed: Double = .infinity
 }
 
@@ -115,16 +115,22 @@ enum KawaIndicatorTimeline {
     }
 
     /// From when nothing on the panel can move until the next event: the muted strokes are in
-    /// and the layer is still waiting for audio, as while preparing or with a dead microphone.
-    /// Nil once audio flows or the cycle is released, when the panel always has motion to come.
+    /// and the layer is still waiting for audio, as with a dead microphone; or the recording is
+    /// released, Glass has left and the text is not typed yet, as while River waits for the model
+    /// (planning 0004), which can take minutes. Nil while audio drives the layer, and once the
+    /// text is typed, when the exit is to come.
     static func stillFrom(_ ev: KawaIndicatorEvents) -> Double? {
-        guard !ev.audio.isFinite, !ev.release.isFinite else { return nil }
-        return ev.press + Constants.kawaMutedDelaySeconds + Constants.kawaMutedFadeSeconds
+        typealias C = Constants
+        let strokesIn = ev.press + C.kawaMutedDelaySeconds + C.kawaMutedFadeSeconds
+        guard ev.release.isFinite else { return ev.audio.isFinite ? nil : strokesIn }
+        guard !ev.typed.isFinite else { return nil }
+        let glassGone = ev.release + C.kawaLayerOutDelaySeconds + max(C.kawaGlassFormSeconds, C.kawaGlassInkSeconds)
+        return max(strokesIn, glassGone)
     }
 
     /// The longest the panel can take to leave once River is idle: a release and the text typed
-    /// at the same moment (a cancel, or preparing ending), without Reduce Motion. The window
-    /// stays up this long so the exit is never cut off.
+    /// at the same moment (a cancel), without Reduce Motion. The window stays up this long so
+    /// the exit is never cut off.
     static let longestExit: Double = end(KawaIndicatorEvents(press: 0, release: 0, typed: 0), reduceMotion: false)
 
     private static func strokesOut(_ ev: KawaIndicatorEvents) -> Double {
@@ -143,7 +149,7 @@ struct KawaIndicatorCycle: Equatable {
     let id = UUID()
     /// The moment the cycle's clock reads 0.
     let start: Date
-    /// What the mark is showing: listening or preparing.
+    /// What the mark is showing: listening.
     let activity: MarkActivity
     private(set) var events = KawaIndicatorEvents(press: 0)
 
@@ -155,21 +161,21 @@ struct KawaIndicatorCycle: Equatable {
         events.typed.isFinite ? start.addingTimeInterval(KawaIndicatorTimeline.end(events, reduceMotion: reduceMotion)) : nil
     }
 
-    /// The cycle after River's activity, or the microphone, changes at `date`. A recording or
-    /// preparing starts a cycle; audio flowing starts the layer; the end of the recording
-    /// releases it; rest marks the text typed. A new recording while the last cycle is still
-    /// leaving starts a new one, taking over the panel at the opacity it had reached.
+    /// The cycle after River's activity, or the microphone, changes at `date`. A recording
+    /// starts a cycle; audio flowing starts the layer; the end of the recording releases it;
+    /// rest marks the text typed. A new recording while the last cycle is still leaving starts
+    /// a new one, taking over the panel at the opacity it had reached.
     static func next(_ cycle: KawaIndicatorCycle?, activity: MarkActivity, isAudioFlowing: Bool,
                      reduceMotion: Bool, at date: Date) -> KawaIndicatorCycle? {
         switch activity {
-        case .listening, .preparing:
+        case .listening:
             guard var cycle, cycle.activity == activity, !cycle.events.release.isFinite else {
                 let opacity = cycle.map { KawaIndicatorTimeline.channels(at: $0.time(at: date), events: $0.events, reduceMotion: reduceMotion).panel } ?? 0
                 let resumed = KawaIndicatorCycle(start: date.addingTimeInterval(-pressOffset(forPanel: opacity, reduceMotion: reduceMotion)),
                                                  activity: activity)
                 return next(resumed, activity: activity, isAudioFlowing: isAudioFlowing, reduceMotion: reduceMotion, at: date)
             }
-            if activity == .listening, isAudioFlowing, !cycle.events.audio.isFinite { cycle.events.audio = cycle.time(at: date) }
+            if isAudioFlowing, !cycle.events.audio.isFinite { cycle.events.audio = cycle.time(at: date) }
             return cycle
         case .transcribing:
             guard var cycle else { return nil }
