@@ -38,11 +38,10 @@ struct ModelSectionView: View {
     private struct FailedDelete { let model: ModelOption; let message: String }
 
     private let models = Constants.curatedModels
-    // The status column fits "Downloaded" beside Select, its widest content. The ⋯ menu
-    // follows it, 4 pt after, in its own column, so the status column keeps its layout; the
-    // name column gives up the width it takes, so descriptions keep theirs, and the longest
-    // name still wraps in two lines.
-    private static let columnWidths = (name: 116.0, size: 76.0, status: 132.0, menu: 16.0)
+    // Every column reads from its left edge, and every row keeps all of them, the ⋯ menu's
+    // included, so the columns line up down the table. The size column fits its header, and
+    // the status column a download's ring and percentage, its widest content.
+    private static let columnWidths = (name: 116.0, size: 80.0, status: 132.0, menu: 16.0)
     private static let menuGap = 4.0
 
     var body: some View {
@@ -125,7 +124,7 @@ struct ModelSectionView: View {
             }
             .buttonStyle(.plain)
             .fixedSize()
-            .frame(width: Self.columnWidths.size, alignment: .trailing)
+            .frame(width: Self.columnWidths.size, alignment: .leading)
             .accessibilityValue(sort == .grouped ? "Grouped by provider" : sort == .ascending ? "Smallest first" : "Largest first")
             Color.clear.frame(width: Self.columnWidths.status + Self.menuGap + Self.columnWidths.menu, height: 1)
                 .accessibilityHidden(true)
@@ -190,14 +189,20 @@ struct ModelSectionView: View {
                 .foregroundStyle(ink.secondary)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(ModelCatalogue.formattedSize(megabytes: model.downloadMegabytes))
-                .font(.system(size: 12).monospacedDigit())
-                .foregroundStyle(unavailable ? ink.opacity(0.7) : ink.opacity(0.86))
-                .frame(width: Self.columnWidths.size, alignment: .trailing)
+            // A downloaded model that Select would load without a download says so under its size.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ModelCatalogue.formattedSize(megabytes: model.downloadMegabytes))
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(unavailable ? ink.opacity(0.7) : ink.opacity(0.86))
+                if status == .selectable(downloaded: true) {
+                    Text("Downloaded").font(.system(size: 11)).foregroundStyle(ink.secondary)
+                }
+            }
+            .frame(width: Self.columnWidths.size, alignment: .leading)
             HStack(spacing: Self.menuGap) {
                 ModelRowAction(model: model, status: status, fraction: appState.downloadProgress[model.name],
                                selectModel: selectModel, focusedRow: $focusedRow)
-                    .frame(width: Self.columnWidths.status, alignment: .trailing)
+                    .frame(width: Self.columnWidths.status, alignment: .leading)
                 rowMenuButton(model, status: status, isDownloaded: isDownloaded, ink: ink)
                     .frame(width: Self.columnWidths.menu)
             }
@@ -216,7 +221,7 @@ struct ModelSectionView: View {
     }
 
     // A downloaded row's ⋯: shown while the pointer is over the row or the keyboard is on it,
-    // and always there for VoiceOver.
+    // and always there for VoiceOver. Other rows keep its column empty, so they line up.
     @ViewBuilder
     private func rowMenuButton(_ model: ModelOption, status: ModelCatalogue.RowStatus, isDownloaded: Bool, ink: SettingsInk) -> some View {
         if isDownloaded {
@@ -230,6 +235,8 @@ struct ModelSectionView: View {
             .focused($focusedRow, equals: model.name)
             .opacity(hoveredRow == model.name || focusedRow == model.name ? 1 : 0)
             .accessibilityLabel("Actions for \(model.label)")
+        } else {
+            Color.clear.frame(height: 16)
         }
     }
 
@@ -416,6 +423,7 @@ private struct ModelStatusLabel: View {
     let model: String
     let phase: StatusRing.Phase
     let fraction: Double?
+    var showsWords = true
     @State private var cycle: StatusRingCycle?
     @State private var shownPhase: StatusRing.Phase?
     // A ready or failed ring is still once its sign is drawn, so the timeline stops redrawing it.
@@ -440,7 +448,7 @@ private struct ModelStatusLabel: View {
             HStack(spacing: 6) {
                 StatusRingGlyph(frame: frame, size: 12, ink: Palette.HUD.for(colorScheme).text)
                     .opacity(phase == .failed ? 1 : Constants.hudSecondaryTextOpacity)
-                words(frame)
+                if showsWords { words(frame) }
             }
         }
         .onChange(of: phase, initial: true) { update() }
@@ -504,12 +512,15 @@ private struct ModelRowAction: View {
             case .preparing:
                 ModelStatusLabel(model: model.name, phase: .preparing, fraction: fraction)
             case .failed:
-                ModelStatusLabel(model: model.name, phase: .failed, fraction: fraction)
+                // The line above the table says it couldn't load; here the words would push
+                // Try Again out of the column.
+                ModelStatusLabel(model: model.name, phase: .failed, fraction: fraction, showsWords: false)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Couldn’t load")
                 selectButton("Try Again")
             case .needsMacOS(let major):
                 Text("Needs macOS \(major)")
-            case .selectable(let isDownloaded):
-                if isDownloaded { Text("Downloaded") }
+            case .selectable:
                 selectButton("Select")
             }
         }
