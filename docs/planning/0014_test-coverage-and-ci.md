@@ -66,7 +66,7 @@ Cheap, pure-function coverage plus a cleanup:
 3. A test binds a real `RiverSession` to an `AppState` via `bind(to:)` and asserts `state`, `errorMessage`, and `notice` all propagate (including notice clear-on-end).
 4. Tests exercise `AudioCaptureManager.convert`'s `conversionFailed` path and assert non-zero downsampled output for a non-silent input.
 5. Tests cover `SettingsStore.readValue`'s undecodable fallback, `TapStateMachine.reset()`, and `ActivationNotice.keyChanged`'s unknown-keycode fallback; the dead assertion in `TextInsertionManagerTests` is removed.
-6. Any new seam introduced (e.g. the transcription decode seam in #2) is added to the access-seams inventory in [tests.md](../conventions/tests.md) so that list stays the single source of truth.
+6. Any new seam introduced (e.g. the transcription decode seam in #2) is added to the access-seams inventory, now [test-seams.md](../conventions/test-seams.md), so that list stays the single source of truth.
 
 ## Related
 

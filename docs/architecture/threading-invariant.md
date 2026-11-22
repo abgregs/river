@@ -25,7 +25,7 @@ Running the tap's CFRunLoop on its own background thread isolates it from anythi
 - Do **not** add the tap source to the main run loop, even temporarily during testing.
 - Do **not** use `DispatchQueue.main.sync` to deliver tap events; deadlocks under SwiftUI scenes.
 - Do **not** call `CGEvent.tapCreate` from anywhere other than `InputMonitoringCapability`. This is the seam that enforces the threading rule; bypassing it puts the burden on the new caller to remember the rule.
-- Do **not** make `InputMonitoringCapability`'s event-decoding helpers `private`. Tests need internal access — they cannot exercise a real CGEventTap (no Accessibility / Input Monitoring grant in CI), so they synthesize `CGEvent`s and feed them directly. See [../conventions/tests.md](../conventions/tests.md).
+- Do **not** make `InputMonitoringCapability`'s event-decoding helpers `private`. Tests need internal access — they cannot exercise a real CGEventTap (no Accessibility / Input Monitoring grant in CI), so they synthesize `CGEvent`s and feed them directly. See [../conventions/test-seams.md](../conventions/test-seams.md).
 
 ## Self-healing the tap
 

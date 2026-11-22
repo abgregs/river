@@ -11,7 +11,7 @@ The stones mark ([../design/stones-identity.md](../design/stones-identity.md)) i
 All by the maintainer, 2026-11-02, unless marked otherwise. Decisions 3 to 6 are kept as planned; decision 9 supersedes their parts that concern Stream, the setting and the picker.
 
 1. **The mark is 川, variant 3C, centred "halfway":** the point halfway between the ink's box centre and its centroid, on both axes, sits at the centre of the space it is drawn in. The mark is monochrome. The accent leaves the panel; it stays as the control tint ([../design/color.md](../design/color.md)).
-2. **The menu bar Ready glyph and the app icon become the solid 川.** The menu bar's recording and transcribing glyph **stays the three stones bars** until it is redrawn for 川 (deferred). The exceptional states keep their SF Symbols. *The bars: superseded by decision 11.*
+2. **The menu bar Ready glyph and the app icon become the solid 川.** The menu bar's recording and transcribing glyph **stays the three stones bars** until it is redrawn for 川 (deferred). The exceptional states keep their SF Symbols. *The bars: superseded by decision 11. The model's states: superseded by PR 11, which draws them with the status ring ([0004](0004_model-loading-indicator.md)); a cycle error keeps its SF Symbol.*
 3. **Two recording indicator styles ship: Stream (the default) and Glass.** Stream is a band of cells that carries the level left to right through the strokes, brighter inside them. Glass is a pane of frost over the strokes that the voice ripples and clears. Both are finished treatments with no tuning of their own. The study's third concept, Level, is dropped, and the stones r is retired with its engine, renderer and presentation. *Stream: superseded by decision 9; Glass is the one treatment.*
 4. **One setting, `Settings.indicatorStyle`** (`IndicatorStyle`: `stream`, `glass`; default `Constants.defaultIndicatorStyle = .stream`), declared once (rules 4 and 5). *Superseded by decision 9: the setting is removed.*
 5. **A temporary "Recording Indicator" picker in the menu bar dropdown**, for trying the styles on device. This is an explicit exception to the settings direction of 2026-10-31 (no new items in the menu bar dropdown or the current Settings window). The picker moves to the custom settings page when that page exists. *Superseded by decision 9: the picker is removed.*
@@ -119,7 +119,7 @@ The maintainer noted that the raised takes are the least reliable: they were spo
 
 **Smoke round 4 (2026-11-04).** The entrance and the exit's timing looked good, and the ripples' strength improved. Two Light-mode findings: the ripple light read slightly too dark, now charcoal lifted 15 % toward the tint (then 35 %, with the far side's blend toward white cut from 40 % to 20 %, after the next check); and at the very end of the exit the fill seemed to drop out, leaving the bright rim over the dark desktop. **Cause:** the panel's opacity reached each layer of its surface on its own, so the rim, where layers stack, outlasted the fill: at a quarter opacity the rim measured 19.5 L* above the fill. **Fix:** the light panel is flattened before it fades; `lightRimFadesWithFill` holds the gap under 3 L*. Dark mode, with the same layering, is left as approved.
 
-**Not yet recorded on device:** preparing (AC 6), and the light entrance after the fix.
+**Not yet recorded on device:** preparing (AC 6), and the light entrance after the fix. *AC 6 moved to PR 11 ([current-focus.md](current-focus.md), item 11).*
 
 ## Tests (swift-testing)
 

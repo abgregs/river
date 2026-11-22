@@ -64,7 +64,7 @@ open -e eval-openai_whisper-small.en.txt    # the scorecard, written to the pack
 
 ## Related
 
-- [tests.md](tests.md) — the general test conventions and the access seams these harnesses use
+- [tests.md](tests.md) — the general test conventions; [test-seams.md](test-seams.md) — the access seams these harnesses use
 - [../architecture/distribution.md](../architecture/distribution.md) — the bundle assertions that back the generated assets
 - [../planning/0028_identity-implementation.md](../planning/0028_identity-implementation.md) — the identity build the asset renderers came from
 - [../planning/0022_transcription-eval-harness.md](../planning/0022_transcription-eval-harness.md) — the eval harness spec

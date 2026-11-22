@@ -1,6 +1,6 @@
 # Planning: Model Loading Indicator (roadmap 0004)
 
-**Status:** built 2026-11-21 in PR 11 (`feat/preparing-treatment`): dictation always starts, the status row and its ring beside the indicator, the ring in Settings and the menu bar, and the real download percentage. The decisions are in "Update (2026-09-25)" below.
+**Status:** built 2026-11-21 in PR 11 (`feat/preparing-treatment`): dictation always starts, the status row and its ring beside the indicator, the ring in Settings and the menu bar, and the real download percentage. The decisions are in "Update (2026-09-25)" below. Smoke-tested on device 2026-11-21 and 2026-11-22: everything passed except a download that fails part-way, which waits until after PR 12's onboarding step (maintainer, 2026-11-22).
 
 A queued follow-up, deferred from the M8 custom-dictionary work. Surfaces the
 model-loading state in the menu bar so a dictation attempted before the model is

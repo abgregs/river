@@ -15,7 +15,7 @@ The trim and padding changes in [0023](0023_silence-decoding-hardening.md) recov
 3. **One switch turns it off: "Only use the microphone while dictating"** (`Settings.micOnlyWhileDictating`, default `false`). When on, River behaves exactly as it does today: the unit starts on press and stops after the recording. The switch is named for what the user controls (when the mic is open), not for how the app works inside.
    **Amended 2026-11-09 for `v0.3.0` (maintainer):** the switch is turned around to **"Keep the microphone ready"** (`Settings.keepMicrophoneReady`, default `true`), built in PR 7 of the `v0.3.0` plan. A switch that is on by default and named for its on state reads more plainly than one whose on state takes the default behaviour away. `micOnlyWhileDictating` never shipped in a release, so the new key replaces it with no migration. The results and checks below were written for the old switch: there, "the switch off" means the microphone is kept ready.
 4. **Bluetooth headsets keep their audio quality: River captures from the built-in microphone instead.** When the default input is a Bluetooth device (transport type Bluetooth or Bluetooth LE), River captures from the built-in microphone, and the headset is never asked for input, so it never drops to call mode (HFP) and music keeps its quality, idle or dictating. Ready mode runs on this route like any other. Decided 2026-10-26 from the step 0 rerun: a raw HAL output unit pinned to the built-in microphone before it initialises captured 48 kHz audio while connected AirPods stayed at 48 kHz A2DP and the system defaults were untouched (two other paths passed too; see the step 0 results). The 2026-10-22 failure was `AVAudioEngine`'s alone, because its `inputNode` binds the default input before a pin can take effect. The built-in microphone is also the better capture device: a headset in call mode delivers 24 kHz at best. The cost is that someone dictating through AirPods from across the room gets the laptop's microphone; a microphone picker is still out of scope. A device change re-evaluates the selection (see "Which device"). Landed in PR #76.
-5. **The mic is ready only while dictation is possible.** The unit runs when *all* of these are true: onboarding is complete (Microphone, Input Monitoring and Accessibility are all granted, by the same `OnboardingGate` rule that closes the permissions window), the model is `.ready`, the switch is off, and the Mac is awake, unlocked and in the active user session. Otherwise it is stopped. During the first-run download and onboarding the mic stays closed, and the indicator does not show before the user can dictate. Microphone alone is not enough: the model download runs alongside onboarding and can finish while Input Monitoring and Accessibility are still being granted, and a cached model (a reinstall) is ready at once.
+5. **The mic is ready only while dictation is possible.** The unit runs when *all* of these are true: onboarding is complete (Microphone, Input Monitoring and Accessibility are all granted, by the same `OnboardingGate` rule that closes the permissions window), the model is `.ready`, the switch is off, and the Mac is awake, unlocked and in the active user session. Otherwise it is stopped. During the first-run download and onboarding the mic stays closed, and the indicator does not show before the user can dictate. Microphone alone is not enough: the model download runs alongside onboarding and can finish while Input Monitoring and Accessibility are still being granted, and a cached model (a reinstall) is ready at once. *Superseded 2026-11-21 by PR 11 ([0004](0004_model-loading-indicator.md)): the model's state is no longer an input, so the microphone is ready while the model downloads or gets ready, since a dictation can start then and its first word needs the ready microphone ([../architecture/river-pipeline.md](../architecture/river-pipeline.md)).*
 6. **If ready mode fails, a press falls back to today's path.** If the unit is not running when the key goes down (it failed, it is restarting after a device change, or the Mac just woke), that recording starts the unit on press, as today, and the fallback is logged. This keeps the current path as the recovery path.
 7. **No idle timeout.** The mic does not close after some minutes of disuse. The first dictation after a pause is the common case, and a timeout would clip exactly that one.
 
@@ -61,8 +61,8 @@ Fixes 3 and 4 of 0032 (the capture gap and its watchdog) count the gap from the 
 
 ### Who decides ready or not
 
-- A pure decision type, `MicrophoneReadiness`, takes the setting, whether onboarding is complete, the model state and the system state, and returns whether the unit should be running. Bluetooth is no longer an input: decision 4 is handled by device selection, not by withholding ready mode. It follows the existing Presentation-enum pattern, so it is unit tested without a unit.
-- `RiverSession` subscribes to the switch, the three capabilities' `status` publishers (through `OnboardingGate`), the model-load state and the system state, computes the answer, and calls `AudioCaptureManager.setReady(_:)`. The switch does not go through the hotkey apply-or-defer path; the manager's own end-of-recording apply is the deferral ([../architecture/river-session.md](../architecture/river-session.md)).
+- A pure decision type, `MicrophoneReadiness`, takes the setting, whether onboarding is complete, the model state (until PR 11, decision 5) and the system state, and returns whether the unit should be running. Bluetooth is no longer an input: decision 4 is handled by device selection, not by withholding ready mode. It follows the existing Presentation-enum pattern, so it is unit tested without a unit.
+- `RiverSession` subscribes to the switch, the three capabilities' `status` publishers (through `OnboardingGate`), the model-load state (until PR 11) and the system state, computes the answer, and calls `AudioCaptureManager.setReady(_:)`. The switch does not go through the hotkey apply-or-defer path; the manager's own end-of-recording apply is the deferral ([../architecture/river-session.md](../architecture/river-session.md)).
 - The system state comes from these notifications, wrapped by `SystemAvailabilityMonitor`:
 
   | Event | Notification |
@@ -155,7 +155,7 @@ The maintainer ran the build of PR #79 (`f5eb5b9`, installed with `make install`
 **`MicrophoneReadiness`:** each input that must close the mic closes it:
 - the switch on;
 - onboarding not complete (any of the three permissions not granted);
-- the model not ready;
+- the model not ready (until PR 11, decision 5);
 - asleep, locked, or session inactive.
 
 All inputs favourable means ready.
@@ -172,7 +172,7 @@ All inputs favourable means ready.
 
 **`RiverSession`:**
 - with every input favourable the session marks the manager ready after `start()`;
-- the switch on, a missing Microphone, Accessibility or Input Monitoring permission, a model that is not ready, or the Mac asleep each turn it off;
+- the switch on, a missing Microphone, Accessibility or Input Monitoring permission, a model that is not ready (until PR 11), or the Mac asleep each turn it off;
 - turning the switch on mid-recording takes effect after `handleDeactivate`;
 - `stop()` turns it off.
 

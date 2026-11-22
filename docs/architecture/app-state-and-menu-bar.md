@@ -25,12 +25,12 @@ final class AppState {
 
 `AppDelegate` constructs one `AppState`, calls `bind(to: session)` once at launch, and hands it to the `MenuBarExtra`. The `cancellables` set is `@ObservationIgnored` so subscription bookkeeping doesn't trip observation.
 
-Three rules live in the update entry points (all `internal` for testability — see [../conventions/tests.md](../conventions/tests.md)):
+Three rules live in the update entry points (all `internal` for testability — see [../conventions/test-seams.md](../conventions/test-seams.md)):
 
 - **`apply(_ state:)`** — a fresh `.recording` clears `errorMessage`; leaving `.recording` clears `notice`, so a recording-context message never outlives the recording it described.
 - **`apply(_ error:)`** — the **single choke point** where a `RiverError` becomes display text. It runs `LogRedaction.redactUserPaths(_:)` exactly once here, so a `/Users/<name>` path in a framework error can't ride onto the menu (and into a screenshot). This is the UI half of [ADR 0002](../decisions/0002-log-redaction-over-debug-flag.md); the log half redacts at the log sites.
 - **`apply(notice:)`** — sets `notice` from a `session.notices` message (a live activation-settings change applied during a tap-mode recording). A recording-context heads-up, separate from `errorMessage`, with the clear-on-end lifecycle above.
-- **`apply(dictationEvent:)`**, with the state and model entry points — the status row's timing ([0004](../planning/0004_model-loading-indicator.md), round eleven's "On the mark"). `.processing` schedules a reveal at `statusRevealDelaySeconds` (0.5 s): a dictation still waiting for the model then shows the model's phase, which follows the model to ready; a model ready sooner shows nothing. A failed load (`.recordingKept`) and held text (`.textHeld`) show and set `holdsPanel` for `statusHoldSeconds` (4 s), a failure ending early if the model loads after all; ready holds the panel until its check is drawn. A fresh `.recording` clears it all. The timers go through the injected `TimerScheduler`, which the error toast's dismiss shares.
+- **`apply(dictationEvent:)`**, with the state and model entry points — the status row's timing ([0004](../planning/0004_model-loading-indicator.md), round eleven's "On the mark"). `.processing` schedules a reveal at `statusRevealDelaySeconds` (0.5 s): a dictation still waiting for the model then shows the model's phase, which follows the model to ready; a model ready sooner shows nothing. A failed load (`.recordingKept`) and held text (`.textHeld`) show and set `holdsPanel` for `statusHoldSeconds` (4 s), a failure ending early if the model loads after all; ready holds the panel until its check is drawn. A fresh `.recording` clears it all. The timers go through the injected `TimerScheduler`, which the error toast's dismiss shares. `isDictationWaiting` lasts from `.waitingForModel` until the model is ready or fails, or River is idle again, so the menu's Cancel Dictation never outlives the wait. **Why:** it once stayed set when the model was ready before the row showed, and Cancel Dictation then did nothing (fixed 2026-11-22).
 
 ## RiverError — the cycle-failure surface
 
@@ -84,4 +84,4 @@ A notice belongs to the recording it describes. `apply(_:)` clears it both when 
 - [../decisions/0002-log-redaction-over-debug-flag.md](../decisions/0002-log-redaction-over-debug-flag.md) — why the error message is path-redacted at this boundary
 - [../decisions/0003-floating-ui-one-window-stack.md](../decisions/0003-floating-ui-one-window-stack.md) — why the floating surfaces share one window and one stack
 - [../requirements/core-feature.md](../requirements/core-feature.md) — item 5, the visible-feedback requirement this satisfies
-- [../conventions/tests.md](../conventions/tests.md) — the `apply` / `visual` test seams
+- [../conventions/test-seams.md](../conventions/test-seams.md) — the `apply` / `visual` test seams

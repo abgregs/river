@@ -46,5 +46,5 @@
 
 ## Related
 
-- [tests.md](tests.md) — access-control implications for testability
+- [tests.md](tests.md) and [test-seams.md](test-seams.md) — access-control implications for testability, and the seams it allows
 - [anti-patterns.md](anti-patterns.md) — what not to do
