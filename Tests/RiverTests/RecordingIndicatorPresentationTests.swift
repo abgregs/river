@@ -29,7 +29,7 @@ struct RecordingIndicatorPresentationTests {
 
 @Suite("Status row words")
 struct StatusRowWordsTests {
-    // planning 0004, round eleven's words: the row says why the text hasn't typed yet.
+    // planning 0004's words: the row says why the text hasn't typed yet.
     private static let pasteLast = (display: "⌃⌥V", spoken: "Control-Option-V")
     private static let downloadingAt = { (fraction: Double) in
         StatusRingFrame(layers: [.init(opacity: 1, marks: StatusRing.download(fraction, breath: 0))], akane: 0)

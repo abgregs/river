@@ -441,9 +441,7 @@ enum Constants {
     // Reduce Motion: every envelope becomes a linear fade this long.
     static let kawaReducedFadeSeconds: Double = 0.2
 
-    // The model's status ring (planning 0004), from the preparing status study, round ten
-    // (docs/design/studies/preparing/preparing-status-r10.html, its spec table), on the mark's
-    // 14 pt grid. `StatusRing` reads them.
+    // The model's status ring (planning 0004), on the mark's 14 pt grid. `StatusRing` reads them.
     static let statusRingRadius: Double = 4.9
     static let statusRingStroke: Double = 1.1
     // Strengths, as opacity of the ring's colour: the track still to come, the arc that has
@@ -485,12 +483,12 @@ enum Constants {
     static let statusRingRevealEdge: Double = 1.5
     static let statusRingRevealBlur: Double = 0.45
 
-    // The status row beside the indicator (planning 0004, round eleven's "On the mark"): it
+    // The status row beside the indicator (planning 0004): it
     // appears this long after a dictation ends with the model not ready, and a failed load or
     // held text stays this long after it shows, then leaves with the panel.
     static let statusRevealDelaySeconds: Double = 0.5
     static let statusHoldSeconds: Double = 4
-    // The row, as round ten draws it: 8 pt right of the mark's panel, 26 pt tall with the
+    // The row: 8 pt right of the mark's panel, 26 pt tall with the
     // tile's corner; the ring in a 26 pt tile, inset 6 pt, with a hairline inset 2.25 pt at
     // radius 3.75; the words 30 pt in, at 12 pt, the detail 6 pt after them, 10 pt to the end.
     static let statusRowGap: Double = 8

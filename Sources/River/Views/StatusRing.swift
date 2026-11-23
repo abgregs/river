@@ -138,8 +138,7 @@ struct StatusRingFrame: Equatable {
 /// The model's status ring (planning 0004): the arc fills with the real download fraction, a
 /// light turns round the ring while the model is prepared, a check is revealed when it is
 /// ready, and the ring turns akane round an exclamation mark when it couldn't load. Drawn on the
-/// mark's 14 pt grid beside the recording indicator, and in Settings and the menu. Ported from
-/// the preparing status study, round ten (docs/design/studies/preparing/preparing-status-r10.html).
+/// mark's 14 pt grid beside the recording indicator, and in Settings and the menu.
 /// Pure, so every moment is unit-tested; `StatusRingRenderer` draws a frame.
 enum StatusRing {
     /// The model's state the ring shows.

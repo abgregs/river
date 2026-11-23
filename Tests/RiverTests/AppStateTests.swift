@@ -343,7 +343,7 @@ private final class ManualScheduler {
 @Suite("AppState dictation status")
 @MainActor
 struct AppStateDictationStatusTests {
-    // planning 0004, round eleven's "On the mark": the row beside the indicator speaks only once
+    // planning 0004: the row beside the indicator speaks only once
     // a dictation ends with the model not ready, half a second after; a failed load and held text
     // stay 4 s, then leave with the panel; the menu bar and Settings keep the state after that.
     private let checkSeconds = Constants.statusRingCheckDelaySeconds + Constants.statusRingCheckSeconds

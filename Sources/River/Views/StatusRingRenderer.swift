@@ -3,8 +3,7 @@ import SwiftUI
 
 /// Draws a `StatusRingFrame` (planning 0004): the 14 pt grid scaled to fit the box, in `ink`
 /// turning toward `akane` as far as the frame says. The check is always `ink` and the
-/// exclamation mark `akane`, as the study draws them (docs/design/studies/preparing/
-/// preparing-status-r10.html).
+/// exclamation mark `akane`.
 enum StatusRingRenderer {
     static func draw(_ frame: StatusRingFrame, in context: inout GraphicsContext, size: CGSize, ink: NSColor, akane: NSColor) {
         let scale = min(size.width, size.height) / StatusRing.grid

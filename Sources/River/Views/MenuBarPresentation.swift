@@ -87,7 +87,7 @@ enum MenuBarPresentation {
         }
     }
 
-    // The menu's words for the model's state, as the preparing status study writes them.
+    // The menu's words for the model's state (planning 0004).
     private static func statusLabel(_ ring: Ring, fraction: Double?) -> String {
         switch ring.phase {
         case .downloading: "Downloading model… \(Int(((fraction ?? 0) * 100).rounded(.down)))%"

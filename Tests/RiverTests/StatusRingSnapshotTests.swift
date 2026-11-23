@@ -3,9 +3,8 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// Renders the status ring at held moments to PNGs, for the side-by-side check against the
-/// preparing status study, round ten (docs/design/studies/preparing/preparing-status-r10.html, its
-/// ring states and filmstrips at the same times), and for PR screenshots. Env-gated like the
+/// Renders the status ring at held moments to PNGs, for checks by eye and for PR screenshots.
+/// Env-gated like the
 /// other snapshot harnesses: the normal suite never writes files.
 @Suite("Status ring snapshots", .enabled(if: ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"] != nil))
 @MainActor

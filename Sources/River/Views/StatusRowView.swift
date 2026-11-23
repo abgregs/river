@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// What the status row says (planning 0004, the words of the preparing status study, round
-/// eleven): why the text hasn't typed yet, in full, and what VoiceOver hears, which names each
+/// What the status row says (planning 0004):
+/// why the text hasn't typed yet, in full, and what VoiceOver hears, which names each
 /// change of status but never a percentage.
 struct StatusRowWords: Equatable {
     let main: String
@@ -65,7 +65,7 @@ struct ShownStatus: Equatable {
     let appeared: Date
 }
 
-/// The row beside the mark (planning 0004, round eleven's "On the mark"): the ring or the held
+/// The row beside the mark (planning 0004): the ring or the held
 /// sheet in its tile, then the words, always in full. It enters on the HUD's fade, follows the
 /// model through preparing to ready, and leaves with the mark's panel, on the mark's own clock.
 /// It never takes the mouse: the window ignores it, as it does the panel.
@@ -189,8 +189,7 @@ struct StatusRowFace: View {
     }
 }
 
-/// App changed's glyph, as the preparing status study's round seven drew it and round eleven
-/// locked it: a finished sheet under a paperweight, on the 14 pt grid.
+/// App changed's glyph: a finished sheet under a paperweight, on the 14 pt grid.
 enum HeldSheetRenderer {
     static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
         var c = context

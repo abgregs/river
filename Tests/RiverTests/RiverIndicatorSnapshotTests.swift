@@ -258,9 +258,8 @@ struct RiverIndicatorSnapshotTests {
         }
     }
 
-    // The status row beside the mark (planning 0004), at the moments the preparing status study
-    // draws it (docs/design/studies/preparing/preparing-status-r11.html, "On the mark"), for the
-    // side-by-side check against its two views.
+    // The status row beside the mark (planning 0004) in each state, for checks by eye and for
+    // PR screenshots.
     @Test("write the indicator with its status row in each state, 2x, on light and dark appearance")
     func writeStatusSnapshots() throws {
         let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))

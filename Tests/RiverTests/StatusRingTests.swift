@@ -4,9 +4,9 @@ import Testing
 
 @Suite("Status ring")
 struct StatusRingTests {
-    // planning 0004 and the preparing status study, round ten: the arc shows the real download
+    // planning 0004: the arc shows the real download
     // fraction, a light turns while the model gets ready, a check when it's ready, and akane with
-    // an exclamation mark when it couldn't load. Each test pins one moment of the spec table.
+    // an exclamation mark when it couldn't load. Each test pins one moment of the ring's spec.
 
     @Test("the arc glides through each rise of the real fraction on a spring that never overshoots, settled in about 0.6 s")
     func arcGlides() {
