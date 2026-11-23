@@ -57,18 +57,6 @@ enum TranscriptionError: Error, LocalizedError {
     /// The model a dictation waited for failed to load (`waitUntilReady`, planning 0004).
     case modelLoadFailed
     case transcriptionFailed(underlying: Error)
-    /// The engine returned no text for a non-empty audio buffer. Distinct from
-    /// the no-audio path (`AudioCaptureError.noAudioCaptured` in M5) so the
-    /// log shows *what* failed.
-    case emptyTranscription
-    /// Whisper's decode produced only non-speech annotations (`[BLANK_AUDIO]`, `(heavy
-    /// breathing)`, …), or a FluidAudio model wrote nothing: the model heard the audio but
-    /// found no words in it. The
-    /// session treats this like the all-silence trim case — quiet no-op, not a
-    /// failure (planning 0023). Kept distinct from `.emptyTranscription` so the
-    /// 0002/0018/0020 feedback surface can later explain "nothing was pasted"
-    /// without conflating it with a real decode failure.
-    case noSpeechDetected
     /// A tokenizer folder WhisperKit could load from has `tokenizer.json` and
     /// `config.json` but no `tokenizer_config.json` naming a `tokenizer_class`.
     /// Loading it would crash the app, so the load fails with this instead.
@@ -83,10 +71,6 @@ enum TranscriptionError: Error, LocalizedError {
             return "The transcription model failed to load."
         case .transcriptionFailed(let underlying):
             return "Transcription failed: \(underlying.localizedDescription)"
-        case .emptyTranscription:
-            return "Transcription returned no text."
-        case .noSpeechDetected:
-            return "No speech was detected in the recording."
         case .unusableTokenizerConfig(let folderName):
             return "The tokenizer files in \(folderName) are incomplete: tokenizer_config.json is missing or names no tokenizer class."
         }
@@ -419,11 +403,6 @@ final class TranscriptionManager {
         return true
     }
 
-    // internal for testability — when set, `transcribe` returns this string instead of
-    // calling the model. Lets session tests exercise post-transcription paths (last-
-    // transcript retention, insertion) without a loaded model.
-    var transcribeResultForTesting: String?
-
     /// Chooses a model (planning 0036, Model). Called from `RiverSession` at any time. A ready
     /// model is never replaced mid-dictation: a choice made during one loads beside it. A
     /// dictation that started before the model was ready waits for whichever model is in use
@@ -524,27 +503,19 @@ final class TranscriptionManager {
         return try await whisper.evaluateDictionaryPrompt(wavPath: wavPath, dictionaryTerms: customDictionaryTerms)
     }
 
-    /// Returns the transcribed text or throws. Throws `.modelNotLoaded` if
-    /// `loadModel` hasn't completed: the session waits for the model first
+    /// The transcribed text, or nil when the engine heard no speech (planning 0039). Throws
+    /// `.modelNotLoaded` if `loadModel` hasn't completed: the session waits for the model first
     /// (`waitUntilReady`), so only a live-text segment decoded mid-recording meets it,
     /// and the stream then decodes from there in one piece at release.
-    func transcribe(audioSamples: [Float]) async throws -> String {
-        if let result = transcribeResultForTesting { return result }
+    func transcribe(audioSamples: [Float]) async throws -> String? {
         guard let model else { throw TranscriptionError.modelNotLoaded }
         logger.info("Transcribing \(audioSamples.count, privacy: .public) samples with \(self.modelName, privacy: .public)")
-        let text = try await model.transcribe(Self.paddedForDecoding(audioSamples), dictionaryTerms: customDictionaryTerms)
+        guard let text = try await model.transcribe(audioSamples, dictionaryTerms: customDictionaryTerms) else {
+            logger.info("Heard no speech")
+            return nil
+        }
         logger.info("Transcribed \(text.count, privacy: .public) chars")
         return text
-    }
-
-    // internal for testability — a clip under `shortClipSeconds` gets silence on each side,
-    // the context Whisper needs to hear a short word at all; longer clips decode as captured.
-    // Every engine gets it: it also lifts any clip past FluidAudio's 0.3 s minimum, which a
-    // shorter clip would fail.
-    nonisolated static func paddedForDecoding(_ samples: [Float], sampleRate: Double = 16_000) -> [Float] {
-        guard !samples.isEmpty, Double(samples.count) < Constants.shortClipSeconds * sampleRate else { return samples }
-        let silence = [Float](repeating: 0, count: Int(Constants.shortClipPadSeconds * sampleRate))
-        return silence + samples + silence
     }
 }
 

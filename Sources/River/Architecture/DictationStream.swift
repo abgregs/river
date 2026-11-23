@@ -16,10 +16,12 @@ import os
 /// only: a committed segment replaces it, and it is never part of the outcome.
 ///
 /// Failure never leaves a hole: when a segment fails, streaming stops and everything from that
-/// segment's start is decoded in one piece at release, which is today's one-shot path.
+/// segment's start is decoded in one piece at release, which is today's one-shot path. A segment
+/// the model hears no speech in is not a failure: it adds nothing, and streaming goes on.
 @MainActor
 final class DictationStream {
-    typealias Decode = @MainActor (_ samples: [Float]) async throws -> String
+    /// The text, or nil when the model heard no speech (`TranscriptionManager.transcribe`).
+    typealias Decode = @MainActor (_ samples: [Float]) async throws -> String?
 
     struct Outcome {
         /// The whole transcript; empty when nothing was said.
@@ -244,11 +246,7 @@ final class DictationStream {
     private func decodeClip(_ range: Range<Int>) async throws -> String? {
         let clip = AudioCaptureManager.trimSilence(Array(samples[range]))
         guard !clip.isEmpty else { return nil }
-        do {
-            return try await decode(clip)
-        } catch TranscriptionError.noSpeechDetected {
-            return nil
-        }
+        return try await decode(clip)
     }
 
     private func seconds(_ count: Int) -> String { String(format: "%.2f", Double(count) / sampleRate) }

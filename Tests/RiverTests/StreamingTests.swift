@@ -146,15 +146,16 @@ struct SegmentJoinerTests {
     }
 }
 
-/// Canned decoder: returns the next answer per call and records what it was given.
+/// Canned decoder: returns the next answer per call and records what it was given; nil is a
+/// model that heard no speech, as once the answers run out.
 @MainActor
 private final class FakeDecoder {
-    var answers: [Result<String, Error>]
+    var answers: [Result<String?, Error>]
     private(set) var clipSeconds: [Double] = []
-    init(_ answers: [Result<String, Error>]) { self.answers = answers }
-    func decode(_ samples: [Float]) async throws -> String {
+    init(_ answers: [Result<String?, Error>]) { self.answers = answers }
+    func decode(_ samples: [Float]) async throws -> String? {
         clipSeconds.append(Double(samples.count) / Double(rate))
-        guard !answers.isEmpty else { return "" }
+        guard !answers.isEmpty else { return nil }
         return try answers.removeFirst().get()
     }
 }
@@ -171,7 +172,7 @@ private final class HeldDecoder {
     private var held: CheckedContinuation<Void, Never>?
     var isHolding: Bool { held != nil }
     init(_ answers: [String]) { self.answers = answers }
-    func decode(_ samples: [Float]) async throws -> String {
+    func decode(_ samples: [Float]) async throws -> String? {
         calls += 1
         if calls == 1 {
             await withCheckedContinuation { held = $0 }
@@ -244,9 +245,23 @@ struct DictationStreamTests {
     }
 
     @MainActor
+    @Test("a segment the model hears nothing in keeps streaming: both segments decode as the user speaks")
+    func nothingHeardKeepsStreaming() async {
+        // A failure in place of nil would stop streaming after the first segment (planning 0039).
+        let decoder = FakeDecoder([.success(nil), .success("Second phrase.")])
+        let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
+        stream.append(speech(2) + silence(1.2) + speech(2) + silence(1.2))
+        await stream.settle()
+        #expect(decoder.clipSeconds.count == 2)
+        let outcome = await stream.finish()
+        #expect(outcome.text == "Second phrase.")
+        #expect(outcome.error == nil)
+    }
+
+    @MainActor
     @Test("a segment that holds no speech is dropped, and the next decodes cold")
     func noSpeechSegment() async {
-        let decoder = FakeDecoder([.failure(TranscriptionError.noSpeechDetected), .success("Second phrase.")])
+        let decoder = FakeDecoder([.success(nil), .success("Second phrase.")])
         let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
         stream.append(speech(2) + silence(1.2) + speech(2))
         let outcome = await stream.finish()

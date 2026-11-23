@@ -237,9 +237,9 @@ struct TranscriptionCacheLocationTests {
 struct TranscriptionEmptyPromptRetryTests {
     // The dictionary-can-only-help guarantee (custom-dictionary.md): a prompted
     // decode that comes back empty must retry unprompted, so adding a dictionary
-    // term never turns a working dictation into a hard `.emptyTranscription`.
-    // Exercised through the narrow decode seam (ADR 0001) — a fake `decode`
-    // closure, no live WhisperKit model.
+    // term never turns a working dictation into nothing said. Exercised through
+    // the narrow decode seam (ADR 0001) — a fake `decode` closure, no live
+    // WhisperKit model.
 
     @MainActor
     @Test("prompted-empty falls back to the unprompted retry and returns its text")
@@ -256,46 +256,55 @@ struct TranscriptionEmptyPromptRetryTests {
     }
 
     @MainActor
-    @Test("a genuinely silent recording (both decodes empty) still throws .emptyTranscription")
-    func bothEmptyThrows() async {
-        // The retry degrades a bad prompt to neutral, not error — but honest
-        // failure must survive: if the audio itself is silent, both decodes are
-        // empty and the cycle must still surface `.emptyTranscription`.
-        await #expect(throws: TranscriptionError.self) {
-            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { _ in "" }
-        }
+    @Test("a genuinely silent recording (both decodes empty) is nothing said, not an error")
+    func bothEmptyIsNothingSaid() async throws {
+        // The retry degrades a bad prompt to neutral; if the audio itself is silent,
+        // both decodes are empty and the model heard no speech, as for every engine
+        // (planning 0039).
+        let text = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: [1, 2, 3]) { _ in "" }
+        #expect(text == nil)
     }
 
     @MainActor
-    @Test("no prompt: an empty decode throws without a spurious retry")
-    func noPromptEmptyThrowsWithoutRetry() async {
+    @Test("no prompt: an empty decode is nothing said, without a spurious retry")
+    func noPromptEmptyWithoutRetry() async throws {
         // With no prompt in play there is nothing to degrade to, so an empty
         // decode is an honest empty result — it must not trigger a second call.
         var callCount = 0
-        await #expect(throws: TranscriptionError.self) {
-            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in
-                callCount += 1
-                return ""
-            }
+        let text = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in
+            callCount += 1
+            return ""
         }
+        #expect(text == nil)
         #expect(callCount == 1)   // no retry when there was no prompt to blame
     }
 
     @MainActor
-    @Test("annotation-only output classifies as .noSpeechDetected, not .emptyTranscription")
-    func annotationOnlyThrowsNoSpeechDetected() async {
+    @Test("annotation-only output is nothing said, so it never pastes")
+    func annotationOnlyIsNothingSaid() async throws {
         // Decode gates don't reliably suppress non-speech — probed on-device:
         // real room tone decodes to "[BLANK_AUDIO]" (planning 0023). That text
-        // must never paste, and it must classify as the quiet no-op case (the
-        // session skips it silently) rather than the loud .emptyTranscription.
-        do {
-            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in "[BLANK_AUDIO]" }
-            Issue.record("expected .noSpeechDetected to be thrown")
-        } catch TranscriptionError.noSpeechDetected {
-            // expected: quiet no-op classification
-        } catch {
-            Issue.record("wrong error: \(error) — the session would show the error glyph")
+        // must never paste: it is Whisper's way of hearing no speech.
+        let text = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in "[BLANK_AUDIO]" }
+        #expect(text == nil)
+    }
+
+    @MainActor
+    @Test("a failed decode throws, so a broken model is never read as nothing said")
+    func failedDecodeThrows() async {
+        await #expect(throws: TranscriptionError.self) {
+            _ = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in
+                throw TranscriptionError.transcriptionFailed(underlying: CancellationError())
+            }
         }
+    }
+
+    @MainActor
+    @Test("speech around an annotation comes back as written")
+    func speechAroundAnnotationIsKept() async throws {
+        // Whole-output classification only (planning 0023): mixed text keeps every word.
+        let text = try await WhisperKitModel.resolveWithEmptyPromptRetry(promptTokens: []) { _ in "Hello (laughs) world" }
+        #expect(text == "Hello (laughs) world")
     }
 
     @MainActor
@@ -353,9 +362,9 @@ struct TranscriptionAnnotationDetectorTests {
     @MainActor
     @Test("empty and annotation-free punctuation are NOT annotations")
     func emptyAndBarePunctuationAreNot() {
-        // Empty is `.emptyTranscription`'s territory, and punctuation-only output
-        // with no bracketed label present is left alone — classification requires
-        // at least one annotation to have matched.
+        // Empty is nothing said on its own, and punctuation-only output with no
+        // bracketed label present is left alone — classification requires at
+        // least one annotation to have matched.
         #expect(!WhisperKitModel.isNonSpeechAnnotation(""))
         #expect(!WhisperKitModel.isNonSpeechAnnotation("   "))
         #expect(!WhisperKitModel.isNonSpeechAnnotation("..."))
@@ -407,15 +416,15 @@ struct TranscriptionFilterTests {
     }
 }
 
-@Suite("TranscriptionManager short clips")
-struct TranscriptionManagerShortClipTests {
+@Suite("Short clips before decoding")
+struct ShortClipTests {
     // The maintainer's smoke (2026-09-26): quick taps of "hi" and "yes" under about a
     // second decoded to nothing until silence surrounded them; with half a second each
     // side, the same recordings transcribed.
     @Test("a clip under 1.2 s gets half a second of silence on each side")
     func shortClipIsPadded() {
         let clip = [Float](repeating: 0.1, count: 12_000)
-        let padded = TranscriptionManager.paddedForDecoding(clip)
+        let padded = ShortClip.padded(clip)
         let pad = Int(Constants.shortClipPadSeconds * 16_000)
         #expect(Constants.shortClipSeconds == 1.2)
         #expect(Constants.shortClipPadSeconds == 0.5)
@@ -428,12 +437,29 @@ struct TranscriptionManagerShortClipTests {
     @Test("a clip of 1.2 s or longer is decoded as captured")
     func longClipIsUntouched() {
         let clip = [Float](repeating: 0.1, count: Int(Constants.shortClipSeconds * 16_000))
-        #expect(TranscriptionManager.paddedForDecoding(clip) == clip)
+        #expect(ShortClip.padded(clip) == clip)
     }
 
     @Test("an empty clip stays empty")
     func emptyStaysEmpty() {
-        #expect(TranscriptionManager.paddedForDecoding([]).isEmpty)
+        #expect(ShortClip.padded([]).isEmpty)
+    }
+}
+
+@Suite("FluidAudioModel spoken text")
+struct FluidAudioSpokenTextTests {
+    // Parakeet and Phonon write nothing for audio with no words: that is nothing said.
+    @Test("empty or blank output is nothing said")
+    func blankIsNothingSaid() {
+        #expect(FluidAudioModel.spokenText("") == nil)
+        #expect(FluidAudioModel.spokenText("  \n ") == nil)
+    }
+
+    // River fixes no model's text (planning 0039, decision 2): only the edges are trimmed.
+    @Test("words come back as the model wrote them, trimmed")
+    func wordsAreKeptAsWritten() {
+        #expect(FluidAudioModel.spokenText(" Hello. ") == "Hello.")
+        #expect(FluidAudioModel.spokenText("Dictating for30 seconds") == "Dictating for30 seconds")
     }
 }
 

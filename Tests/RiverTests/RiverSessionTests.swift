@@ -360,14 +360,6 @@ struct RiverSessionTests {
     }
 
     @MainActor
-    @Test(.disabled("end-to-end paste verification requires a loaded WhisperKit model + Accessibility grant — manual on-device before release. The insertion-catch branch in handleDeactivate is structurally identical to the transcription-catch (which is already covered by handleDeactivateReturnsToIdleOnAudioError indirectly) — reaching it in a unit test would require injecting a success-path TranscriptionManager fake, which ADR 0001 defers until a second adapter shows up."))
-    func endToEndPasteCycle() async throws {
-        // Placeholder lives here so the gap is locatable in the suite, not
-        // hidden in a doc. If this comment grows to a third bullet, the ADR
-        // revisit trigger has fired — extract a TranscriptionManager protocol.
-    }
-
-    @MainActor
     @Test("cancel from .recording returns to .idle with no error and a canceled notice")
     func cancelFromRecordingReturnsToIdle() async throws {
         // Planning 0017 AC1: the discard transition ends the recording with NO
@@ -655,8 +647,8 @@ struct RiverSessionTests {
 
     // A dictation always starts. The transcript waits in `.processing` for the model, then
     // types; a failed load keeps the recording for the next load that succeeds. These tests
-    // hold the fake loader's load open and leave `transcribeResultForTesting` unset, so every
-    // decode before the model is ready fails as a real one does.
+    // hold the fake loader's load open, so every decode before the model is ready fails as a
+    // real one does.
 
     @MainActor
     @Test("a press while the model downloads records, waits in processing, and types once the model is ready")
@@ -873,7 +865,7 @@ struct RiverSessionTests {
     func appAtTheReleaseIsTheTarget() async throws {
         // In a tap mode the user can start, click into the field they want, and stop there.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         let events = EventLog(env.session)
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
@@ -1100,7 +1092,7 @@ struct RiverSessionTests {
         // "type what was heard" path would decode and type it. A dead unit at the press
         // must surface as an error and type nothing (planning 0033).
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "said before the press"
+        try await loadModel(env, transcribing: "said before the press")
         #expect(env.store.value(for: Settings.streamingDictation))
         await env.audio.setReady(true)
         for _ in 0..<5 { env.microphone.publishForTest(makeNonSilentBuffer()) }
@@ -1235,6 +1227,14 @@ struct RiverSessionTests {
         }
     }
 
+    // The model in use loaded through the fake loader, which then hears `text` in any audio
+    // ("" for no speech), so the cycle runs the real decode path (planning 0039).
+    @MainActor
+    private func loadModel(_ env: TestEnv, transcribing text: String) async throws {
+        env.loader.texts[env.transcription.currentModelName] = text
+        try await env.transcription.loadModel()
+    }
+
     // The model in use downloading, its load held open by the fake loader until the test
     // finishes it, as a first launch's download is.
     @MainActor
@@ -1311,7 +1311,7 @@ struct RiverSessionTests {
         // The whole point: the panel has text while the user is still talking, and the field
         // still receives one insertion — nothing is typed mid-dictation.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         var shown = ""
         let watch = env.session.liveTranscript.sink { shown = $0 }
         defer { watch.cancel() }
@@ -1338,7 +1338,7 @@ struct RiverSessionTests {
     func streamingOffShowsNothing() async throws {
         let env = makeSession()
         env.store.setValue(false, for: Settings.streamingDictation)
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         var shown: [String] = []
         let watch = env.session.liveTranscript.sink { shown.append($0) }
         defer { watch.cancel() }
@@ -1367,10 +1367,10 @@ struct RiverSessionTests {
     @Test("last transcript is retained after a successful transcription")
     func lastTranscriptSetAfterSuccessfulTranscription() async throws {
         // AC2: after the paste lands, the menu item offers that cycle's text.
-        // `transcribeResultForTesting` injects a canned result; `skipPostForTesting`
+        // The fake model hears the given text; `skipPostForTesting`
         // suppresses the real CGEvent.post so insertion "succeeds" in CI.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         env.accessibility.setStatusForTesting(.granted)
         env.accessibility.skipPostForTesting = true
 
@@ -1391,7 +1391,7 @@ struct RiverSessionTests {
         // keeps the user's clipboard out of the test.
         let transcript = String(repeating: "Dictated in one go: café, naïve 👍🏽, \"quotes\" — and more. ", count: 12)
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = transcript
+        try await loadModel(env, transcribing: transcript)
 
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
@@ -1416,7 +1416,7 @@ struct RiverSessionTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(env.accessibility.postedKeyDownTextForTesting.isEmpty)
 
-        env.transcription.transcribeResultForTesting = "hello again"
+        try await loadModel(env, transcribing: "hello again")
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
         env.microphone.publishForTest(makeNonSilentBuffer())
@@ -1455,7 +1455,7 @@ struct RiverSessionTests {
     func liveTextToggleMidRecording() async throws {
         // Showing the text is not a stop: the dictation goes on and is typed at release.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "still here"
+        try await loadModel(env, transcribing: "still here")
         env.session.handleActivate()
         env.session.toggleLiveText()
         #expect(env.session.currentState == .recording)
@@ -1470,7 +1470,7 @@ struct RiverSessionTests {
     func pasteLastWaitsOutRecording() async throws {
         // Typing into the app in front mid-dictation would mix two transcriptions.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello again"
+        try await loadModel(env, transcribing: "hello again")
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
         env.microphone.publishForTest(makeNonSilentBuffer())
@@ -1491,7 +1491,7 @@ struct RiverSessionTests {
         // is retained BEFORE the paste attempt, so the menu item is available even
         // when the paste throws.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         // Force the failure through the insertion guard rather than by denying the
         // capability: since the 0012 AC5 gate, a denied Accessibility refuses
         // activation outright, so "recording completes, then the paste fails" is no
@@ -1522,7 +1522,7 @@ struct RiverSessionTests {
         // AC3: cancel produces no transcript and must NOT clear the last one.
         // First, retain a transcript via a successful cycle.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         env.accessibility.setStatusForTesting(.granted)
         env.accessibility.skipPostForTesting = true
 
@@ -1546,7 +1546,7 @@ struct RiverSessionTests {
         // AC3: a stray key-brush (all silence after trim) skips transcription and
         // must not replace the last retained transcript with nothing.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "hello world"
+        try await loadModel(env, transcribing: "hello world")
         env.accessibility.setStatusForTesting(.granted)
         env.accessibility.skipPostForTesting = true
 
@@ -1565,6 +1565,88 @@ struct RiverSessionTests {
         #expect(env.session.hasLastTranscript)   // still set; silence didn't clear it
     }
 
+    // MARK: - Nothing said (planning 0039): quiet for every engine
+
+    @MainActor
+    @Test("a dictation the model hears no speech in types nothing and shows no error")
+    func nothingHeardIsQuiet() async throws {
+        // A Whisper model used to raise "Couldn't transcribe" here, where a FluidAudio
+        // model stayed quiet.
+        let env = makeSession()
+        try await loadModel(env, transcribing: "")
+        var errors: [RiverError] = []
+        let token = env.session.errors.sink { errors.append($0) }
+        defer { token.cancel() }
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+
+        #expect(errors.isEmpty)
+        #expect(env.accessibility.postedEventCountForTesting == 0)
+        #expect(!env.session.hasLastTranscript)
+        #expect(env.session.currentState == .idle)
+    }
+
+    @MainActor
+    @Test("a streamed dictation the model hears no speech in ends quietly, its tail included")
+    func nothingHeardWhileStreamingIsQuiet() async throws {
+        // A Whisper model's empty segment used to stop streaming, and the tail it left
+        // raised "Couldn't transcribe" at release.
+        let env = makeSession()
+        try await loadModel(env, transcribing: "")
+        var errors: [RiverError] = []
+        let token = env.session.errors.sink { errors.append($0) }
+        defer { token.cancel() }
+
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 2 s of sound
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }            // 1.2 s pause
+        await waitUntil { env.loader.mostTranscriptionsAtOnce == 1 }               // the segment decoded
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // the tail
+        await env.session.handleDeactivate()
+
+        #expect(errors.isEmpty)
+        #expect(env.accessibility.postedEventCountForTesting == 0)
+        #expect(!env.session.hasLastTranscript)
+        #expect(env.session.currentState == .idle)
+    }
+
+    @MainActor
+    @Test("a kept recording the model hears no speech in is dropped quietly")
+    func keptRecordingWithNothingHeardIsDropped() async throws {
+        let env = makeSession()
+        // Started, so the session hears the model become ready.
+        try await env.session.start()
+        env.loader.failing = [Constants.defaultModel]
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
+        var errors: [RiverError] = []
+        let errorWatch = env.session.errors.sink { errors.append($0) }
+        defer { errorWatch.cancel() }
+
+        let dictation = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await dictation.value
+        await load.value
+        #expect(env.session.currentKeptRecordingCount == 1)
+
+        // Try Again: the load succeeds, and the model hears no speech in the kept recording.
+        env.loader.texts[Constants.defaultModel] = ""
+        env.loader.failing = []
+        env.session.selectModel(Constants.defaultModel)
+        await env.loader.loadStarted(Constants.defaultModel)
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await waitUntil { env.session.currentKeptRecordingCount == 0 }
+
+        #expect(!env.session.hasLastTranscript)
+        #expect(errors.isEmpty)
+        #expect(env.accessibility.postedEventCountForTesting == 0)
+    }
+
     @MainActor
     @Test("transcript content is kept out of all log lines — only its count is observable")
     func transcriptContentNeverLogged() async throws {
@@ -1574,7 +1656,7 @@ struct RiverSessionTests {
         // There is no `privacy:` annotation to audit because the content is never
         // interpolated; see logging.md anti-pattern #4.
         let env = makeSession()
-        env.transcription.transcribeResultForTesting = "sensitive dictation content"
+        try await loadModel(env, transcribing: "sensitive dictation content")
         env.accessibility.setStatusForTesting(.granted)
         env.accessibility.skipPostForTesting = true
 

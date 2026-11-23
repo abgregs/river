@@ -1,6 +1,6 @@
 # Planning: One Owner per Dictation Pipeline Rule (0039)
 
-**Status: planned 2026-11-23; nothing is built yet.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day. Four PRs, A to D, in the order under "Order"; A is `refactor/transcript-result`.
+**Status: A built 2026-11-23 on `refactor/pipeline-owners`; B and C follow in the same PR, D after it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
 
 ## Why
 
@@ -87,7 +87,7 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 3. **C.** The largest, and simpler once nothing said means one thing.
 4. **D.** Once C is in, so it replays the module the app runs; the corpus can be recorded any time before.
 
-Each PR builds and passes on its own and updates the docs it changes (`river-pipeline.md`, `river-session.md`, `test-seams.md`, `test-harnesses.md`). They follow PR 11 ([#99](https://github.com/abgregs/river/pull/99), merged 2026-11-23) directly, each from `main`, and come before PR 12's onboarding step (maintainer, 2026-11-23). No release is planned around them: work continues until the maintainer decides to release.
+A, B and C ship as one PR, `refactor/pipeline-owners`, with a commit series per part, each part planned and approved before its code; D is its own PR once the corpus is recorded (maintainer, 2026-11-23). Each commit builds and passes on its own and updates the docs it changes (`river-pipeline.md`, `river-session.md`, `test-seams.md`, `test-harnesses.md`). They follow PR 11 ([#99](https://github.com/abgregs/river/pull/99), merged 2026-11-23) directly and come before PR 12's onboarding step (maintainer, 2026-11-23). No release is planned around them: work continues until the maintainer decides to release.
 
 ## Acceptance criteria
 

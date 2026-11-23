@@ -18,6 +18,8 @@ final class FakeModelLoader: ModelLoader {
     var held: Set<String> = []
     /// Every load asked for, in order.
     private(set) var loads: [String] = []
+    /// What each model hears in any audio, in place of its own name; "" means no speech.
+    var texts: [String: String] = [:]
 
     /// Whether each transcription waits for `finishTranscriptions()`, so a test can hold one
     /// open and see what else runs meanwhile.
@@ -87,7 +89,8 @@ final class FakeModelLoader: ModelLoader {
 }
 
 /// A loaded fake model: it transcribes any audio as its own name, so a test can tell which
-/// model wrote the text.
+/// model wrote the text, or as the loader's `texts` say, nil for "" as an engine that heard
+/// no speech.
 @MainActor
 final class FakeModel: LoadedModel {
     let name: String
@@ -98,10 +101,11 @@ final class FakeModel: LoadedModel {
         self.loader = loader
     }
 
-    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String {
+    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String? {
         await loader?.transcriptionStarted()
         loader?.transcriptionEnded()
-        return name
+        let text = loader?.texts[name] ?? name
+        return text.isEmpty ? nil : text
     }
 }
 

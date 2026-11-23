@@ -43,7 +43,7 @@ enum ErrorToastPresentation {
         case .transcription:
             return ErrorToast(
                 headline: "Couldn't transcribe",
-                hint: "No text was produced. Speak a little louder or check your input device."
+                hint: "The model failed on this recording. Try dictating again."
             )
         case .textInsertion:
             return ErrorToast(

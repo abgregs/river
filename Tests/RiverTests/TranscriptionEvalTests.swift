@@ -54,15 +54,9 @@ struct TranscriptionEvalTests {
             if trimmed.isEmpty {
                 output = ""   // the app reads this as "nothing was said"; no decode
             } else {
-                do {
-                    output = try await manager.transcribe(audioSamples: trimmed)
-                } catch TranscriptionError.emptyTranscription, TranscriptionError.noSpeechDetected {
-                    // Either no-speech outcome (planning 0023) — a truly empty
-                    // decode, or annotation-only output ("[BLANK_AUDIO]") that
-                    // classifies as `.noSpeechDetected` — is the honest "empty
-                    // output" result for this eval, not a harness failure.
-                    output = ""
-                }
+                // A model that heard no speech (planning 0023, 0039) is the honest "empty
+                // output" result for this eval, not a harness failure.
+                output = try await manager.transcribe(audioSamples: trimmed) ?? ""
             }
             let latency = Date().timeIntervalSince(decodeStart)
 

@@ -93,7 +93,8 @@ enum FluidAudioLoaderError: Error, LocalizedError {
 }
 
 /// A loaded Parakeet or Phonon model. They take no custom-dictionary terms: the prompt is
-/// Whisper's (planning 0037).
+/// Whisper's (planning 0037). The encoder reads 15 s at a time, and FluidAudio splits a longer
+/// clip into overlapping windows itself (planning 0039).
 @MainActor
 final class FluidAudioModel: LoadedModel {
     private let manager: AsrManager
@@ -104,19 +105,22 @@ final class FluidAudioModel: LoadedModel {
         self.decoderLayers = decoderLayers
     }
 
-    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String {
+    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String? {
         // Each call decodes one whole recording, so it starts from a fresh decoder state.
         var state = TdtDecoderState.make(decoderLayers: decoderLayers)
         let result: ASRResult
         do {
-            result = try await manager.transcribe(samples, decoderState: &state)
+            result = try await manager.transcribe(ShortClip.padded(samples), decoderState: &state)
         } catch {
             throw TranscriptionError.transcriptionFailed(underlying: error)
         }
-        let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // These models write nothing for audio with no words, where Whisper writes an
-        // annotation such as "[BLANK_AUDIO]": both are the quiet no-speech case.
-        guard !text.isEmpty else { throw TranscriptionError.noSpeechDetected }
-        return text
+        return Self.spokenText(result.text)
+    }
+
+    // internal for testability — these models write nothing for audio with no words, where
+    // Whisper writes an annotation such as "[BLANK_AUDIO]": both are nothing said.
+    nonisolated static func spokenText(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

@@ -311,8 +311,8 @@ final class RiverSession {
                 // the error glyph. The `notices` channel clears on recording-end
                 // (AppState) so a post-recording message wouldn't survive there, and
                 // a stray brush shouldn't nag; logged for observability (planning
-                // 0023). A recording that DID contain speech but decoded empty still
-                // throws `.emptyTranscription` below and surfaces loudly.
+                // 0023). A decode the model hears no speech in is treated the same way
+                // below, for every engine (planning 0039).
                 logger.info("Recording was all silence after trim; skipping decode")
             } else {
                 // No pause long enough to cut (or streaming off): the one-shot decode,
@@ -323,17 +323,14 @@ final class RiverSession {
                 }
                 guard await waitForModel(keeping: samples) else { return }
                 do {
-                    let text = try await transcribeInTurn(samples)
-                    logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
-                    await deliver(text, into: app)
-                } catch TranscriptionError.noSpeechDetected {
-                    // Decode heard only non-speech (breath, room tone, music the
-                    // trim didn't catch): same policy as the all-silence branch
-                    // above — nothing was said, so no paste and no error glyph
-                    // (planning 0023). When the 0002/0018/0020 feedback surface
-                    // lands, it becomes the home for a friendly "no speech
-                    // detected" notice; until then this is log-only.
-                    logger.info("Decode found no speech; skipping paste")
+                    if let text = try await transcribeInTurn(samples) {
+                        logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
+                        await deliver(text, into: app)
+                    } else {
+                        // The model heard only non-speech (breath, room tone, music the trim
+                        // kept): nothing was said, so no paste and no error (planning 0023).
+                        logger.info("Decode found no speech; skipping paste")
+                    }
                 } catch {
                     logger.error("Transcription failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
                     errorSubject.send(.transcription(underlying: error))
@@ -404,7 +401,7 @@ final class RiverSession {
     }
 
     // A decode for the current dictation, after any kept recordings' decode still running.
-    private func transcribeInTurn(_ samples: [Float]) async throws -> String {
+    private func transcribeInTurn(_ samples: [Float]) async throws -> String? {
         await keptDecode?.value
         return try await transcription.transcribe(audioSamples: samples)
     }
@@ -422,9 +419,11 @@ final class RiverSession {
             while let recording = self.keptRecordings.first, self.currentState == .idle,
                   self.transcription.currentModelLoadState == .ready {
                 do {
-                    texts.append(try await self.transcription.transcribe(audioSamples: recording))
-                } catch TranscriptionError.noSpeechDetected, TranscriptionError.emptyTranscription {
-                    self.logger.info("A kept recording held no speech")
+                    if let text = try await self.transcription.transcribe(audioSamples: recording) {
+                        texts.append(text)
+                    } else {
+                        self.logger.info("A kept recording held no speech")
+                    }
                 } catch {
                     self.logger.error("Kept recording failed to transcribe: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
                     self.errorSubject.send(.transcription(underlying: error))

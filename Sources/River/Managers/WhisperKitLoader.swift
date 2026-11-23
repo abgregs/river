@@ -201,17 +201,19 @@ struct WhisperKitLoader: ModelLoader {
 }
 
 /// A loaded Whisper model: the custom-dictionary prompt, its retry without the prompt, and the
-/// non-speech annotation check are Whisper's (planning 0037).
+/// non-speech annotation check are Whisper's (planning 0037). Whisper reads 30 s at a time, and
+/// WhisperKit steps through longer audio itself (planning 0039).
 @MainActor
 final class WhisperKitModel: LoadedModel {
     private let whisperKit: WhisperKit
 
     init(_ whisperKit: WhisperKit) { self.whisperKit = whisperKit }
 
-    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String {
+    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String? {
+        let padded = ShortClip.padded(samples)
         let promptTokens = buildPromptTokens(dictionaryTerms)
         return try await Self.resolveWithEmptyPromptRetry(promptTokens: promptTokens) { tokens in
-            try await self.decode(samples, promptTokens: tokens)
+            try await self.decode(padded, promptTokens: tokens)
         }
     }
 
@@ -222,25 +224,21 @@ final class WhisperKitModel: LoadedModel {
     //
     // A small model like `base.en` can occasionally emit empty output when
     // conditioned on a prompt; without the retry, adding a dictionary term could
-    // turn a working dictation into a hard `.emptyTranscription` — strictly worse
-    // than no dictionary (requirements/custom-dictionary.md). Retry unprompted so
-    // the dictionary degrades to neutral. Annotation-only output ("[BLANK_AUDIO]")
-    // counts as no-speech for the retry, and classifies as `.noSpeechDetected`
-    // at the end (vs `.emptyTranscription` for a truly empty decode — the session
-    // treats the former as a quiet no-op and the latter as a loud failure).
-    // Logged so prompt-quality regressions stay observable.
+    // turn a working dictation into nothing said — strictly worse than no
+    // dictionary (requirements/custom-dictionary.md). Retry unprompted so the
+    // dictionary degrades to neutral. Empty or annotation-only output
+    // ("[BLANK_AUDIO]") is how Whisper hears no speech: nil, as for every engine
+    // (planning 0039). Logged so prompt-quality regressions stay observable.
     static func resolveWithEmptyPromptRetry(
         promptTokens: [Int],
         decode: (_ promptTokens: [Int]) async throws -> String
-    ) async throws -> String {
+    ) async throws -> String? {
         var text = try await decode(promptTokens)
         if text.isEmpty || isNonSpeechAnnotation(text), !promptTokens.isEmpty {
             logger.warning("Prompted transcription had no speech; retrying without the custom-dictionary prompt")
             text = try await decode([])
         }
-        guard !text.isEmpty else { throw TranscriptionError.emptyTranscription }
-        guard !isNonSpeechAnnotation(text) else { throw TranscriptionError.noSpeechDetected }
-        return text
+        return text.isEmpty || isNonSpeechAnnotation(text) ? nil : text
     }
 
     // internal for testability — true when decoded text consists *only* of
