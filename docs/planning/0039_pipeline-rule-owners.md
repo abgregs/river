@@ -1,0 +1,111 @@
+# Planning: One Owner per Dictation Pipeline Rule (0039)
+
+**Status: planned 2026-11-23; nothing is built yet.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day. Four PRs, A to D, in the order under "Order"; A is `refactor/transcript-result`.
+
+## Why
+
+Each model and each target app has quirks, and River has no place for them. Three found on 2026-11-23:
+
+- **Phonon-2 writes digits against the word before** ("for30", "about10 to15"). FluidAudio 0.18.3 turns the model's pieces into text with no rule of its own (`convertTokensToText`), and River does no cleanup of FluidAudio text, so the glued digits are typed.
+- **Claude Code's prompt moved River's last character.** It holds rapid multi-character key events back as a possible paste but takes a single character at once. River types in chunks of 20 UTF-16 units, so a transcript of 421 characters ended on a one-character chunk, its final period, which landed 20 characters early when typed at release and 100 early with Paste last.
+- **Loading one encoder window changed FluidAudio's split** of a clip over 15 s from cuts at a pause to overlapping windows ([0037](0037_fluidaudio-engine.md)), and no River test could see it.
+
+The review found three rules with no single owner:
+
+1. **What a transcript is.** Each engine adapter decides. An empty decode stops live streaming under Whisper (`.emptyTranscription`) but drops one segment under FluidAudio (`.noSpeechDetected`), and the callers treat `.emptyTranscription` four ways: loud in the one-piece decode and the tail, quiet for kept recordings, and a stop to streaming mid-dictation.
+2. **How text reaches an app.** `RiverSession` owns the hold check, Paste last's task, Copy Last Transcription and the newline rule; `TextInsertionManager` owns the chunks and their pacing. Nothing runs inserts one at a time, and the pacing suspends between chunks, so a second Paste last during a long one mixes their chunks.
+3. **What audio each decode gets.** Seven modules each set part of it (capture's trim, the pre-roll, the segmenter's cuts, the stream's overlap and gates, the joiner's second decode, the session's choice of path, the manager's padding). Audio reaches the engine seven ways, the one-piece decode is written three times, and no session test sees the clip an engine gets.
+
+What holds, and stays: one import per engine; every decode through `TranscriptionManager.transcribe`; one `CGEvent.post` site (AGENTS.md rule 3); a pure segmenter and joiner; no model switch mid-dictation, so one dictation's joins never mix engines.
+
+## Decisions (maintainer, 2026-11-23)
+
+1. **An empty result is quiet for every engine.** Either engine returning no words means nothing was said: no error, and live streaming continues. **Why:** this replaces Whisper's loud `.emptyTranscription`. An engine returns nothing when its own gates find no speech in the audio (0023 pins Whisper's), and `FluidAudioModel` already treated that as nothing said. A "no speech heard" notice can come with 0023's planned feedback surface.
+2. **No fixes to a model's text for now; a general-purpose linting layer later.** River types each model's text as the model writes it. A later phase adds one linting layer for every model's transcript: simple rules, or a fast classifier that judges the transcript, applies the fixes it is sure of, and judges again. Where it runs, on each decode or on the final transcript, is decided with it; on the final transcript, the joiner and the live text still see the raw text. **Why:** this replaces per-model rules keyed by the catalogue, decided earlier the same day: a model's update can fix its own quirks, and quirks such as glued digits are easy to find without knowing which model wrote them.
+3. **A long one-piece clip is split by its engine.** River writes each engine's window down behind the seam (Whisper 30 s, FluidAudio 15 s) and tests long clips in the replay harness; River adds no cap. **Why:** a cap would not make a dictation that waited for the model any faster, since the same audio is decoded either way, and River's joiner has not been judged on FluidAudio text.
+4. **The maintainer records the replay corpus,** about 15 clips (D).
+
+## Design
+
+### A. One meaning of a transcript
+
+- `TranscriptionManager.transcribe` returns text or nothing said, and throws only for a real failure (`.transcriptionFailed`, `.modelNotLoaded`). `.emptyTranscription` and `.noSpeechDetected` go.
+- **Each adapter says nothing said its engine's way:** Whisper's empty output, or output made only of annotations (0023's whole-output rule; annotations inside speech stay), and FluidAudio's empty output. No adapter changes a word.
+- **What each engine needs from its audio** moves behind the seam too: the short-clip padding (Whisper's context, which also meets FluidAudio's 0.3 s minimum), and each engine's window, written down in its adapter.
+- **Callers.** The stream's segments and tail, the one-piece decode and kept recordings stop catching engine errors, and read nothing said the same way.
+- Unchanged: each engine imported only by its adapter ([0037](0037_fluidaudio-engine.md)); the Whisper adapter's retry without the custom-dictionary prompt.
+- **Tests.** Each adapter's nothing said is tested on raw text, with no model loaded. `FakeModel` returns given text, or nothing said, and replaces `transcribeResultForTesting` (the PR #97 review's "Retire the last two test flags"); [ADR 0001](../decisions/0001-defer-cycle-protocol-seams.md)'s 2026-11-19 note is amended.
+
+### B. One delivery module
+
+- `TextInsertionManager` takes the text and the app it was meant for, and reports typed, held, skipped (no editable field) or failed. It owns the hold check, Paste last, Copy Last Transcription's pasteboard write ([0007](0007_transient-pasteboard-markers.md)'s markers), the chunk plan, the pacing and the newline rule. The session keeps the last transcript ([0019](0019_last-transcript-recovery.md)) and the state.
+- **One insert at a time.** A second insert waits for the first, so Paste last pressed twice types the text twice, in order.
+- **The app in front is read again before each chunk.** If it changed, typing stops and the text is held, as when it changes before typing starts.
+- **A newline is typed as a space.** **Why:** Return sends a message in most chat apps, and River's own joins already avoid newlines.
+- **No chunk is a single character:** the last two chunks share the remainder. Checked on device in Claude Code at 20n+1 and 20n+2 characters before it ships.
+- Unchanged: the one post in `AccessibilityCapability`; Paste last's wait for the shortcut's keys in `HotkeyManager`; keystrokes, never the clipboard, for typing ([0011](0011_keystroke-injection.md)).
+- **Tests.** Chunk plans for every length; queue order with the injected pause; each outcome, with no polling; a change of app mid-insert.
+
+### C. One module decides what audio each decode gets
+
+- `DictationStream` turns a recording into text on every path: the segments cut while the user speaks, the tail at release, the live text, and every one-piece case (no cut, a failed segment, a kept recording, streaming off, a capture failure). The session hands it the recording and gets text back; a kept recording becomes a request to the same module.
+- It takes the silence trim from `AudioCaptureManager`, and makes one 16 kHz conversion of the recording (the live one, finished at the end) where there are two today. The one-piece decode is written once.
+- The hidden `streamingDictation` switch stays, as one path inside the module.
+- Unchanged: the cut, overlap and join rules (0025, [0034](0034_live-text-and-microphone-settings.md)); the wait for the model ([0004](0004_model-loading-indicator.md)).
+- **Tests.** A fake decoder records every clip on every path; session tests stop needing held loads and polling.
+
+### D. Replay harness
+
+- `TranscriptionEvalTests` becomes one on-device replay: each clip goes through C's module, with streaming on and off, and through each real model behind A. It scores word errors as today (`WordErrorRate`) and, apart, reports each model's text shape against the reference as written (digits, punctuation, capitals), so a model's update or the later linting layer is judged against it. It is rerun after any engine or model upgrade, the check 0037 asks for after a FluidAudio upgrade.
+- Gated by `RIVER_EVAL_CORPUS` and `RIVER_EVAL_MODEL` as today; it loads real models, so it runs on its own, never beside a build.
+- **The corpus** (`~/river-eval-corpus`, format in [test-harnesses.md](../conventions/test-harnesses.md)). Record each clip in QuickTime Player (File › New Audio Recording, built-in microphone), then convert it: `afconvert -f WAVE -d LEI16@16000 -c 1 clip.m4a clip.wav`. Read each script as written; note any change in its reference.
+  1. `numbers-01`: "Dictating for 30 seconds, then about 10 to 15 seconds more."
+  2. `numbers-02`: "The call moved from 3:45 to 4:15 on November 23, 2026."
+  3. `numbers-03`: "It costs $20, about 15 percent of the 140 we budgeted."
+  4. `long-01`: a paragraph of 40 s or more, read without pausing.
+  5. `long-02`: a paragraph of 45 s or more, with pauses of 1 to 2 s between sentences.
+  6. `pauses-01`: "The best option is… to move the launch… to next week because… the build isn't ready."
+  7. `short-01`: "Yes."
+  8. `short-02`: "Send it."
+  9. `questions-01`: "Can you check the logs? Then fix the test, update the docs, and push."
+  10. `names-01`: "Open River's settings, pick Phonon-2, and check GitHub for the FluidAudio release."
+  11. `contractions-01`: "We'll see. It's fine, they're done, and I don't mind."
+  12. `commands-01`: "Run git status, then cd into the worktree and run swift test."
+  13. `mixed-01`: a sentence with a laugh or a cough in the middle.
+  14. `silence-01`: 5 s of room tone (`silence-heavy`, empty reference).
+  15. `breath-01`: breathing and a key tap, no words (`silence-heavy`, empty reference).
+
+## Findings explored
+
+- **The joiner and FluidAudio text.** The joiner matches words with case and punctuation removed, but a number must be written the same way in both decodes: "for30" against "for 30" or "for thirty" fails. A failed match decodes the segment again on its own and joins it by rule: no word is lost or doubled, but it costs an extra decode and gives a rougher join. Phonon-2's glued digits fail it too, until a model update or the later linting layer fixes them, and so does a number written as digits in one decode and as words in the other. River's history can't show how often, since macOS does not keep info-level log lines; D measures it.
+- **No cap on one decode.** Decision 3.
+
+## Order
+
+1. **A first.** B and C read its one result.
+2. **B.** Small, and it fixes the two faults a user can meet today: chunks mixing and the moved last character.
+3. **C.** The largest, and simpler once nothing said means one thing.
+4. **D.** Once C is in, so it replays the module the app runs; the corpus can be recorded any time before.
+
+Each PR builds and passes on its own and updates the docs it changes (`river-pipeline.md`, `river-session.md`, `test-seams.md`, `test-harnesses.md`). They follow PR 11 ([#99](https://github.com/abgregs/river/pull/99), merged 2026-11-23) directly, each from `main`, and come before PR 12's onboarding step (maintainer, 2026-11-23). No release is planned around them: work continues until the maintainer decides to release.
+
+## Acceptance criteria
+
+1. **A.** An empty result from either engine types nothing, shows no error, and keeps live streaming. No caller catches an engine's own error, and session tests reach typed text through `FakeModel`, with `transcribeResultForTesting` gone.
+2. **B.** Paste last pressed twice types the text twice, in order (tested). No chunk is one character, and on device a 421-character transcript types in order in Claude Code. A change of app mid-insert stops typing and holds the text.
+3. **C.** Tests see every clip an engine gets, on every path; the one-piece decode exists once; the trim and the conversion run once per recording.
+4. **D.** The replay runs a model over the corpus with streaming on and off and writes word errors and text-shape results; a clip over 30 s types in full on every model.
+
+## Not in this plan
+
+- Fixing a model's text, such as Phonon-2's glued digits: the later linting layer (decision 2).
+- Stripping annotations inside speech: 0023 keeps them.
+- Pasting long transcripts, about 1,000 characters and up: 0031's agreed direction, which would land in B's module.
+- A "no speech heard" notice: 0023's feedback surface.
+- Rules per app beyond the one-character rule: [0031](0031_terminal-insert-fidelity.md) turned down a strategy per terminal.
+
+## Related
+
+- [../architecture/river-pipeline.md](../architecture/river-pipeline.md), [../architecture/river-session.md](../architecture/river-session.md), [../architecture/capabilities.md](../architecture/capabilities.md) — the pipeline, the session and the capabilities these PRs change
+- [ADR 0001](../decisions/0001-defer-cycle-protocol-seams.md) — the model-loading seam A deepens
+- [0022](0022_transcription-eval-harness.md) — the eval harness D extends; [0023](0023_silence-decoding-hardening.md) — the silence rules A keeps
