@@ -24,18 +24,20 @@ struct WhisperKitLoader: ModelLoader {
     }
 
     func load(
-        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
+        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) async throws -> any LoadedModel {
-        WhisperKitModel(try await Self.makeWhisperKit(modelName: model, downloadBase: downloadBase, phase: phase))
+        WhisperKitModel(try await Self.makeWhisperKit(
+            modelName: model, downloadBase: downloadBase, phase: phase, progress: progress))
     }
 
-    static func modelFolder(downloadBase: URL, modelName: String) -> URL {
+    nonisolated static func modelFolder(downloadBase: URL, modelName: String) -> URL {
         downloadBase.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(modelName)", isDirectory: true)
     }
 
     // The Hub's download records for a model: a `.metadata` file per downloaded file, and a
     // cut-off file's `.incomplete` part, which a later download resumes from.
-    private static func downloadRecordsFolder(downloadBase: URL, modelName: String) -> URL {
+    nonisolated private static func downloadRecordsFolder(downloadBase: URL, modelName: String) -> URL {
         downloadBase.appendingPathComponent("models/argmaxinc/whisperkit-coreml/.cache/huggingface/download/\(modelName)", isDirectory: true)
     }
 
@@ -100,9 +102,10 @@ struct WhisperKitLoader: ModelLoader {
 
     // Downloads the model if it is not cached, then loads it. `phase` hears `.downloading` when
     // a cached folder won't load and the download path takes over, and `.loading` once the
-    // files are on disk.
+    // files are on disk; `progress` hears the download's fraction while it runs.
     private static func makeWhisperKit(
-        modelName: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
+        modelName: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) async throws -> WhisperKit {
         // Download under Application Support (planning 0010).
         try FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
@@ -132,13 +135,59 @@ struct WhisperKitLoader: ModelLoader {
         }
         // Phase 1: download or find cached model files. `load: false` skips the
         // in-memory load so we can emit the `.loading` transition before it.
-        let wk = try await WhisperKit(model: modelName, downloadBase: downloadBase, load: false)
+        let wk = try await whileDownloading(modelName, downloadBase: downloadBase, progress: progress) {
+            try await WhisperKit(model: modelName, downloadBase: downloadBase, load: false)
+        }
         // Phase 2: files confirmed on disk — now loading CoreML models into memory.
         phase(.loading)
         // Again after the download, which can add files to the model folder.
         try checkTokenizerFiles(downloadBase: downloadBase, modelName: modelName)
         try await wk.loadModels()
         return wk
+    }
+
+    // Runs `download` while a task off the main actor measures the model's bytes on disk every
+    // half second and reports them against the catalogue's size (planning 0004). WhisperKit's
+    // own progress counts files, and two weight files hold nearly all of a model, so it jumps.
+    private static func whileDownloading<T>(
+        _ modelName: String, downloadBase: URL, progress: @escaping @MainActor (Double) -> Void,
+        _ download: () async throws -> T
+    ) async throws -> T {
+        let megabytes = ModelCatalogue.option(named: modelName)?.downloadMegabytes ?? 0
+        let folders = downloadFolders(downloadBase: downloadBase, modelName: modelName)
+        let sampler = Task.detached(priority: .utility) {
+            let throttle = DownloadProgressThrottle()
+            while !Task.isCancelled {
+                let bytes = bytesOnDisk(in: folders)
+                if let fraction = throttle.report(downloadFraction(bytes: bytes, megabytes: megabytes)) {
+                    await progress(fraction)
+                }
+                try? await Task.sleep(for: .seconds(Constants.downloadProgressSampleSeconds))
+            }
+        }
+        defer { sampler.cancel() }
+        return try await download()
+    }
+
+    // internal for testability — where a download's bytes are while it runs: the files already
+    // whole in the model's folder, and the part of each file still coming in, which the Hub
+    // writes as an `.incomplete` file among the download records and moves in once it is whole.
+    nonisolated static func downloadFolders(downloadBase: URL, modelName: String) -> [URL] {
+        [modelFolder(downloadBase: downloadBase, modelName: modelName),
+         downloadRecordsFolder(downloadBase: downloadBase, modelName: modelName)]
+    }
+
+    // internal for testability — the bytes in `folders` as Finder counts them.
+    nonisolated static func bytesOnDisk(in folders: [URL]) -> Int64 {
+        folders.compactMap(ModelStore.diskUsage(of:)).reduce(0, +)
+    }
+
+    // internal for testability — a download's fraction from its bytes on disk and the
+    // catalogue's size. It stops short of 1 (`downloadProgressCeiling`): the size is a
+    // measurement, so only the end of the download says it is done.
+    nonisolated static func downloadFraction(bytes: Int64, megabytes: Int) -> Double {
+        guard megabytes > 0 else { return 0 }
+        return min(Double(bytes) / (Double(megabytes) * 1_000_000), Constants.downloadProgressCeiling)
     }
 
     // internal for the eval harness (`TranscriptionEvalTests`, planning 0022) —

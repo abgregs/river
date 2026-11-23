@@ -36,7 +36,8 @@ struct SettingsWindowSnapshotTests {
         // Each section, then the Model section with a choice waiting for a dictation to end,
         // and with a switch that failed.
         let shots = SettingsSection.allCases.map { ($0, $0.rawValue) }
-            + [(.model, "model-waiting"), (.model, "model-switch-failed")]
+            + [(.model, "model-waiting"), (.model, "model-switch-failed"),
+               (.model, "model-downloading"), (.model, "model-preparing"), (.model, "model-failed")]
         for (section, shot) in shots {
             model.section = section
             if shot == "model-waiting" {
@@ -47,6 +48,22 @@ struct SettingsWindowSnapshotTests {
             if shot == "model-switch-failed" {
                 loader.failing = ["openai_whisper-large-v3-v20240930_turbo"]
                 await transcription.switchModel(to: "openai_whisper-large-v3-v20240930_turbo")
+            }
+            // The model in use's own load (planning 0004): the status ring and its words, and
+            // the recording a failed load kept.
+            let inUse = transcription.currentSelection.inUse
+            if shot == "model-downloading" {
+                appState.apply(modelSelection: ModelSelection(inUse: inUse, inUseState: .downloading, next: nil))
+                appState.apply(downloadProgress: [inUse: 0.62])
+            }
+            if shot == "model-preparing" {
+                appState.apply(modelSelection: ModelSelection(inUse: inUse, inUseState: .loading, next: nil))
+                appState.apply(downloadProgress: [:])
+            }
+            if shot == "model-failed" {
+                appState.apply(modelSelection: ModelSelection(inUse: inUse, inUseState: .failed, next: nil))
+                appState.apply(downloadProgress: [inUse: 0.62])
+                appState.apply(keptRecordingCount: 1)
             }
             let size = section == .model ? Constants.settingsModelWindowSize : Constants.settingsWindowSize
             for appearance in Self.appearances {

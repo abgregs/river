@@ -31,6 +31,7 @@ final class RiverSession {
     private let errorSubject = PassthroughSubject<RiverError, Never>()
     private let noticeSubject = PassthroughSubject<String, Never>()
     private let discardSubject = PassthroughSubject<Void, Never>()
+    private let eventSubject = PassthroughSubject<DictationEvent, Never>()
 
     private let accessibility: AccessibilityCapability
     private let microphone: MicrophoneCapability
@@ -51,11 +52,25 @@ final class RiverSession {
     }
     private let lastTranscriptAvailableSubject = CurrentValueSubject<Bool, Never>(false)
 
+    // Recordings a failed load kept, in order, for the next load that succeeds (planning 0004).
+    // Memory only, like `lastTranscript`: a quit loses them. Never logged.
+    private var keptRecordings: [[Float]] = [] {
+        didSet { keptCountSubject.send(keptRecordings.count) }
+    }
+    private let keptCountSubject = CurrentValueSubject<Int, Never>(0)
+    // The wait of a dictation that ended before the model was ready; Cancel Dictation ends it.
+    private var modelWait: Task<Void, Error>?
+    // The kept recordings' decode, which runs at `.idle`. A dictation's own decodes wait for it,
+    // so the engine runs one decode at a time.
+    private var keptDecode: Task<Void, Never>?
+
     // The recording's live transcription when streaming is on (0025 prototype); nil otherwise.
     private var stream: DictationStream?
     // The text transcribed so far for the transcript panel. Unlike `lastTranscript` this
     // content does reach the UI layer: showing it is the point. Still never logged.
     private let liveTranscriptSubject = CurrentValueSubject<String, Never>("")
+    // Whether this dictation's live text may show: only one that started with the model ready.
+    private let liveTextAllowedSubject = CurrentValueSubject<Bool, Never>(true)
 
     private var isStarted = false
     private var cancellables = Set<AnyCancellable>()
@@ -83,6 +98,13 @@ final class RiverSession {
     // Fires just before a silent discard's `.idle`, so `AppState` can tell it from a
     // cancel, which looks the same as a state change.
     var discards: AnyPublisher<Void, Never> { discardSubject.eraseToAnyPublisher() }
+    // What became of a dictation River couldn't type as soon as it ended, sent before `.idle`
+    // so the panel can show it (planning 0004).
+    var dictationEvents: AnyPublisher<DictationEvent, Never> { eventSubject.eraseToAnyPublisher() }
+    // How many recordings a failed load kept, for Settings' "1 recording kept".
+    var keptRecordingCount: AnyPublisher<Int, Never> { keptCountSubject.eraseToAnyPublisher() }
+    // internal for testability — the count only, never the audio.
+    var currentKeptRecordingCount: Int { keptRecordings.count }
     // Availability signal for the "Copy Last Transcription" menu item (planning 0019).
     // Emits `true` after the first successful transcription; `AppState` bridges it.
     var lastTranscriptAvailable: AnyPublisher<Bool, Never> { lastTranscriptAvailableSubject.eraseToAnyPublisher() }
@@ -90,8 +112,16 @@ final class RiverSession {
     var hasLastTranscript: Bool { lastTranscript != nil }
     // The streaming transcript of the current recording, for the transcript panel.
     var liveTranscript: AnyPublisher<String, Never> { liveTranscriptSubject.eraseToAnyPublisher() }
-    // Whether the live text shows above the indicator (planning 0034, decision 2).
-    var isLiveTextShown: AnyPublisher<Bool, Never> { settings.publisher(for: Settings.showLiveText) }
+    // Whether the live text shows above the indicator (planning 0034, decision 2). Never for a
+    // dictation that started before the model was ready (planning 0004): it would sit empty
+    // through the wait and take the mouse.
+    var isLiveTextShown: AnyPublisher<Bool, Never> {
+        settings.publisher(for: Settings.showLiveText)
+            .combineLatest(liveTextAllowedSubject)
+            .map { shown, allowed in shown && allowed }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
     // What macOS said to each combination River holds, for Settings' "Not working" lines.
     var shortcutRegistrations: AnyPublisher<[RiverShortcut: HotKeyRegistration], Never> { hotkey.registrations }
 
@@ -186,17 +216,11 @@ final class RiverSession {
     // Audio capture is kicked off fire-and-forget so the state change is
     // immediately observable; engine-warmup race is handled at stop time.
     //
-    // If the model is not yet ready the activation is declined and an error is
-    // surfaced immediately (planning 0004 AC3) — no audio is captured, so no
-    // audio can be silently lost to the `.modelNotLoaded` fail-fast.
+    // A model still downloading or getting ready doesn't stop a dictation (planning 0004):
+    // it records, and waits for the model at release.
     func handleActivate() {
         guard currentState == .idle else {
             logger.info("Ignoring activate in state \(String(describing: self.currentState), privacy: .public)")
-            return
-        }
-        guard transcription.currentModelLoadState == .ready else {
-            logger.info("Ignoring activate: model not ready (\(String(describing: self.transcription.currentModelLoadState), privacy: .public))")
-            errorSubject.send(.transcription(underlying: TranscriptionError.modelNotLoaded))
             return
         }
         // Pre-recording capability gate (planning 0012 AC5). Without this the app
@@ -216,6 +240,9 @@ final class RiverSession {
         stateSubject.send(.recording)
         logger.info("State -> recording")
         liveTranscriptSubject.send("")
+        liveTextAllowedSubject.send(transcription.currentModelLoadState == .ready)
+        // Made even while the model isn't ready: its segments fail until it is, and it then
+        // decodes from the first failed one in one piece at release.
         let stream = settings.value(for: Settings.streamingDictation) ? makeStream() : nil
         self.stream = stream
         let audio = self.audio
@@ -225,8 +252,10 @@ final class RiverSession {
     }
 
     private func makeStream() -> DictationStream {
-        let transcription = self.transcription
-        let stream = DictationStream { samples in try await transcription.transcribe(audioSamples: samples) }
+        let stream = DictationStream { [weak self] samples in
+            guard let self else { throw CancellationError() }
+            return try await self.transcribeInTurn(samples)
+        }
         stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
         stream.showsPreview = settings.value(for: Settings.showLiveText)
         return stream
@@ -237,6 +266,7 @@ final class RiverSession {
     // the complete cycle. Each step's failure is caught independently so the
     // cycle always returns to `.idle` and pending reconfiguration applies;
     // getting stuck in `.processing` would freeze the app (river-pipeline.md).
+    // A model not yet ready is waited for in `.processing` (`waitForModel`).
     func handleDeactivate() async {
         guard currentState == .recording else {
             logger.info("Ignoring deactivate in state \(String(describing: self.currentState), privacy: .public)")
@@ -244,6 +274,11 @@ final class RiverSession {
         }
         stateSubject.send(.processing)
         logger.info("State -> processing")
+        // Every way out returns to `.idle`: a failed load and Cancel Dictation end it early.
+        defer { returnToIdle() }
+        // The app dictated into: the one in front at the release, so in a tap mode a click into
+        // another app before the stop types there (planning 0004).
+        let app = textInsertion.appInFront()
         let stream = self.stream
         self.stream = nil
         let released = ContinuousClock.now
@@ -251,6 +286,10 @@ final class RiverSession {
             let samples = try await audio.stopRecording()
             logger.info("Captured \(samples.count, privacy: .public) samples")
             if let stream, stream.cutCount > 0 {
+                guard await waitForModel(keeping: samples) else {
+                    stream.cancel()
+                    return
+                }
                 // Streaming: the segments are already decoded; only the tail is left.
                 let outcome = await stream.finish()
                 logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
@@ -261,7 +300,7 @@ final class RiverSession {
                     logger.info("Stream found no speech; skipping paste")
                 } else {
                     liveTranscriptSubject.send(outcome.text)
-                    await deliver(outcome.text)
+                    await deliver(outcome.text, into: app)
                 }
             } else if samples.isEmpty {
                 stream?.cancel()
@@ -282,10 +321,11 @@ final class RiverSession {
                     await stream.cancelAndWait()
                     logger.info("Stream made no cut (\(stream.provisionalCount, privacy: .public) provisional); decoding in one piece")
                 }
+                guard await waitForModel(keeping: samples) else { return }
                 do {
-                    let text = try await transcription.transcribe(audioSamples: samples)
+                    let text = try await transcribeInTurn(samples)
                     logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
-                    await deliver(text)
+                    await deliver(text, into: app)
                 } catch TranscriptionError.noSpeechDetected {
                     // Decode heard only non-speech (breath, room tone, music the
                     // trim didn't catch): same policy as the all-silence branch
@@ -309,27 +349,120 @@ final class RiverSession {
             if case AudioCaptureError.noAudioCaptured = error {
                 stream?.cancel()
             } else if let stream {
-                let outcome = await stream.finish()
-                if !outcome.text.isEmpty {
-                    logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
-                    liveTranscriptSubject.send(outcome.text)
-                    await deliver(outcome.text)
+                if await waitForModel(keeping: AudioCaptureManager.trimSilence(stream.samples)) {
+                    let outcome = await stream.finish()
+                    if !outcome.text.isEmpty {
+                        logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
+                        liveTranscriptSubject.send(outcome.text)
+                        await deliver(outcome.text, into: app)
+                    }
+                } else {
+                    stream.cancel()
                 }
             }
             errorSubject.send(.audioCapture(underlying: error))
         }
+    }
+
+    // The end of `handleDeactivate`'s cycle, whichever way it ended.
+    private func returnToIdle() {
         stateSubject.send(.idle)
         logger.info("State -> idle")
         applyPendingReconfigurations()
         // A model that became ready mid-cycle takes over now; a no-op unless one is ready.
         transcription.commitModelSwitch()
+        transcribeKeptRecordings()
+    }
+
+    // Waits in `.processing` for a model still downloading or getting ready (planning 0004),
+    // so a press meanwhile is ignored; `true` once it is ready to decode. `false` when the
+    // dictation ends here: the load failed and `recording` is kept for the next load that
+    // succeeds, or Cancel Dictation threw it away. A load that has already failed fails at once.
+    private func waitForModel(keeping recording: [Float]) async -> Bool {
+        let state = transcription.currentModelLoadState
+        guard state != .ready else { return true }
+        logger.info("Waiting for the model (\(String(describing: state), privacy: .public))")
+        if state != .failed { eventSubject.send(.waitingForModel) }
+        let transcription = self.transcription
+        let wait = Task { try await transcription.waitUntilReady() }
+        modelWait = wait
+        defer { modelWait = nil }
+        do {
+            try await wait.value
+            logger.info("Model ready; transcribing the dictation that waited")
+            return true
+        } catch TranscriptionError.modelLoadFailed {
+            guard !recording.isEmpty else { return false }
+            keptRecordings.append(recording)
+            logger.info("Model failed to load; \(self.keptRecordings.count, privacy: .public) recordings kept")
+            eventSubject.send(.recordingKept)
+            return false
+        } catch {
+            logger.info("Dictation waiting for the model canceled")
+            return false
+        }
+    }
+
+    // A decode for the current dictation, after any kept recordings' decode still running.
+    private func transcribeInTurn(_ samples: [Float]) async throws -> String {
+        await keptDecode?.value
+        return try await transcription.transcribe(audioSamples: samples)
+    }
+
+    // Transcribes the recordings a failed load kept, once the model is ready and River is idle
+    // (planning 0004): one at a time, stopping when a dictation starts. The text is joined with
+    // a space, since Paste last types it and a newline is Return, and held as the last
+    // transcript, never typed. Idempotent; the work runs in a task, after the caller returns.
+    private func transcribeKeptRecordings() {
+        guard keptDecode == nil, !keptRecordings.isEmpty, currentState == .idle,
+              transcription.currentModelLoadState == .ready else { return }
+        keptDecode = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var texts: [String] = []
+            while let recording = self.keptRecordings.first, self.currentState == .idle,
+                  self.transcription.currentModelLoadState == .ready {
+                do {
+                    texts.append(try await self.transcription.transcribe(audioSamples: recording))
+                } catch TranscriptionError.noSpeechDetected, TranscriptionError.emptyTranscription {
+                    self.logger.info("A kept recording held no speech")
+                } catch {
+                    self.logger.error("Kept recording failed to transcribe: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+                    self.errorSubject.send(.transcription(underlying: error))
+                }
+                self.keptRecordings.removeFirst()
+            }
+            if !texts.isEmpty {
+                let text = texts.joined(separator: " ")
+                self.lastTranscript = text
+                self.logger.info("Held \(texts.count, privacy: .public) kept recordings as the last transcript (\(text.count, privacy: .public) chars)")
+            }
+            self.keptDecode = nil
+        }
+    }
+
+    /// The menu's Cancel Dictation (planning 0004): throws away a dictation waiting for the
+    /// model, and River returns to `.idle`. The model keeps loading. A no-op unless one waits.
+    func cancelWaiting() {
+        guard let modelWait else {
+            logger.info("Ignoring cancel: no dictation is waiting for the model")
+            return
+        }
+        logger.info("Cancel: discarding the dictation waiting for the model")
+        modelWait.cancel()
     }
 
     // Retains the transcript, then types it at the cursor. Retained before the paste
     // attempt: recovery is available even when insertion fails (planning 0019 AC1).
     // Content is never logged — only its count is; see logging.md anti-pattern #4.
-    private func deliver(_ text: String) async {
+    // When `app`, the app in front at the release, is no longer in front, River types nothing
+    // and holds the text: it would land in an app the user never dictated into (planning 0004).
+    private func deliver(_ text: String, into app: pid_t?) async {
         lastTranscript = text
+        if let app, textInsertion.appInFront() != app {
+            logger.info("The app in front changed after the release; holding \(text.count, privacy: .public) chars")
+            eventSubject.send(.textHeld)
+            return
+        }
         do {
             try await textInsertion.insertText(text)
         } catch {
@@ -385,6 +518,7 @@ final class RiverSession {
         applyPendingReconfigurations()
         // A model that became ready mid-cycle takes over now; a no-op unless one is ready.
         transcription.commitModelSwitch()
+        transcribeKeptRecordings()
     }
 
     // internal for testability — a recording thrown away because the held dictation
@@ -409,6 +543,7 @@ final class RiverSession {
         applyPendingReconfigurations()
         // A model that became ready mid-cycle takes over now; a no-op unless one is ready.
         transcription.commitModelSwitch()
+        transcribeKeptRecordings()
     }
 
     // Pending reconfigurations parked during a non-idle cycle fire on the
@@ -478,6 +613,8 @@ final class RiverSession {
                         self.transcription.commitModelSwitch()
                     }
                 }
+                // Recordings a failed load kept are transcribed once a model is ready at `.idle`.
+                if selection.inUseState == .ready { self.transcribeKeptRecordings() }
             }
             .store(in: &cancellables)
     }
@@ -535,10 +672,10 @@ final class RiverSession {
     }
 
     /// The Model section's Select and Try Again (planning 0036): makes `name` the model River
-    /// uses. It starts loading at once, even mid-dictation, since a dictation only starts with
-    /// a ready model and the new one loads beside it; it takes over only at `.idle`, so no
-    /// recording changes model halfway. Choosing the model in use retries it after a failure,
-    /// or drops a model loading beside it.
+    /// uses. It starts loading at once, even mid-dictation. Beside a ready model it takes over
+    /// only at `.idle`, so no recording changes model halfway; with no ready model it replaces
+    /// the one loading, and a dictation waiting for a model waits for it. Choosing the model in
+    /// use retries it after a failure, or drops a model loading beside it.
     func selectModel(_ name: String) {
         let transcription = self.transcription
         Task { @MainActor in await transcription.switchModel(to: name) }
@@ -561,10 +698,10 @@ final class RiverSession {
             .combineLatest(microphone.status, inputMonitoring.status)
             .map { !OnboardingGate.shouldPresent(statuses: [$0, $1, $2]) }
         settings.publisher(for: Settings.keepMicrophoneReady)
-            .combineLatest(onboardingComplete, transcription.modelLoadState, system.availability)
-            .map { keepReady, onboardingComplete, model, system in
+            .combineLatest(onboardingComplete, system.availability)
+            .map { keepReady, onboardingComplete, system in
                 MicrophoneReadiness.shouldListen(
-                    keepMicrophoneReady: keepReady, onboardingComplete: onboardingComplete, model: model, system: system
+                    keepMicrophoneReady: keepReady, onboardingComplete: onboardingComplete, system: system
                 )
             }
             .removeDuplicates()

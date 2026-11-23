@@ -23,9 +23,11 @@ protocol ModelLoader {
     func files(of model: String, downloadBase: URL) -> [URL]
     /// Downloads the model if it is not on disk, then loads it. `phase` hears `.downloading`
     /// when a download starts that the caller could not foresee, and `.loading` once the files
-    /// are on disk.
+    /// are on disk. `progress` hears how far the download has got, 0 to 1, rising (planning
+    /// 0004); a load with nothing to download reports none.
     func load(
-        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
+        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) async throws -> any LoadedModel
 }
 

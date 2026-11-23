@@ -72,7 +72,7 @@ Quit River before editing the rows — a running app holds its TCC row, and edit
 
 Preferences and the model cache both survive the swap, which is convenient and misleading: a `selectedModel` left on `base.en` from dev testing follows you into the release build, where a new user would get `small.en`. Reset it before judging transcription quality or load time.
 
-## "Loading model…" is not downloading
+## "Getting the model ready…" is not downloading
 
 **This is the single most misread signal in local builds.** The indicator covers both operations, and they have completely different causes and costs.
 
@@ -85,7 +85,7 @@ cp -R $(APP_BUNDLE) $(INSTALL_DIR)/$(APP_NAME).app
 
 It **never touches** `~/Library/Application Support/River`. Downloaded models always persist across installs — the sandbox is intentionally off, so the cache lives outside the app container (see [../architecture/distribution.md](../architecture/distribution.md)).
 
-So a long "Loading model…" after a rebuild is **not** a re-download. It is CoreML loading the model and compiling it for the Apple Neural Engine. On a 1.5 GB model this legitimately takes long enough to look like a hang.
+So a long "Getting the model ready…" is **not** a re-download. It is Core ML compiling the model for the Apple Neural Engine, which happens only when its compiled copy is missing (see "Once per compiled copy" below). On a 1.5 GB model, or Phonon-2, this legitimately takes long enough to look like a hang.
 
 ### Before concluding it is stuck
 
@@ -137,13 +137,11 @@ The `.mlmodelc` files on disk are CoreML's *portable, architecture-neutral* comp
 
 That gap is why the indicator misleads. "Loading" implies reading bytes into memory, an operation whose duration scales with size in a way people intuitively expect. What actually happens is closer to **building** or **compiling**, and it can take minutes on a large model. Someone who reads "Loading…" and waits two minutes reasonably concludes the app has hung — which is exactly what happened to the maintainer on a `large-v3-turbo` build.
 
-Wording like "Preparing model…" or "Optimizing for this Mac…" sets the correct expectation at zero engineering cost. **Done 2026-09-25** ([0029](../planning/0029_pixel-identity.md)): the HUD and the menu bar now say "Preparing model…", and the HUD shows the pixel r with a slow ink crest instead of a spinner.
+Wording like "Preparing model…" or "Optimizing for this Mac…" sets the correct expectation at zero engineering cost. **Done 2026-09-25** ([0029](../planning/0029_pixel-identity.md)): the HUD and the menu bar now say "Preparing model…", and the HUD shows the pixel r with a slow ink crest instead of a spinner. Since PR 11 (2026-11-21) the menu says "Getting the model ready…", Settings "Getting ready…", and the line beside the indicator "Typing once model is ready" ([../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md)).
 
-### It is once per installed *version*, not once ever
+### Once per compiled copy, not once per install
 
-Worth stating precisely, because the imprecise version invites the wrong conclusion. The ANE-compiled artifact is cached by the OS keyed partly on the requesting binary, so **every new version a user installs plausibly pays the cost again on first launch** — not just the very first install.
-
-This matters more than it sounds once auto-update ships (planning 0009): users who currently install once will start updating regularly, and each update may land them on a slow first launch with a misleading "Loading…" label. Small default model plus honest copy is what keeps that from reading as "the update broke it."
+Core ML keeps each model's compiled copy in `~/Library/Caches/com.river.app` (`com.apple.e5rt.e5bundlecache`), and a new build of River reuses it: on 2026-11-22, `main`'s build found the copies a branch build had compiled and loaded Phonon-2 in 2.2 s ([../planning/0037_fluidaudio-engine.md](../planning/0037_fluidaudio-engine.md)). Only new model files (a download) or an emptied cache cost the compile again, and cache cleaners empty it. **Why:** this replaces a guess that the cache was keyed on the app binary, so that every install and every update would pay the compile; the measurement answered the open question that guess left here.
 
 ### Recorded but not taken: forcing GPU over the Neural Engine
 
@@ -153,17 +151,6 @@ Forcing `.cpuAndGPU` would **skip ANE compilation entirely** and load far faster
 
 **Deliberately not doing this.** The ANE is both faster and far more power-efficient at inference than the GPU on Apple Silicon, so it trades a one-time startup cost for a permanent per-dictation and battery cost — a bad trade in a menu-bar app that runs all day. Recorded so the option is not rediscovered and re-litigated. If it is ever revisited, measure it with the eval harness (planning 0022) rather than by feel.
 
-### Open question: is the ANE compile cached across installs?
-
-Unresolved. Each `make install` produces a new code signature, and CoreML's compiled artifacts are cached by the OS keyed partly on the requesting binary, so a re-sign plausibly forces recompilation on first launch. Not confirmed.
-
-**To settle it:** after a `make install`, time the first launch, then quit and relaunch without reinstalling and time that.
-
-- Second launch much faster → the compile is cached, and only the first launch after each install pays it. A build-workflow cost, not a product one.
-- Both equally slow → every launch pays it, which is a genuine first-run concern for any large default model.
-
-Record the answer here once measured.
-
 ## Product signal worth escalating
 
 If a large model takes long enough to prepare that it reads as a hang **to the people who wrote the app**, a first-time user on that default would conclude it is broken and quit.
@@ -171,7 +158,7 @@ If a large model takes long enough to prepare that it reads as a hang **to the p
 Two consequences for the backlog:
 
 - Argues for keeping a small shipped default, with large models as an explicit opt-in (planning 0021's default decision, pending 0022's scorecards).
-- The indicator **already** distinguishes downloading from loading — `TranscriptionManager` splits the two deliberately (`load: false` to download or locate the files, then `emitLoadState(.loading)`, then `loadModels()`). The remaining gap is not the distinction but the *expectation*: "Loading…" gives no sense that a 1.5 GB model may take a long time, which is why it reads as a hang. Setting duration expectations is the open 0004 refinement, not separating the phases.
+- The indicator **already** distinguishes downloading from loading — `TranscriptionManager` splits the two deliberately (`load: false` to download or locate the files, then `emitLoadState(.loading)`, then `loadModels()`). The remaining gap is not the distinction but the *expectation*: "Loading…" gives no sense that a 1.5 GB model may take a long time, which is why it reads as a hang. Setting duration expectations was 0004's refinement, built in PR 11, not separating the phases.
 
 ## Related
 

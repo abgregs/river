@@ -8,7 +8,7 @@ FluidAudio 0.18.3 (FluidInference, Apache-2.0, a Swift package) on macOS 15.6, A
 
 - **It builds with only the Command Line Tools** (Swift 6.1.2), and River with it passes `make verify`, signed with the hardened runtime. Its prebuilt text-processing library is static, so nothing new is embedded or signed.
 - **Parakeet TDT v2 inside the signed River.app:** a 12 s clip typed exactly in 99 ms. The first load in the app took 19 s with the model already downloaded: Core ML preparing it for this Mac, once per model per app. In a test program a prepared model loaded in under 0.4 s.
-- **Phonon-2, in a test program:** exact text with punctuation in about 100 ms for 11.6 s of audio. 374 MB on disk; the first download and load took 3 min 53 s, nearly all of it the download.
+- **Phonon-2, in a test program:** exact text with punctuation in about 100 ms for 11.6 s of audio. 374 MB on disk; the first download and load took 3 min 53 s, most of it the first preparation's compiles (below), not the download as the spike first read it.
 - **Live text:** re-reading the growing recording from the start, as River's live view does, took 54 ms at 1 s of audio and 123 ms at 29 s with Parakeet, and 30 to 95 ms over 11 s with Phonon-2.
 - **Size:** River's release binary grew from about 3 MB to 17 MB, mostly the text-processing library. A clean release build took about 3 minutes.
 
@@ -32,7 +32,13 @@ Not measured in the spike: accuracy on the maintainer's own voice (the spike use
 - **No words is no speech.** Parakeet and Phonon write nothing for audio with no words, where Whisper writes "[BLANK_AUDIO]"; both read as `.noSpeechDetected`, the session's quiet no-op ([0023](0023_silence-decoding-hardening.md)).
 - **Short clips.** FluidAudio refuses audio under 0.3 s. River's padding of clips under 1.2 s with 0.5 s of silence on each side now runs for every engine, which lifts any clip past that.
 - **A saved model this Mac can't run** (a name an older catalogue listed, or Phonon-2 on macOS 14) loads the default instead, which the session then saves once ready; `switchModel` ignores such a choice.
-- **Downloading includes a first compile.** FluidAudio's download compiles each model once to check it, so part of a new model's first preparation shows as Downloading. How long each phase then reads is still unmeasured, and PR 11's preparing look depends on it.
+- **River loads one encoder window, so a first preparation is one Neural Engine compile** (measured on device 2026-11-21 and 2026-11-22, an 8 GB M3, macOS 15, FluidAudio 0.18.3).
+  - **The cost.** Phonon-2's encoder holds three windows, 15, 10 and 5 s. With no compiled copy in Core ML's cache, each is a Neural Engine compile of 61 to 84 s, and each loaded window holds about 350 MB. FluidAudio's own `AsrModels.load` loads all three: 3 min 30 s from an empty cache, on `main` and on this branch alike, and 2.2 s once compiled.
+  - **What River does.** It loads the 15 s window alone, through FluidAudio's public `AsrModels.loadLocal`: 75.5 s from an empty cache, 0.8 s once compiled, and about 675 MB less memory held. The two shorter windows would save a short dictation about 16 ms (an encoder pass takes 24 ms on the 15 s window, 7.8 ms on the 5 s one). Parakeet's encoder has one window (19 s from an empty cache).
+  - **When the cache is empty.** After a download, and after anything clears `~/Library/Caches/com.river.app`, where Core ML keeps the compiled copies: a cleaning tool did on 2026-11-22. A new build of River reuses them. FluidAudio's download ends by compiling each model once to check it, which shows as Preparing ([0004](0004_model-loading-indicator.md)), and the load that follows finds that copy.
+  - **One compile at a time.** The Neural Engine compiles one program at a time, so another model's load waits behind a compile, and a load River no longer needs still finishes its compile.
+  - **What `loadLocal` leaves out.** It reads the files as they are. If they won't load, River falls back to `AsrModels.load`, which downloads them again. It also skips FluidAudio's check of the files' revision, so a FluidAudio upgrade that changes a model's files needs that looked at.
+  - **Why this changed.** On 2026-11-21 the three-window load was kept, on the belief that one window meant copying FluidAudio's private file names and vocabulary parsing. That was wrong: `loadLocal` is public. On 2026-11-22 an emptied cache blocked the maintainer's dictation for the full 3.5 minutes, twice.
 - **The model in the log.** Each decode and each dictation's release-to-text line names the model, so models compare from the log ([../conventions/logging.md](../conventions/logging.md)).
 
 ## Smoke test (2026-11-19)

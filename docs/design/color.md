@@ -4,7 +4,7 @@ The roles River's colors play, what the one accent means, and how a new surface 
 
 ## The system in one sentence
 
-Charcoal and ink carry everything, the mark included; one turquoise accent means **on**: a control you have switched on or are acting on. The one other hue is akane, River recording (below).
+Charcoal and ink carry everything, the mark included; one turquoise accent means **on**: a control you have switched on or are acting on. The one other hue is akane: River recording, and a dictation River couldn't finish because the model couldn't load (below).
 
 ## Tokens
 
@@ -19,7 +19,7 @@ Charcoal and ink carry everything, the mark included; one turquoise accent means
 | `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces |
 | `accent` | dynamic | — | Resolves to the light or dark value per appearance; the tint of the Settings and onboarding windows |
 | `onAccent` | dynamic | — | Text on an accent fill: white on the light value, charcoal on the dark |
-| `akane` / `akaneOnDark` | `#B13546` / `#DD6871` | 51.8% 0.159 17 / 66% 0.147 17 | River recording: the menu bar's dot on a light and on a dark bar, and the Settings recorder's outline and dot (`recording` resolves between them); see Status colors |
+| `akane` / `akaneOnDark` | `#B13546` / `#DD6871` | 51.8% 0.159 17 / 66% 0.147 17 | River recording: the menu bar's dot on a light and on a dark bar, and the Settings recorder's outline and dot (`recording` resolves between them); and the status ring of a model that couldn't load; see Status colors |
 
 ## What the accent means: on
 
@@ -34,7 +34,7 @@ The accent marks something that is **on right now**: a control you turned on. It
 
 - **The floating panel.** The mark and the Glass recording indicator draw in the HUD's text color (`ink` or `charcoal`) at a few strengths, from the press until the panel fades ([kawa-identity.md](kawa-identity.md)).
   **Why:** revised 2026-11-02 with the kawa identity, on the maintainer's direction that the panel be monochrome (2026-10-29). From 2026-10-14 the mark took the accent while River recorded or transcribed, one color for "River is on" ([stones-identity.md](stones-identity.md)); with 川 the panel says it in motion and in the ink's strength instead: muted strokes while River waits, the style's layer once it hears you. An accent glow offered in the motion study was dropped with the glow (2026-10-30).
-- **River getting ready.** Preparing the model and any download stay neutral: in the panel the muted strokes held still, in the menu bar their SF Symbols. Nothing is being dictated yet.
+- **River getting ready.** The model's download and preparation stay neutral: the status ring in the HUD's text color beside the indicator, in Settings' label color, and in one tone in the menu bar ([../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md)). A wait is not something you turned on.
 - **Status.** Errors, warnings, and success are not "on". See Status below.
 - **Confirmation flashes.** A setting that was just changed does not flash turquoise; the switch staying on is the confirmation.
 - **The menu bar, and the app icon.** Every menu bar glyph is the mark the system paints white or black like the icons beside it, with one exception, the recording dot (Status colors); the icon is ink on deep charcoal, with no accent "for now" ([identity-studies.md](identity-studies.md)). If the accent ever reaches the icon, the website, or the DMG, it is brand color outside the app's interface, where no state is implied.
@@ -80,9 +80,9 @@ The mark is the HUD's text color at a few strengths ([kawa-identity.md](kawa-ide
 |---|---|---|---|
 | Glass's ink where cleared (90%) | 13.14:1 | 10.35:1 | River hears you |
 | Glass's ink under the frost (45%) | 4.06:1 | 2.65:1 | The voice's layer in silence |
-| Muted (20%) | 1.75:1 | 1.48:1 | Waiting: preparing, before audio flows, a dead microphone, transcribing |
+| Muted (20%) | 1.75:1 | 1.48:1 | Waiting: before audio flows, a dead microphone, transcribing, waiting for the model |
 
-Glass's cleared ink carries "River hears you" and clears 3:1 on both tints. The frosted ink falls below 3:1 on the light tint; whether it needs a lift is open. The muted strokes, at the approved strength (maintainer, 2026-11-02), sit below it: the panel itself shows that River is on, and while the model prepares the label above it speaks. Whether the muted strokes need a lift under Increase Contrast is open. The stones' rule, solid and never below 3:1 with no Increase Contrast floor, no longer holds ([stones-identity.md](stones-identity.md); [pixel-identity.md](pixel-identity.md) recorded the earlier dimmed values).
+Glass's cleared ink carries "River hears you" and clears 3:1 on both tints. The frosted ink falls below 3:1 on the light tint; whether it needs a lift is open. The muted strokes, at the approved strength (maintainer, 2026-11-02), sit below it: the panel itself shows that River is on, and while a dictation waits for the model the status row beside it speaks. Whether the muted strokes need a lift under Increase Contrast is open. The stones' rule, solid and never below 3:1 with no Increase Contrast floor, no longer holds ([stones-identity.md](stones-identity.md); [pixel-identity.md](pixel-identity.md) recorded the earlier dimmed values).
 
 Glass's veil, the light its ripples catch, and the shade on their far side are `Palette.HUD` colors too. The veil is the tint moved 16 % toward the text color in both appearances: `ink` over `deepCharcoal`, `charcoal` over `mist`. A ripple's lit side moves toward the text color and its far side toward the tint pushed away from it (40 % in Dark): `ink` and a deeper tint over `deepCharcoal`; over `mist`, `charcoal` lifted 35 % toward the tint and the tint blended 20 % toward white, both lifted toward the tint after full strength read too dark on device. Light's amounts are larger (0.95 and 0.15, against Dark's 0.55 and 0.5) so that its ripples measure as strong as Dark's: the shader mixes in linear light, where charcoal over the light tint shows about half as strongly as the same fraction of ink over the dark one.
 **Why:** revised 2026-11-04, after the on-device check of the light entrance. The light veil was a near-white past `mist`, so the frost never showed on the light tint: the strokes went from muted to frosted with nothing visibly forming over them, where the dark frost visibly forms. The entrance's pulse in both appearances was the ink, not the veil ([kawa-identity.md](kawa-identity.md)). The light ripples were white light and a `charcoal` shade at 0.75 and 0.22; measured on rendered frames, they showed at about a quarter of Dark's strength (mean 3 L* against 12), so the maintainer asked for them to match (2026-11-04).
@@ -94,7 +94,10 @@ One: while River records a dictation (`.recording`), the menu bar's Listening gl
 Since 2026-11-12 akane also marks the Settings recorder while it records a shortcut: the outline around the keys and the pulsing dot inside it (maintainer, shortcut recorder study, rounds 2 to 8). It means River is recording, your voice in the menu bar or a shortcut in Settings, and the two never show at once, since recording a shortcut is unavailable during a dictation. On the Settings window's tints it measures 5.55:1 (`#B13546` on `mist`) and 5.62:1 (`#DD6871` on `deepCharcoal`), past the 3:1 a graphic needs (`PaletteTests`). The Record button reading Cancel and the line under the row carry the state too.
 **Why:** revised 2026-11-12. Akane was the menu bar's dot and nothing else; the recorder needed to show it is listening, and River's recording red already says that.
 
-Otherwise error toasts are plain prose and the menu bar warning is a template symbol. When a feature genuinely needs one, use the macOS system colors, which adapt to appearance and Increase Contrast: red for errors and destructive actions, orange for warnings. Success gets no color; the typed text is the confirmation. Never system teal or cyan: teal sits at hue 217, 21° from the accent's 196, close enough to read as River's own color.
+Since 2026-11-21 akane also marks a dictation River couldn't finish: when the model couldn't load, the status ring turns akane round an exclamation mark, beside the indicator, in Settings' Model section and beside the menu's status line ([../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md)). The menu bar's own icon stays in one tone. The exclamation mark, at 90 %, measures 4.69:1 (`#B13546` on `mist`) and 4.75:1 (`#DD6871` on `deepCharcoal`); a whole ring after a finished download, at 62 %, measures 2.80:1 and 2.85:1, just under the 3:1 a graphic needs. The exclamation mark's shape and the words, "Couldn’t load the model", carry the state, so color is never the only cue.
+**Why:** revised 2026-11-21 (maintainer). A failed load leaves the user's words untyped until the model loads; red says their dictation didn't go through, and River's own red, not the system's, keeps one hue for "your dictation" in both cases.
+
+Otherwise error toasts are plain prose and the menu bar warning for a cycle error is a template symbol. When a feature genuinely needs one, use the macOS system colors, which adapt to appearance and Increase Contrast: red for errors and destructive actions, orange for warnings. Success gets no color; the typed text is the confirmation. Never system teal or cyan: teal sits at hue 217, 21° from the accent's 196, close enough to read as River's own color.
 
 ## Adding a color
 
@@ -108,7 +111,7 @@ Only when two things must be told apart at a glance and shape, text, or position
 | Snippets | Platform selection; no per-snippet color coding |
 | Streaming text in the panel | The HUD's text color (`ink` or `charcoal`). A candidate under the earlier rule, open since the panel went monochrome (2026-11-02): words still being recognized in the accent (your voice, live), turning the text color once committed |
 | History | Neutral; platform selection |
-| Download progress | In the menu bar, its SF Symbol; in a window, the platform progress bar |
+| Download progress | Built 2026-11-21 ([0004](../planning/0004_model-loading-indicator.md)): the status ring's arc in the HUD's text color, in Settings' label color, and in one tone in the menu bar |
 | Toasts and warnings | Prose in the HUD's text color; a status glyph, if added, takes system red or orange |
 
 ## Related

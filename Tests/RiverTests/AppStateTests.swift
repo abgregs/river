@@ -183,8 +183,8 @@ struct AppStateTests {
         // AC1/AC4: the toast auto-dismisses after a bounded duration. An injected
         // scheduler fires the dismiss synchronously — no wall-clock wait — and
         // confirms the duration passed is the configured one.
-        let scheduler = ManualToastScheduler()
-        let appState = AppState(scheduleToastDismiss: scheduler.schedule)
+        let scheduler = ManualScheduler()
+        let appState = AppState(schedule: scheduler.schedule)
         appState.apply(RiverError.audioCapture(underlying: NSError(domain: "x", code: 1)))
         #expect(appState.toast != nil)
         #expect(scheduler.lastDelay == Constants.errorToastDurationSeconds)
@@ -283,8 +283,8 @@ struct AppStateTests {
         )
         let store = SettingsStore(defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!)
         let transcription = TranscriptionManager()
-        // Unit tests never load the real model — mark ready so handleActivate
-        // exercises the recording path rather than the model-gate decline.
+        // Unit tests never load the real model — mark ready so a dictation
+        // never waits for one.
         transcription.setModelLoadStateForTesting(.ready)
         let session = RiverSession(
             accessibility: accessibility,
@@ -292,7 +292,8 @@ struct AppStateTests {
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
             audio: AudioCaptureManager(microphone: microphone),
-            textInsertion: TextInsertionManager(accessibility: accessibility),
+            // One app in front throughout: a switch of app would hold the text, not type it.
+            textInsertion: TextInsertionManager(accessibility: accessibility, frontmostApp: { 1 }),
             transcription: transcription,
             settings: store,
             system: SystemAvailabilityMonitor()
@@ -303,26 +304,217 @@ struct AppStateTests {
     }
 }
 
-// Captures the scheduled toast-dismiss instead of dispatching it, so a test fires
-// the auto-clear synchronously and asserts the delay — the injectable-clock pattern
-// (planning 0018 AC4).
+// Captures each scheduled timer instead of dispatching it, so a test fires them synchronously
+// and asserts their delays — the injectable-clock pattern (planning 0018 AC4). A cancelled timer
+// leaves the list, as a cancelled dispatch never fires.
 @MainActor
-private final class ManualToastScheduler {
-    private(set) var pending: (@MainActor () -> Void)?
-    private(set) var lastDelay: TimeInterval?
+private final class ManualScheduler {
+    private var timers: [(id: Int, delay: TimeInterval, action: @MainActor () -> Void)] = []
+    private var nextID = 0
 
-    var schedule: ToastScheduler {
+    var schedule: TimerScheduler {
         { [weak self] delay, action in
-            self?.lastDelay = delay
-            self?.pending = action
-            return AnyCancellable { self?.pending = nil }
+            guard let self else { return AnyCancellable {} }
+            let id = self.nextID
+            self.nextID += 1
+            self.timers.append((id, delay, action))
+            return AnyCancellable { [weak self] in
+                MainActor.assumeIsolated { self?.timers.removeAll { $0.id == id } }
+            }
         }
     }
 
-    func fire() {
-        let action = pending
-        pending = nil
-        action?()
+    /// The delays of the timers still pending, oldest first.
+    var pendingDelays: [TimeInterval] { timers.map(\.delay) }
+    var lastDelay: TimeInterval? { timers.last?.delay }
+
+    /// Fires the newest pending timer.
+    func fire() { fire(timers.last?.id) }
+
+    /// Fires the pending timer scheduled `delay` seconds out.
+    func fire(after delay: TimeInterval) { fire(timers.first { abs($0.delay - delay) < 1e-9 }?.id) }
+
+    private func fire(_ id: Int?) {
+        guard let id, let index = timers.firstIndex(where: { $0.id == id }) else { return }
+        timers.remove(at: index).action()
+    }
+}
+
+@Suite("AppState dictation status")
+@MainActor
+struct AppStateDictationStatusTests {
+    // planning 0004: the row beside the indicator speaks only once
+    // a dictation ends with the model not ready, half a second after; a failed load and held text
+    // stay 4 s, then leave with the panel; the menu bar and Settings keep the state after that.
+    private let checkSeconds = Constants.statusRingCheckDelaySeconds + Constants.statusRingCheckSeconds
+
+    private func make(_ model: ModelLoadState) -> (AppState, ManualScheduler) {
+        let timers = ManualScheduler()
+        let state = AppState(schedule: timers.schedule)
+        state.apply(modelLoadState: model)
+        return (state, timers)
+    }
+
+    // A dictation that ended and waits for the model.
+    private func waiting(_ model: ModelLoadState = .downloading) -> (AppState, ManualScheduler) {
+        let (state, timers) = make(model)
+        state.apply(.recording)
+        state.apply(.processing)
+        state.apply(dictationEvent: .waitingForModel)
+        return (state, timers)
+    }
+
+    @Test("nothing shows at launch or while you speak, whatever the model is doing")
+    func nothingWhileSpeaking() {
+        let (state, timers) = make(.downloading)
+        #expect(state.dictationStatus == nil)
+        state.apply(.recording)
+        state.apply(modelLoadState: .loading)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+        #expect(timers.pendingDelays.isEmpty)
+    }
+
+    @Test("a dictation that ends before the model is ready shows its state half a second after, then follows it to ready")
+    func waitShowsAfterHalfASecond() {
+        let (state, timers) = waiting()
+        #expect(state.dictationStatus == nil)
+        #expect(timers.pendingDelays == [Constants.statusRevealDelaySeconds])
+        timers.fire(after: Constants.statusRevealDelaySeconds)
+        #expect(state.dictationStatus == .model(.downloading))
+        state.apply(modelLoadState: .loading)
+        #expect(state.dictationStatus == .model(.preparing))
+        state.apply(modelLoadState: .ready)
+        #expect(state.dictationStatus == .model(.ready))
+        // The text types and River is idle, but the panel stays until the check is drawn.
+        state.apply(.idle)
+        #expect(state.holdsPanel)
+        timers.fire(after: checkSeconds)
+        #expect(!state.holdsPanel)
+        #expect(state.dictationStatus == nil)
+    }
+
+    @Test("a model ready within the half second shows nothing: the text types as usual")
+    func quickLoadShowsNothing() {
+        let (state, timers) = waiting(.loading)
+        state.apply(modelLoadState: .ready)
+        state.apply(.idle)
+        #expect(timers.pendingDelays.isEmpty)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+    }
+
+    @Test("a load that fails while the row shows turns it to failed, which stays 4 s after River is idle")
+    func failureShowsAndHolds() {
+        let (state, timers) = waiting()
+        timers.fire(after: Constants.statusRevealDelaySeconds)
+        state.apply(modelLoadState: .failed)
+        state.apply(dictationEvent: .recordingKept)
+        state.apply(.idle)
+        #expect(state.dictationStatus == .model(.failed))
+        #expect(state.holdsPanel)
+        #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
+        timers.fire(after: Constants.statusHoldSeconds)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+    }
+
+    @Test("a failure shown ends early once the model loads after all")
+    func failureEndsWhenReady() {
+        let (state, timers) = waiting()
+        timers.fire(after: Constants.statusRevealDelaySeconds)
+        state.apply(modelLoadState: .failed)
+        state.apply(dictationEvent: .recordingKept)
+        state.apply(.idle)
+        // Try Again: the failure stays through the new download, and goes once the model is ready.
+        state.apply(modelLoadState: .downloading)
+        #expect(state.dictationStatus == .model(.failed))
+        state.apply(modelLoadState: .ready)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+    }
+
+    @Test("a load that failed while you spoke shows already failed half a second after, the panel held until then")
+    func failedBeforeTheRelease() {
+        let (state, timers) = make(.failed)
+        state.apply(.recording)
+        state.apply(.processing)
+        state.apply(dictationEvent: .recordingKept)
+        state.apply(.idle)
+        #expect(state.dictationStatus == nil)
+        #expect(state.holdsPanel)
+        timers.fire(after: Constants.statusRevealDelaySeconds)
+        #expect(state.dictationStatus == .model(.failed))
+        #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
+    }
+
+    @Test("held text shows at once and stays 4 s")
+    func heldShowsAtOnce() {
+        let (state, timers) = make(.ready)
+        state.apply(.recording)
+        state.apply(.processing)
+        state.apply(dictationEvent: .textHeld)
+        #expect(state.dictationStatus == .held)
+        state.apply(.idle)
+        #expect(state.holdsPanel)
+        #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
+        timers.fire(after: Constants.statusHoldSeconds)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+    }
+
+    @Test("Cancel Dictation takes the row away with the panel")
+    func cancelEndsTheRow() {
+        let (state, timers) = waiting()
+        timers.fire(after: Constants.statusRevealDelaySeconds)
+        state.apply(.idle)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+    }
+
+    @Test("a new recording starts with nothing beside the indicator")
+    func recordingClearsTheRow() {
+        let (state, timers) = make(.ready)
+        state.apply(.recording)
+        state.apply(.processing)
+        state.apply(dictationEvent: .textHeld)
+        state.apply(.idle)
+        state.apply(.recording)
+        #expect(state.dictationStatus == nil)
+        #expect(!state.holdsPanel)
+        #expect(timers.pendingDelays.isEmpty)
+    }
+
+    @Test("a dictation waits from the session's word until the model is ready, its load fails, or it is cancelled")
+    func waitingForTheMenu() {
+        // The menu offers Cancel Dictation for exactly this span: once the model is ready, River
+        // transcribes and nothing is left to cancel, even if the row never showed.
+        let (state, _) = waiting()
+        #expect(state.isDictationWaiting)
+        state.apply(modelLoadState: .ready)
+        #expect(!state.isDictationWaiting)
+        // A failed load ends the wait whether or not it kept a recording.
+        let (failing, _) = waiting()
+        failing.apply(modelLoadState: .failed)
+        #expect(!failing.isDictationWaiting)
+        let (kept, _) = waiting()
+        kept.apply(dictationEvent: .recordingKept)
+        #expect(!kept.isDictationWaiting)
+        let (cancelled, _) = waiting()
+        cancelled.apply(.idle)
+        #expect(!cancelled.isDictationWaiting)
+    }
+
+    @Test("the download fraction is the model in use's")
+    func fractionOfTheModelInUse() {
+        let (state, _) = make(.downloading)
+        state.apply(modelSelection: ModelSelection(inUse: "a", inUseState: .downloading, next: nil))
+        state.apply(downloadProgress: ["a": 0.4, "b": 0.9])
+        #expect(state.downloadFraction == 0.4)
+        state.apply(modelSelection: ModelSelection(inUse: "b", inUseState: .downloading, next: nil))
+        #expect(state.downloadFraction == 0.9)
+        state.apply(downloadProgress: [:])
+        #expect(state.downloadFraction == nil)
     }
 }
 

@@ -19,16 +19,46 @@ enum MenuBarPresentation {
         }
     }
 
-    // The cycle states draw River's mark; the warning, downloading, and loading states keep
-    // their SF Symbols.
+    /// The model's status ring (planning 0004), still and in one tone in the menu bar: the
+    /// download's arc in eighths, so the icon redraws eight times at most over a download; the
+    /// ring while the model gets ready; the ring with an exclamation mark once it couldn't load.
+    struct Ring: Hashable {
+        let phase: StatusRing.Phase
+        /// Eighths of the download, for downloading and a failed download; nil for a ring
+        /// with no download to show.
+        let eighths: Int?
+
+        static func of(_ state: ModelLoadState, fraction: Double?) -> Ring? {
+            let eighths = fraction.map { Int((min(max($0, 0), 1) * 8).rounded(.down)) }
+            switch state {
+            case .downloading: return Ring(phase: .downloading, eighths: eighths ?? 0)
+            case .loading: return Ring(phase: .preparing, eighths: nil)
+            case .failed: return Ring(phase: .failed, eighths: eighths)
+            case .ready: return nil
+            }
+        }
+
+        /// The still frame: as the ring first appears, preparing's light a little past the top,
+        /// where the study draws it.
+        var frame: StatusRingFrame {
+            let events = StatusRingEvents(appearing: phase, fraction: eighths.map { Double($0) / 8 })
+            return StatusRing.frame(at: phase == .preparing ? 0.95 : 0, events: events, reduceMotion: false)
+        }
+    }
+
+    // The cycle states draw River's mark, the model's states its status ring; a cycle error
+    // keeps its SF Symbol.
     enum Icon: Equatable {
         case glyph(Glyph)
+        case ring(Ring)
         case symbol(String)
     }
 
     struct Visual: Equatable {
         let icon: Icon
         let statusLabel: String
+        /// The ring beside the status line in the menu, for the model's states.
+        var statusRing: Ring? = nil
     }
 
     // core-feature.md item 5: Ready (.idle) shows 川; Listening (.recording) adds the red dot;
@@ -36,42 +66,34 @@ enum MenuBarPresentation {
     // A pending error overrides the *idle* icon with a warning glyph — errors
     // surface at end-of-cycle, so an active state's icon always wins.
     //
-    // During the model load window (planning 0004), the idle state shows the load
-    // progress ("Downloading model…" / "Preparing model…") instead of "Ready". Active cycle
-    // states (.recording / .processing) are never masked — the model is ready before
-    // recording is permitted, so the load state only affects the idle presentation.
-    static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState = .ready) -> Visual {
-        // Non-idle states are unaffected by model load state.
-        guard state == .idle else {
-            let glyph: Glyph
-            switch state {
-            case .idle: glyph = .ready  // unreachable (guard above), kept for exhaustiveness
-            case .recording: glyph = .listening
-            case .processing: glyph = .transcribing
-            }
-            let statusLabel: String
-            switch state {
-            case .idle: statusLabel = "Ready"
-            case .recording: statusLabel = "Recording..."
-            case .processing: statusLabel = "Processing..."
-            }
-            return Visual(icon: .glyph(glyph), statusLabel: statusLabel)
-        }
-
-        // Idle + model still loading: show download/load progress instead of "Ready".
-        switch modelLoadState {
-        case .downloading:
-            return Visual(icon: .symbol("arrow.down.circle"), statusLabel: "Downloading model...")
-        case .loading:
-            return Visual(icon: .symbol("ellipsis"), statusLabel: "Preparing model...")
-        case .failed:
-            // "Ready" here would be the exact lie 0004 removes — dictation cannot
-            // work until relaunch, so the label says so alongside the glyph. (The
-            // session also emits a .transcription error if the user tries anyway.)
-            return Visual(icon: .symbol("exclamationmark.triangle"), statusLabel: "Model failed to load")
-        case .ready:
+    // While the model downloads, gets ready, or couldn't load (planning 0004), idle shows its
+    // status ring and says so instead of "Ready", which would be a lie. Active cycle states
+    // (.recording / .processing) keep their own icon; a dictation waiting for the model says in
+    // the status line what it waits for, in place of "Processing...". `fraction` is the model
+    // in use's download.
+    static func visual(state: RiverState, hasError: Bool, modelLoadState: ModelLoadState = .ready,
+                       fraction: Double? = nil) -> Visual {
+        let ring = Ring.of(modelLoadState, fraction: fraction)
+        let words = ring.map { statusLabel($0, fraction: fraction) }
+        switch state {
+        case .recording:
+            return Visual(icon: .glyph(.listening), statusLabel: "Recording...")
+        case .processing:
+            return Visual(icon: .glyph(.transcribing), statusLabel: words ?? "Processing...", statusRing: ring)
+        case .idle:
+            if let ring, let words { return Visual(icon: .ring(ring), statusLabel: words, statusRing: ring) }
             let icon: Icon = hasError ? .symbol("exclamationmark.triangle") : .glyph(.ready)
             return Visual(icon: icon, statusLabel: "Ready")
+        }
+    }
+
+    // The menu's words for the model's state (planning 0004).
+    private static func statusLabel(_ ring: Ring, fraction: Double?) -> String {
+        switch ring.phase {
+        case .downloading: "Downloading model… \(Int(((fraction ?? 0) * 100).rounded(.down)))%"
+        case .preparing: "Getting the model ready…"
+        case .failed: "Couldn’t load the model"
+        case .ready: "Ready"
         }
     }
 }

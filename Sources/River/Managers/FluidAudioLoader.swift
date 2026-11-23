@@ -1,5 +1,8 @@
 import FluidAudio
 import Foundation
+import os
+
+private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "transcribe")
 
 /// The Parakeet and Phonon models' loader: the only file that imports FluidAudio (planning
 /// 0037). A model's name is its FluidAudio repo, kept in River's one models folder (planning
@@ -30,21 +33,56 @@ struct FluidAudioLoader: ModelLoader {
     }
 
     func load(
-        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void
+        _ model: String, downloadBase: URL, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) async throws -> any LoadedModel {
         guard let version = Self.models[model]?.version else { throw FluidAudioLoaderError.unknownModel }
         // FluidAudio puts a repo in the parent of the folder it is given, under the repo's own
         // folder name, which is this folder.
         let folder = folder(of: model, downloadBase: downloadBase)
         // A downloaded model loads from disk with no network request. FluidAudio's download
-        // also compiles each model once to check it, so the first preparation is part of
-        // Downloading.
+        // ends by compiling each model once to check it, so its first compile starts Preparing.
         if !isDownloaded(model, downloadBase: downloadBase) {
-            try await AsrModels.download(to: folder, version: version)
-            phase(.loading)
+            let reports = DownloadProgressThrottle()
+            // Called on a queue FluidAudio picks, as often as each chunk of bytes arrives.
+            try await AsrModels.download(to: folder, version: version, progressHandler: { report in
+                switch report.phase {
+                case .downloading(_, let totalFiles):
+                    guard let share = Self.downloadFraction(report.fractionCompleted, filesToDownload: totalFiles),
+                          let fraction = reports.report(share) else { return }
+                    Task { @MainActor in progress(fraction) }
+                case .compiling:
+                    if reports.markPreparing() { Task { @MainActor in phase(.loading) } }
+                case .listing:
+                    break
+                }
+            })
+            if reports.markPreparing() { phase(.loading) }
         }
-        let models = try await AsrModels.load(from: folder, version: version)
+        // One encoder window, where FluidAudio's own load adds Phonon-2's two shorter ones
+        // (planning 0037): with no compiled copy, each window costs a Neural Engine compile of
+        // about a minute and then holds some 350 MB, to save a dictation 16 ms at most.
+        // `loadLocal` blocks while Core ML compiles, so it runs off the main actor.
+        let models: AsrModels
+        do {
+            models = try await Task.detached(priority: .userInitiated) {
+                try AsrModels.loadLocal(from: folder, version: version)
+            }.value
+        } catch {
+            // FluidAudio's own load downloads again the files that won't load.
+            logger.error("Loading \(model, privacy: .public) from disk failed, so FluidAudio repairs it: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+            models = try await AsrModels.load(from: folder, version: version)
+        }
         return FluidAudioModel(manager: AsrManager(config: .default, models: models), decoderLayers: version.decoderLayers)
+    }
+
+    // internal for testability — the download's fraction in one FluidAudio 0.18.3 report of the
+    // repo download. Each model call reports its download as the first `fluidAudioDownloadShare`
+    // of its own fraction, and only the first call fetches files: a later call, with nothing to
+    // fetch, reports none, which says nothing about the download.
+    nonisolated static func downloadFraction(_ fractionCompleted: Double, filesToDownload: Int) -> Double? {
+        guard filesToDownload > 0 else { return nil }
+        return min(max(fractionCompleted / Constants.fluidAudioDownloadShare, 0), 1)
     }
 }
 

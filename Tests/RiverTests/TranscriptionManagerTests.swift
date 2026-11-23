@@ -199,7 +199,7 @@ struct CuratedModelListTests {
     }
 }
 
-@Suite("TranscriptionManager model gate")
+@Suite("TranscriptionManager with no model loaded")
 struct TranscriptionManagerGateTests {
     @MainActor
     @Test("transcribe throws .modelNotLoaded when loadModel has not completed")
@@ -207,9 +207,10 @@ struct TranscriptionManagerGateTests {
         // Per ADR 0001, success-path transcription is integration-tested
         // manually (a real WhisperKit load is too heavy for the unit suite).
         // The fail-fast surface — calling transcribe before the model is
-        // loaded — is what `RiverSession` relies on to keep the cycle
-        // moving when the user dictates before the model has finished
-        // downloading. That contract belongs to a fast unit test.
+        // loaded — is what stops the live text's stream when the user
+        // dictates before the model has finished downloading: it then decodes
+        // from there in one piece at release. That contract belongs to a fast
+        // unit test.
         let service = TranscriptionManager()
         await #expect(throws: TranscriptionError.self) {
             _ = try await service.transcribe(audioSamples: [0.0, 0.1, 0.2])
@@ -839,7 +840,7 @@ struct TranscriptionManagerEngineTests {
         #expect(store.files(of: "openai_whisper-tiny.en").isEmpty)
         #expect(!store.isDownloaded("openai_whisper-tiny.en"))
         await #expect(throws: ModelStoreError.notInCatalogue) {
-            _ = try await store.load("openai_whisper-tiny.en") { _ in }
+            _ = try await store.load("openai_whisper-tiny.en", phase: { _ in }, progress: { _ in })
         }
         #expect(loader.loads.isEmpty)
     }
@@ -885,5 +886,336 @@ struct TranscriptionManagerEngineTests {
         #expect(!fixture.exists(folder))
         #expect(!FluidAudioLoader().isDownloaded(Self.parakeet, downloadBase: fixture.base))
         #expect(WhisperKitLoader.isModelCached(downloadBase: fixture.base, modelName: Constants.defaultModel))
+    }
+}
+
+@Suite("TranscriptionManager download progress")
+struct TranscriptionManagerDownloadProgressTests {
+    // planning 0004: the status ring and Settings show how far a download has got. The manager
+    // publishes it apart from the selection, only while its model downloads, and never lower.
+    private static let small = Constants.defaultModel
+    private static let base = "openai_whisper-base.en"
+
+    @MainActor
+    @Test("a download's fraction is published under its model's name, never falls, and ends once preparing starts")
+    func fractionLastsWhileDownloading() async throws {
+        let loader = FakeModelLoader()
+        loader.held = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        #expect(mgr.currentModelLoadState == .downloading)
+        let load = Task { try await mgr.loadModel() }
+        await loader.loadStarted(Self.small)
+
+        loader.report(progress: 0.4, of: Self.small)
+        #expect(mgr.currentDownloadProgress == [Self.small: 0.4])
+        // A report that lands late, below one already shown, would move the arc backwards.
+        loader.report(progress: 0.3, of: Self.small)
+        #expect(mgr.currentDownloadProgress == [Self.small: 0.4])
+
+        loader.report(.loading, of: Self.small)
+        #expect(mgr.currentDownloadProgress.isEmpty)
+        // Preparing has no fraction: a report landing now is from the finished download.
+        loader.report(progress: 0.9, of: Self.small)
+        #expect(mgr.currentDownloadProgress.isEmpty)
+
+        loader.finishLoad(of: Self.small)
+        try await load.value
+        #expect(mgr.currentModelLoadState == .ready)
+    }
+
+    @MainActor
+    @Test("a model loading beside the one in use reports its own download, and the one in use stays ready")
+    func stagedModelReportsItsOwnDownload() async throws {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        try await mgr.loadModel()
+        loader.held = [Self.base]
+        let choice = Task { await mgr.switchModel(to: Self.base) }
+        await loader.loadStarted(Self.base)
+
+        loader.report(progress: 0.5, of: Self.base)
+        #expect(mgr.currentDownloadProgress == [Self.base: 0.5])
+        #expect(mgr.currentModelLoadState == .ready)
+
+        loader.finishLoad(of: Self.base)
+        await choice.value
+        #expect(mgr.currentModelSwitch == ModelSwitch(target: Self.base, phase: .ready))
+        #expect(mgr.currentDownloadProgress.isEmpty)
+        // A late report must not put a model that is ready to take over back to downloading.
+        loader.report(.downloading, of: Self.base)
+        #expect(mgr.currentModelSwitch == ModelSwitch(target: Self.base, phase: .ready))
+    }
+
+    @MainActor
+    @Test("a load a newer choice replaced reports nothing, so only the model being waited for shows")
+    func supersededLoadReportsNothing() async {
+        let loader = FakeModelLoader()
+        loader.held = [Self.small, Self.base]
+        let mgr = TranscriptionManager.withFake(loader)
+        let first = Task { try? await mgr.loadModel() }
+        await loader.loadStarted(Self.small)
+        let choice = Task { await mgr.switchModel(to: Self.base) }
+        await loader.loadStarted(Self.base)
+
+        loader.report(progress: 0.7, of: Self.small)
+        loader.report(.loading, of: Self.small)
+        #expect(mgr.currentDownloadProgress.isEmpty)
+        #expect(mgr.currentModelLoadState == .downloading)
+        loader.report(progress: 0.2, of: Self.base)
+        #expect(mgr.currentDownloadProgress == [Self.base: 0.2])
+
+        loader.finishLoad(of: Self.small)
+        loader.finishLoad(of: Self.base)
+        await first.value
+        await choice.value
+        #expect(mgr.currentModelName == Self.base)
+        #expect(mgr.currentModelLoadState == .ready)
+    }
+
+    @MainActor
+    @Test("a load's fraction ends with it, or stays where a failed download stopped, and a late report changes nothing",
+          arguments: [false, true])
+    func loadEndsItsReports(fails: Bool) async {
+        let loader = FakeModelLoader()
+        loader.held = [Self.small]
+        if fails { loader.failing = [Self.small] }
+        let mgr = TranscriptionManager.withFake(loader)
+        let load = Task { try? await mgr.loadModel() }
+        await loader.loadStarted(Self.small)
+        loader.report(progress: 0.5, of: Self.small)
+        loader.finishLoad(of: Self.small)
+        await load.value
+        let settled: ModelLoadState = fails ? .failed : .ready
+        // The failed ring shows how far the download got.
+        let kept: [String: Double] = fails ? [Self.small: 0.5] : [:]
+        #expect(mgr.currentModelLoadState == settled)
+        #expect(mgr.currentDownloadProgress == kept)
+
+        // FluidAudio reports from a queue of its own, so a report can reach the main actor after
+        // its load has returned. Taken, it would show Preparing for a model that is ready.
+        loader.report(.loading, of: Self.small)
+        loader.report(progress: 0.6, of: Self.small)
+        #expect(mgr.currentModelLoadState == settled)
+        #expect(mgr.currentDownloadProgress == kept)
+    }
+
+    @MainActor
+    @Test("a failed download's fraction goes once its model loads again, or another replaces it")
+    func failedFractionGoesWithTheNextLoad() async {
+        let loader = FakeModelLoader()
+        loader.held = [Self.small]
+        loader.failing = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        let load = Task { try? await mgr.loadModel() }
+        await loader.loadStarted(Self.small)
+        loader.report(progress: 0.4, of: Self.small)
+        loader.finishLoad(of: Self.small)
+        await load.value
+        #expect(mgr.currentDownloadProgress == [Self.small: 0.4])
+
+        // Chosen again with its files now on disk: preparing, which has no fraction.
+        loader.downloaded = [Self.small]
+        loader.failing = []
+        loader.held = []
+        await mgr.switchModel(to: Self.small)
+        #expect(mgr.currentModelLoadState == .ready)
+        #expect(mgr.currentDownloadProgress.isEmpty)
+    }
+}
+
+@Suite("WhisperKitLoader download progress")
+struct WhisperKitLoaderDownloadProgressTests {
+    // planning 0004: WhisperKit's own progress counts files, and two weight files hold nearly
+    // all of a model, so River measures the bytes on disk against the catalogue's size.
+    private static let small = "openai_whisper-small.en"
+
+    @Test("the bytes on disk give the fraction of the catalogue's size")
+    func fractionOfCatalogueSize() {
+        #expect(WhisperKitLoader.downloadFraction(bytes: 0, megabytes: 487) == 0)
+        #expect(WhisperKitLoader.downloadFraction(bytes: 243_500_000, megabytes: 487) == 0.5)
+    }
+
+    @Test("the fraction stops short of done until the download ends, since the size is a measurement")
+    func fractionStopsShortOfDone() {
+        #expect(WhisperKitLoader.downloadFraction(bytes: 487_000_000, megabytes: 487) == Constants.downloadProgressCeiling)
+        #expect(WhisperKitLoader.downloadFraction(bytes: 600_000_000, megabytes: 487) == Constants.downloadProgressCeiling)
+    }
+
+    @Test("a model with no size to measure against reports no progress rather than a made-up one")
+    func noSizeReportsNothing() {
+        #expect(WhisperKitLoader.downloadFraction(bytes: 1_000, megabytes: 0) == 0)
+    }
+
+    @MainActor
+    @Test("a download counts its model's files and the parts still coming in, not other models or the tokenizer")
+    func measuresItsOwnFiles() throws {
+        let fixture = try ModelFixture()
+        defer { fixture.remove() }
+        let folders = WhisperKitLoader.downloadFolders(downloadBase: fixture.base, modelName: Self.small)
+        try fixture.writeModel(Self.small, bytes: 10_000)
+        let whole = WhisperKitLoader.bytesOnDisk(in: folders)
+        #expect(whole >= 17 * 10_000)
+
+        // The Hub writes a file still coming in beside the records, and moves it in once whole:
+        // while a weight file downloads, that part is nearly all the download.
+        let part = fixture.records.appendingPathComponent("\(Self.small)/AudioEncoder.mlmodelc/weights/weight.bin.0123abcd.incomplete")
+        try fixture.write(part, bytes: 50_000)
+        let withPart = WhisperKitLoader.bytesOnDisk(in: folders)
+        #expect(withPart - whole >= 50_000)
+
+        try fixture.writeModel("openai_whisper-base.en", bytes: 30_000)
+        try fixture.writeTokenizer()
+        #expect(WhisperKitLoader.bytesOnDisk(in: folders) == withPart)
+    }
+}
+
+@Suite("FluidAudioLoader download progress")
+struct FluidAudioLoaderDownloadProgressTests {
+    // planning 0004: FluidAudio 0.18.3 reports each model call's repo download as the first half
+    // of that call's fraction and its compile as the rest, so River scales the download back up.
+
+    @Test("the download report of the call that fetches the files is scaled to the whole download")
+    func scalesTheDownloadShare() {
+        #expect(FluidAudioLoader.downloadFraction(0, filesToDownload: 12) == 0)
+        #expect(FluidAudioLoader.downloadFraction(0.25, filesToDownload: 12) == 0.5)
+        #expect(FluidAudioLoader.downloadFraction(0.5, filesToDownload: 12) == 1)
+    }
+
+    @Test("a call that finds the files on disk carries no fraction")
+    func nothingToFetchCarriesNoFraction() {
+        // It reports its download as done without fetching anything, so the arc would fill
+        // for a download that never ran.
+        #expect(FluidAudioLoader.downloadFraction(0.5, filesToDownload: 0) == nil)
+    }
+}
+
+@Suite("TranscriptionManager waiting for the model")
+struct TranscriptionManagerWaitTests {
+    // planning 0004: a dictation that ends before the model is ready waits for it, then types.
+    // The wait follows the published state: ready ends it, a failed load ends it with an error,
+    // and downloading, preparing or a newer choice keep it waiting.
+    private static let small = Constants.defaultModel
+    private static let base = "openai_whisper-base.en"
+
+    private enum Outcome: Equatable { case ready, failed, cancelled, other }
+
+    // How the wait ended. One still open after 200 turns of the main actor, a second when it is
+    // idle, is cancelled, so a wait that never ends fails the test rather than hanging the run.
+    // Turns, not a clock: in a parallel run other suites hold the main actor too.
+    @MainActor
+    private static func outcome(of wait: Task<Void, Error>) async -> Outcome {
+        let deadline = Task { @MainActor in
+            for _ in 0..<200 { try await Task.sleep(nanoseconds: 5_000_000) }
+            wait.cancel()
+        }
+        defer { deadline.cancel() }
+        do {
+            try await wait.value
+            return .ready
+        } catch TranscriptionError.modelLoadFailed {
+            return .failed
+        } catch is CancellationError {
+            return .cancelled
+        } catch {
+            return .other
+        }
+    }
+
+    // A wait that has started, and a held load of `model` running under it.
+    @MainActor
+    private static func waitDuringLoad(_ loader: FakeModelLoader, _ mgr: TranscriptionManager, of model: String) async -> Task<Void, Error> {
+        loader.held.insert(model)
+        Task { try? await mgr.loadModel() }
+        await loader.loadStarted(model)
+        let wait = Task { try await mgr.waitUntilReady() }
+        for _ in 0..<200 where mgr.openWaitCount == 0 { try? await Task.sleep(nanoseconds: 5_000_000) }
+        return wait
+    }
+
+    @MainActor
+    @Test("a ready model ends the wait at once, and a failed one fails it at once")
+    func settledStateEndsTheWaitAtOnce() async {
+        let mgr = TranscriptionManager.withFake(FakeModelLoader())
+        mgr.setModelLoadStateForTesting(.ready)
+        #expect(await Self.outcome(of: Task { try await mgr.waitUntilReady() }) == .ready)
+        mgr.setModelLoadStateForTesting(.failed)
+        #expect(await Self.outcome(of: Task { try await mgr.waitUntilReady() }) == .failed)
+        #expect(mgr.openWaitCount == 0)
+    }
+
+    @MainActor
+    @Test("the wait lasts through downloading and preparing, and ends once the model is ready")
+    func waitEndsWhenReady() async {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        #expect(mgr.openWaitCount == 1)
+        loader.report(.loading, of: Self.small)
+        #expect(mgr.openWaitCount == 1)
+
+        loader.finishLoad(of: Self.small)
+        #expect(await Self.outcome(of: wait) == .ready)
+        #expect(mgr.currentModelLoadState == .ready)
+        #expect(mgr.openWaitCount == 0)
+    }
+
+    @MainActor
+    @Test("a load that fails ends the wait with modelLoadFailed, so the dictation can keep its recording")
+    func failedLoadFailsTheWait() async {
+        let loader = FakeModelLoader()
+        loader.failing = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        loader.finishLoad(of: Self.small)
+        #expect(await Self.outcome(of: wait) == .failed)
+        #expect(mgr.currentModelLoadState == .failed)
+    }
+
+    @MainActor
+    @Test("a model chosen during the wait is waited for in place of the one it replaced")
+    func waitFollowsANewChoice() async {
+        let loader = FakeModelLoader()
+        loader.failing = [Self.small]
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        loader.held.insert(Self.base)
+        let choice = Task { await mgr.switchModel(to: Self.base) }
+        await loader.loadStarted(Self.base)
+
+        // The replaced load failing is not the new model failing.
+        loader.finishLoad(of: Self.small)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(mgr.openWaitCount == 1)
+
+        loader.finishLoad(of: Self.base)
+        await choice.value
+        #expect(await Self.outcome(of: wait) == .ready)
+        #expect(mgr.currentModelName == Self.base)
+    }
+
+    @MainActor
+    @Test("a wait with no load running starts one, so it can never wait forever")
+    func waitStartsAMissingLoad() async {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        #expect(mgr.currentModelLoadState == .downloading)
+        #expect(await Self.outcome(of: Task { try await mgr.waitUntilReady() }) == .ready)
+        #expect(loader.loads == [Self.small])
+    }
+
+    @MainActor
+    @Test("cancelling the waiting task ends the wait, and the model keeps loading")
+    func cancelEndsTheWait() async {
+        let loader = FakeModelLoader()
+        let mgr = TranscriptionManager.withFake(loader)
+        let wait = await Self.waitDuringLoad(loader, mgr, of: Self.small)
+        wait.cancel()
+        #expect(await Self.outcome(of: wait) == .cancelled)
+        #expect(mgr.openWaitCount == 0)
+        #expect(mgr.currentModelLoadState == .downloading)
+
+        loader.finishLoad(of: Self.small)
+        for _ in 0..<200 where mgr.currentModelLoadState != .ready { try? await Task.sleep(nanoseconds: 5_000_000) }
+        #expect(mgr.currentModelLoadState == .ready)
     }
 }

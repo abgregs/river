@@ -110,6 +110,21 @@ enum Constants {
         ),
     ]
 
+    // A download's fraction is passed on only once it has risen this much since the last one
+    // passed on, so a handler called for every chunk of bytes sends the main actor 200 updates
+    // at most, finer than the whole percents Settings and the menu show (planning 0004).
+    static let downloadProgressStep: Double = 0.005
+    // How often a Whisper download's bytes on disk are measured. WhisperKit's own progress
+    // counts files, and two weight files hold nearly all of a model, so its fraction jumps.
+    static let downloadProgressSampleSeconds: Double = 0.5
+    // A fraction measured from bytes on disk stops short of 1 until the download ends: the
+    // catalogue's size is a measurement, and a model's files can come to a little more.
+    static let downloadProgressCeiling: Double = 0.99
+    // The share of each FluidAudio 0.18.3 model call's fraction that is the repo download: its
+    // ModelHub reports the download as 0 to 0.5 and the Core ML compile as 0.5 to 1. The weight
+    // is FluidAudio's own, so check it when raising the pin (Package.swift).
+    static let fluidAudioDownloadShare: Double = 0.5
+
     // Seed for the user-editable custom dictionary. Empty by default; the user
     // curates terms in Settings (M8). A curated starter list could be added here
     // later. See requirements/custom-dictionary.md.
@@ -426,6 +441,71 @@ enum Constants {
     // Reduce Motion: every envelope becomes a linear fade this long.
     static let kawaReducedFadeSeconds: Double = 0.2
 
+    // The model's status ring (planning 0004), on the mark's 14 pt grid. `StatusRing` reads them.
+    static let statusRingRadius: Double = 4.9
+    static let statusRingStroke: Double = 1.1
+    // Strengths, as opacity of the ring's colour: the track still to come, the arc that has
+    // arrived and the ring while it gets ready, and done (the head, the light, ready's ring, the
+    // check and the exclamation mark). A load that fails after the download shows its whole
+    // ring at the failed strength.
+    static let statusRingTrack: Double = 0.2
+    static let statusRingUnderWay: Double = 0.45
+    static let statusRingDone: Double = 0.9
+    static let statusRingFailedRing: Double = 0.62
+    // The arc follows the real fraction on a critically damped spring this fast, per second:
+    // each rise settles in about 0.6 s. A step this old has settled and folds into the base.
+    static let statusRingGlideRate: Double = 7
+    static let statusRingSettledSeconds: Double = 2
+    // While downloading, the head dims by this much and back every period. Under Reduce Motion
+    // the head holds, and preparing's ring pulses up by `statusRingReducedPulse` instead, over
+    // the same period.
+    static let statusRingBreathSeconds: Double = 2.8
+    static let statusRingBreathDepth: Double = 0.2
+    static let statusRingReducedPulse: Double = 0.17
+    // Preparing's light: from rest at the top, up to a turn every `statusRingLightTurnSeconds`
+    // over `statusRingLightRampSeconds`. The closed arc hands over to it over the hand-off.
+    static let statusRingLightTurnSeconds: Double = 2.4
+    static let statusRingLightRampSeconds: Double = 0.8
+    static let statusRingHandOffSeconds: Double = 0.6
+    // Ready: the ring rises to done and the light fades, and the check is revealed after the delay.
+    static let statusRingReadyRingSeconds: Double = 0.45
+    static let statusRingReadyLightOutSeconds: Double = 0.35
+    static let statusRingCheckDelaySeconds: Double = 0.15
+    static let statusRingCheckSeconds: Double = 0.4
+    // A failed load: the breath (or the light) settles, then the ring turns akane, then the
+    // exclamation mark is revealed, each from the failure.
+    static let statusRingSettleSeconds: Double = 0.25
+    static let statusRingAkaneDelaySeconds: Double = 0.35
+    static let statusRingAkaneSeconds: Double = 0.5
+    static let statusRingSignDelaySeconds: Double = 0.85
+    static let statusRingSignSeconds: Double = 0.45
+    // A reveal wipes behind a soft edge this wide, clearing from a blur this strong, in grid points.
+    static let statusRingRevealEdge: Double = 1.5
+    static let statusRingRevealBlur: Double = 0.45
+
+    // The status row beside the indicator (planning 0004): it
+    // appears this long after a dictation ends with the model not ready, and a failed load or
+    // held text stays this long after it shows, then leaves with the panel.
+    static let statusRevealDelaySeconds: Double = 0.5
+    static let statusHoldSeconds: Double = 4
+    // The row: 8 pt right of the mark's panel, 26 pt tall with the
+    // tile's corner; the ring in a 26 pt tile, inset 6 pt, with a hairline inset 2.25 pt at
+    // radius 3.75; the words 30 pt in, at 12 pt, the detail 6 pt after them, 10 pt to the end.
+    static let statusRowGap: Double = 8
+    static let statusRowHeight: Double = 26
+    static let statusRowCornerRadius: Double = 6
+    static let statusRowGlyphInset: Double = 6
+    static let statusRowHairlineInset: Double = 2.25
+    static let statusRowHairlineRadius: Double = 3.75
+    static let statusRowHairlineOpacity: Double = 0.1
+    static let statusRowTextInset: Double = 30
+    static let statusRowFontSize: Double = 12
+    static let statusRowDetailGap: Double = 6
+    static let statusRowTrailingPadding: Double = 10
+    // Room for the widest row River writes (a test measures each); the window keeps this much
+    // on each side of the mark, so the row is never cut off.
+    static let statusRowMaxWidth: Double = 300
+
     // The voice: one shared level, stepped at a fixed rate so it is the same at any frame rate.
     // It rises fast and falls slowly, with a ±18 % jitter re-drawn on its own clock so it never
     // sits perfectly still while you speak.
@@ -526,6 +606,10 @@ enum Constants {
     // Transcribing's dot: the bar's text color at this strength, the least that still holds 3:1
     // on the modelled light and dark bars (docs/design/color.md).
     static let menuBarMutedDotOpacity: Double = 0.55
+    // The model's status ring (planning 0004): its 14 pt grid drawn this size, centred in the
+    // menu bar glyph's box, and beside the menu's status line, as the study draws them.
+    static let menuBarRingSize: Double = 16
+    static let menuStatusRingSize: Double = 12
 
     // App icon: 川 in ink on a deep charcoal squircle (maintainer, 2026-10-29; ground darkened
     // 2026-11-19, docs/design/kawa-identity.md), drawn on Apple's 1024 grid where the

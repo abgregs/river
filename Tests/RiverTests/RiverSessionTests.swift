@@ -651,36 +651,261 @@ struct RiverSessionTests {
         #expect(env.session.currentState == .idle)
     }
 
+    // MARK: - Dictating before the model is ready (planning 0004)
+
+    // A dictation always starts. The transcript waits in `.processing` for the model, then
+    // types; a failed load keeps the recording for the next load that succeeds. These tests
+    // hold the fake loader's load open and leave `transcribeResultForTesting` unset, so every
+    // decode before the model is ready fails as a real one does.
+
     @MainActor
-    @Test("handleActivate declines and emits a transcription error when the model is not yet ready")
-    func handleActivateDeclinesWhenModelNotReady() {
-        // Planning 0004 AC3: dictating before "Ready" must surface clear feedback
-        // (via the error channel) and must NOT start a recording that loses audio.
+    @Test("a press while the model downloads records, waits in processing, and types once the model is ready")
+    func dictationWaitsForTheModel() async throws {
         let env = makeSession()
-        env.transcription.setModelLoadStateForTesting(.loading)  // not ready
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
 
-        var errors: [RiverError] = []
-        let token = env.session.errors.sink { errors.append($0) }
-        defer { token.cancel() }
+        let release = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+        #expect(env.session.currentState == .processing)
+        #expect(env.accessibility.postedEventCountForTesting == 0)
 
-        env.session.handleActivate()
-
-        #expect(env.session.currentState == .idle)   // never entered .recording
-        #expect(errors.count == 1)
-        guard case .transcription = errors.first else {
-            Issue.record("expected .transcription, got \(String(describing: errors.first))")
-            return
-        }
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await release.value
+        await load.value
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(typed == Constants.defaultModel)
+        #expect(env.session.currentState == .idle)
+        // Sent while River still processes, so the panel can show it before it leaves.
+        #expect(events.states == [.processing])
     }
 
     @MainActor
-    @Test("handleActivate declines during download phase")
-    func handleActivateDeclinesWhenDownloading() {
+    @Test("with streaming on, a dictation made while the model downloads types once, after the wait")
+    func streamedDictationWaitsForTheModel() async throws {
+        // Its segments fail while the model isn't ready, so the release decodes the dictation
+        // from the first of them in one piece: one text, typed once.
         let env = makeSession()
-        env.transcription.setModelLoadStateForTesting(.downloading)
+        #expect(env.store.value(for: Settings.streamingDictation))
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
 
         env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 2 s of sound
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }            // 1.2 s pause
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+        let release = Task { await env.session.handleDeactivate() }
+        await waitUntil { events.events == [.waitingForModel] }
+
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await release.value
+        await load.value
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(typed == Constants.defaultModel)
+    }
+
+    @MainActor
+    @Test("a press while a dictation waits for the model is ignored, as while transcribing")
+    func pressWhileWaitingIsIgnored() async throws {
+        // A second dictation would wait for the same model, so starting one brings no text sooner.
+        let env = makeSession()
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
+        let release = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+
+        env.session.handleActivate()
+        #expect(env.session.currentState == .processing)
+
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await release.value
+        await load.value
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(typed == Constants.defaultModel)
+    }
+
+    @MainActor
+    @Test("Cancel Dictation throws a waiting dictation away, and the model keeps loading")
+    func cancelWaitingDiscardsTheDictation() async throws {
+        let env = makeSession()
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
+        let release = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+
+        env.session.cancelWaiting()
+        await release.value
         #expect(env.session.currentState == .idle)
+        #expect(env.transcription.currentModelLoadState == .downloading)
+
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await load.value
+        try await Task.sleep(nanoseconds: 20_000_000)
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        let retained = env.session.hasLastTranscript
+        let kept = env.session.currentKeptRecordingCount
+        #expect(env.transcription.currentModelLoadState == .ready)
+        #expect(typed.isEmpty)
+        #expect(!retained)
+        #expect(kept == 0)
+    }
+
+    @MainActor
+    @Test("a failed load keeps the recording, and the next load that succeeds holds its text, never typed")
+    func failedLoadKeepsTheRecording() async throws {
+        let env = makeSession()
+        // Started, so the session hears the model become ready.
+        try await env.session.start()
+        env.loader.failing = [Constants.defaultModel]
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
+        var errors: [RiverError] = []
+        let errorWatch = env.session.errors.sink { errors.append($0) }
+        defer { errorWatch.cancel() }
+
+        let first = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await first.value
+        await load.value
+        #expect(events.events == [.waitingForModel, .recordingKept])
+        #expect(events.states == [.processing, .processing])
+        #expect(env.session.currentKeptRecordingCount == 1)
+        // The status ring says it: a toast and a menu error line would say it twice.
+        #expect(errors.isEmpty)
+
+        // With the load already failed there is nothing to wait for: kept at once.
+        let second = try await dictate(env)
+        await second.value
+        #expect(events.events == [.waitingForModel, .recordingKept, .recordingKept])
+        #expect(env.session.currentKeptRecordingCount == 2)
+
+        // Try Again: the load succeeds, and the kept recordings are transcribed and held.
+        env.loader.failing = []
+        env.session.selectModel(Constants.defaultModel)
+        await env.loader.loadStarted(Constants.defaultModel)
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await waitUntil { env.session.currentKeptRecordingCount == 0 && env.session.hasLastTranscript }
+
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        env.session.copyLastTranscript(to: pasteboard)
+        let held = pasteboard.string(forType: .string)
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        // A space, never a newline: Paste last types the text, and a newline is Return.
+        #expect(held == "\(Constants.defaultModel) \(Constants.defaultModel)")
+        #expect(typed.isEmpty)
+    }
+
+    @MainActor
+    @Test("a dictation's decode waits for a kept recording's, so the engine runs one decode at a time")
+    func keptDecodeRunsAlone() async throws {
+        let env = makeSession()
+        try await env.session.start()
+        env.store.setValue(false, for: Settings.streamingDictation)
+        env.loader.failing = [Constants.defaultModel]
+        let load = await holdModelLoad(env)
+        let first = try await dictate(env)
+        await waitUntil { env.session.currentState == .processing }
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await first.value
+        await load.value
+        #expect(env.session.currentKeptRecordingCount == 1)
+
+        // The load succeeds, and the kept recording's decode starts and is held open.
+        env.loader.failing = []
+        env.loader.holdsTranscriptions = true
+        env.session.selectModel(Constants.defaultModel)
+        await env.loader.loadStarted(Constants.defaultModel)
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        #expect(env.loader.heldTranscriptionCount == 1)
+        #expect(!env.session.hasLastTranscript)
+
+        // A dictation ends meanwhile: its decode waits its turn behind the held one.
+        let second = try await dictate(env)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(env.loader.heldTranscriptionCount == 1)
+        #expect(env.accessibility.postedEventCountForTesting == 0)
+
+        // The kept recording's text is held, and only then does the dictation's decode run.
+        env.loader.finishTranscriptions()
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        #expect(env.session.currentKeptRecordingCount == 0)
+        #expect(env.session.hasLastTranscript)
+        env.loader.finishTranscriptions()
+        await second.value
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        let mostAtOnce = env.loader.mostTranscriptionsAtOnce
+        #expect(typed == Constants.defaultModel)
+        #expect(mostAtOnce == 1)
+    }
+
+    @MainActor
+    @Test("a switch of app after the release holds the text and types none")
+    func switchAfterReleaseHoldsTheText() async throws {
+        // The text would land in an app the user never dictated into.
+        let env = makeSession()
+        let load = await holdModelLoad(env)
+        let events = EventLog(env.session)
+        let release = try await dictate(env)
+        await waitUntil { events.events == [.waitingForModel] }
+
+        env.appInFront.pid = 200
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await release.value
+        await load.value
+        #expect(events.events == [.waitingForModel, .textHeld])
+        #expect(events.states == [.processing, .processing])
+
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        env.session.copyLastTranscript(to: pasteboard)
+        let held = pasteboard.string(forType: .string)
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(held == Constants.defaultModel)
+        #expect(typed.isEmpty)
+    }
+
+    @MainActor
+    @Test("a click into another app before the release types there: the app dictated into is the one in front at the release")
+    func appAtTheReleaseIsTheTarget() async throws {
+        // In a tap mode the user can start, click into the field they want, and stop there.
+        let env = makeSession()
+        env.transcription.transcribeResultForTesting = "hello world"
+        let events = EventLog(env.session)
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+
+        env.appInFront.pid = 200
+        await env.session.handleDeactivate()
+        let typed = env.accessibility.postedKeyDownTextForTesting.joined()
+        #expect(typed == "hello world")
+        #expect(events.events.isEmpty)
+    }
+
+    @MainActor
+    @Test("the live text stays hidden for a dictation that started before the model was ready")
+    func liveTextHiddenUntilTheModelIsReady() async throws {
+        // It would sit empty through the wait, and while it shows the panel takes the mouse.
+        let env = makeSession()
+        env.store.setValue(true, for: Settings.showLiveText)
+        var shown: [Bool] = []
+        let watch = env.session.isLiveTextShown.sink { shown.append($0) }
+        defer { watch.cancel() }
+        let load = await holdModelLoad(env)
+
+        env.session.handleActivate()
+        #expect(shown.last == false)
+        env.session.handleCancel()
+
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await load.value
+        env.session.handleActivate()
+        #expect(shown.last == true)
+        env.session.handleCancel()
     }
 
     // MARK: - Test environment
@@ -727,11 +952,12 @@ struct RiverSessionTests {
     @Test("in a tap mode, the tap after a refused start starts a recording", arguments: [ActivationMode.singleTap, .doubleTap])
     func tapAfterRefusedStartStartsRecording(mode: ActivationMode) async throws {
         // Found in the 2026-09-28 architecture review: the tap machine kept its own
-        // "recording" flag, so when the session refused a start (model still
+        // "recording" flag, so when the session refused a start (then a model still
         // preparing, a permission denied, a dictation still transcribing) the machine
         // believed a recording was live and turned the user's next tap into a stop
         // the session ignored. Tapping during "Preparing model" at launch cost the
         // user a keypress. The session's state is the only "recording" there is.
+        // A model no longer refuses a start (planning 0004); a denied permission does.
         let env = makeSession()
         env.store.setValue(mode, for: Settings.activationMode)
         try await env.session.start()
@@ -744,11 +970,11 @@ struct RiverSessionTests {
             }
         }
 
-        env.transcription.setModelLoadStateForTesting(.loading)
+        env.accessibility.setStatusForTesting(.denied)
         activate()
-        #expect(env.session.currentState == .idle)   // refused: the model is not ready
+        #expect(env.session.currentState == .idle)   // refused: Accessibility is denied
 
-        env.transcription.setModelLoadStateForTesting(.ready)
+        env.accessibility.setStatusForTesting(.granted)
         activate()
         try await Task.sleep(nanoseconds: 20_000_000)
         #expect(env.session.currentState == .recording)
@@ -813,7 +1039,7 @@ struct RiverSessionTests {
     }
 
     @MainActor
-    @Test("the switch, any missing permission, an unready model, and sleep each close the microphone")
+    @Test("the switch, any missing permission, and sleep each close the microphone; a loading model doesn't")
     func readinessFollowsEachInput() async throws {
         let env = makeSession()
         try await env.session.start()
@@ -849,12 +1075,12 @@ struct RiverSessionTests {
         await waitUntil { env.microphone.isListening }
         #expect(env.microphone.isListening)
 
+        // A dictation can start while the model downloads or gets ready (planning 0004), and
+        // its first word needs the ready microphone as much as any other.
         env.transcription.setModelLoadStateForTesting(.loading)
-        await waitUntil { !env.microphone.isListening }
-        #expect(!env.microphone.isListening)
-        env.transcription.setModelLoadStateForTesting(.ready)
-        await waitUntil { env.microphone.isListening }
+        try await Task.sleep(nanoseconds: 20_000_000)
         #expect(env.microphone.isListening)
+        env.transcription.setModelLoadStateForTesting(.ready)
 
         env.system.setForTesting(SystemAvailability(isAwake: false))
         await waitUntil { !env.microphone.isListening }
@@ -928,6 +1154,13 @@ struct RiverSessionTests {
         let accessibility: AccessibilityCapability
         let audio: AudioCaptureManager
         let system: SystemAvailabilityMonitor
+        let appInFront: AppInFront
+    }
+
+    // The app in front, which a test moves to switch apps.
+    @MainActor
+    private final class AppInFront {
+        var pid: pid_t? = 100
     }
 
     @MainActor
@@ -958,7 +1191,7 @@ struct RiverSessionTests {
         let loader = FakeModelLoader()
         let transcription = TranscriptionManager.withFake(loader)
         // Unit tests never load a real model, so mark the model as ready to exercise the
-        // normal recording path without triggering the model gate. A model switch (planning
+        // normal recording path without waiting for the model. A model switch (planning
         // 0021) loads through the fake, so the session's routing runs without a download.
         transcription.setModelLoadStateForTesting(.ready)
         // The clock is frozen: these tests are about the cycle, and with suites running
@@ -966,13 +1199,14 @@ struct RiverSessionTests {
         // audio, which the capture-gap check would report as lost audio. The gap check and
         // its watchdog have their own suites; the session test drives the callback directly.
         let audio = AudioCaptureManager(microphone: microphone, now: { 100 })
+        let appInFront = AppInFront()
         let session = RiverSession(
             accessibility: accessibility,
             microphone: microphone,
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
             audio: audio,
-            textInsertion: TextInsertionManager(accessibility: accessibility),
+            textInsertion: TextInsertionManager(accessibility: accessibility, frontmostApp: { appInFront.pid }),
             transcription: transcription,
             settings: store,
             system: system
@@ -988,7 +1222,8 @@ struct RiverSessionTests {
             loader: loader,
             accessibility: accessibility,
             audio: audio,
-            system: system
+            system: system,
+            appInFront: appInFront
         )
     }
 
@@ -997,6 +1232,42 @@ struct RiverSessionTests {
         for _ in 0..<200 {
             if condition() { return }
             try? await Task.sleep(nanoseconds: 5_000_000)   // up to ~1s total
+        }
+    }
+
+    // The model in use downloading, its load held open by the fake loader until the test
+    // finishes it, as a first launch's download is.
+    @MainActor
+    private func holdModelLoad(_ env: TestEnv) async -> Task<Void, Never> {
+        env.loader.held = [Constants.defaultModel]
+        env.transcription.setModelLoadStateForTesting(.downloading)
+        let load = Task { _ = try? await env.transcription.loadModel() }
+        await env.loader.loadStarted(Constants.defaultModel)
+        return load
+    }
+
+    // Presses, delivers a second of sound, and releases. The release runs on until the
+    // dictation is typed, kept or thrown away.
+    @MainActor
+    private func dictate(_ env: TestEnv) async throws -> Task<Void, Never> {
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }
+        return Task { await env.session.handleDeactivate() }
+    }
+
+    // The session's dictation events, each with the state River was in when it was sent.
+    @MainActor
+    private final class EventLog {
+        private(set) var events: [DictationEvent] = []
+        private(set) var states: [RiverState] = []
+        private var watch: AnyCancellable?
+
+        init(_ session: RiverSession) {
+            watch = session.dictationEvents.sink { [weak self, weak session] event in
+                self?.events.append(event)
+                if let state = session?.currentState { self?.states.append(state) }
+            }
         }
     }
 

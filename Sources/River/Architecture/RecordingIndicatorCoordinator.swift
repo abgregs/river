@@ -46,7 +46,7 @@ final class RecordingIndicatorCoordinator {
         withObservationTracking {
             _ = appState.state
             _ = appState.toast
-            _ = appState.modelLoadState
+            _ = appState.holdsPanel
             _ = appState.notice
             _ = appState.isLiveTextShown
         } onChange: { [weak self] in
@@ -62,7 +62,7 @@ final class RecordingIndicatorCoordinator {
         let shouldShow = RecordingIndicatorPresentation.isOnScreen(
             state: appState.state,
             hasToast: appState.toast != nil,
-            modelLoadState: appState.modelLoadState
+            hasStatus: appState.holdsPanel
         )
         if shouldShow {
             orderOutWork?.cancel()

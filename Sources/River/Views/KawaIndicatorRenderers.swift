@@ -2,7 +2,7 @@ import Metal
 import OSLog
 import SwiftUI
 
-/// The muted 川 strokes Glass starts from, and preparing shows held still.
+/// The muted 川 strokes Glass starts from, held still while the layer waits for audio.
 enum KawaMutedStrokes {
     /// 川 in the panel's points, built once: every frame fills it.
     static let path = Path(KawaMark.path(transform: KawaIndicatorEngine.panelTransform))

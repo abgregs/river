@@ -48,5 +48,5 @@ Defer the protocol extraction. Keep concrete cycle collaborators + `skip*ForTest
 
 ## Related
 
-- [../conventions/tests.md](../conventions/tests.md) — the access-seams list documents every `skip*ForTesting` and `publishForTest` seam currently in play.
+- [../conventions/test-seams.md](../conventions/test-seams.md) — the access-seams list documents every `skip*ForTesting` and `publishForTest` seam currently in play.
 - [../conventions/swift-style.md](../conventions/swift-style.md) — the `Manager` suffix convention for state-owning cycle collaborators.

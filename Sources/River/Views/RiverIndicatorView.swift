@@ -3,12 +3,12 @@ import SwiftUI
 
 /// Everything River floats above the Dock, as one bottom-anchored stack (planning 0028; the
 /// mark is 川, docs/design/kawa-identity.md): the mark's panel, which carries only the
-/// recording state;
-/// above it one rounded rectangle for the error toast (0018), the model-loading label
-/// (0004), and the live-reconfiguration notice; and above that the streaming transcript
-/// (0025). It observes `AppState` only; every number that shapes the mark's motion lives in
-/// the pure `KawaIndicatorTimeline` and `KawaIndicatorEngine`, and panel and focus behavior
-/// live in the coordinator.
+/// recording state, with the model's status row beside it once a dictation ends before the
+/// model is ready (0004); above it one rounded rectangle for the error toast (0018) and the
+/// live-reconfiguration notice; and above that the streaming transcript (0025). It observes
+/// `AppState` only; every number that shapes the mark's motion lives in the pure
+/// `KawaIndicatorTimeline` and `KawaIndicatorEngine`, and the ring's in `StatusRing`; panel and
+/// focus behavior live in the coordinator.
 struct RiverIndicatorView: View {
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,18 +16,26 @@ struct RiverIndicatorView: View {
     // The mark's current pass through the panel. It outlives the activity: the mark stays in the
     // stack until its exit has finished.
     @State private var markCycle: KawaIndicatorCycle?
+    // The status beside the mark (planning 0004), kept until the mark's cycle ends, so the row
+    // leaves with the panel and never before it.
+    @State private var shown: ShownStatus?
+    private let statusRing: StatusRingCycle?
 
-    // `markCycle` is internal for testability: the snapshot harness renders a single moment, so
-    // it hands in a cycle already under way.
-    init(appState: AppState, markCycle: KawaIndicatorCycle? = nil) {
+    // `markCycle`, `shown` and `statusRing` are internal for testability: the snapshot harness
+    // renders a single moment, so it hands in a cycle and a status already under way.
+    init(appState: AppState, markCycle: KawaIndicatorCycle? = nil, shown: ShownStatus? = nil, statusRing: StatusRingCycle? = nil) {
         self.appState = appState
+        self.statusRing = statusRing
         _markCycle = State(initialValue: markCycle)
+        _shown = State(initialValue: shown)
     }
 
-    /// The stack at its tallest: transcript, message, and mark. The window is this plus the
-    /// shadow margin and never resizes, so nothing on screen moves under a transition.
+    /// The stack at its tallest: transcript, message, and mark, and wide enough for the widest
+    /// status row on each side of the centred mark. The window is this plus the shadow margin and
+    /// never resizes, so nothing on screen moves under a transition.
     static let contentSize = CGSize(
-        width: max(Constants.transcriptPanelWidth, Constants.hudMessageWidth),
+        width: max(Constants.transcriptPanelWidth, Constants.hudMessageWidth,
+                   2 * (Constants.indicatorPanelWidth / 2 + Constants.statusRowGap + Constants.statusRowMaxWidth)),
         height: Constants.transcriptPanelHeight + Constants.hudStackSpacing
             + Constants.hudMessageReservedHeight + Constants.hudStackSpacing + Constants.indicatorPanelHeight
     )
@@ -47,8 +55,8 @@ struct RiverIndicatorView: View {
             }
             if let markCycle {
                 // The mark runs its own entry and exit on the cycle's clock, so no SwiftUI
-                // transition or animation may also move it.
-                MarkPanel(cycle: markCycle, activity: activity, appState: appState)
+                // transition or animation may also move it, nor the status row beside it.
+                MarkPanel(cycle: markCycle, activity: activity, appState: appState, shown: shown, statusRing: statusRing)
                     .transition(.identity)
                     .transaction { $0.animation = nil }
             }
@@ -57,12 +65,12 @@ struct RiverIndicatorView: View {
         .padding(Constants.hudShadowMargin)
         .onChange(of: activity, initial: true) { updateMarkCycle() }
         .onChange(of: appState.isAudioFlowing) { updateMarkCycle() }
+        .onChange(of: appState.dictationStatus) { _, status in updateShown(status) }
         .task(id: markCycle) { await removeMarkCycleWhenGone() }
         // A message left after the cycle drops into the mark's place once the mark has gone.
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: markCycle == nil)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.toast)
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.modelLoadState)
         .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.notice)
         // The transcript comes and goes with the cycle, as the other surfaces do; its shortcut
         // shows it quicker and hides it quicker still (planning 0034).
@@ -83,14 +91,9 @@ struct RiverIndicatorView: View {
         TranscriptPanelView.isVisible(state: appState.state, isShown: appState.isLiveTextShown)
     }
 
-    // Loading only matters while idle: the model is ready before recording is permitted.
-    private var loadingLabel: String? {
-        appState.state == .idle ? RecordingIndicatorPresentation.loadingLabel(for: appState.modelLoadState) : nil
-    }
-
-    // While the model gets ready the panel holds the muted strokes, not a spinner.
+    // A status that holds the panel keeps the mark transcribing once River is idle.
     private var activity: MarkActivity {
-        MarkActivity.of(state: appState.state, isModelPreparing: loadingLabel != nil)
+        MarkActivity.of(state: appState.state, holdsPanel: appState.holdsPanel)
     }
 
     // A notice belongs to the recording it describes: showing one at `.idle` would put
@@ -101,8 +104,17 @@ struct RiverIndicatorView: View {
     }
 
     private func updateMarkCycle() {
-        markCycle = KawaIndicatorCycle.next(markCycle, activity: activity, isAudioFlowing: appState.isAudioFlowing,
-                                            reduceMotion: reduceMotion, at: Date())
+        let next = KawaIndicatorCycle.next(markCycle, activity: activity, isAudioFlowing: appState.isAudioFlowing,
+                                           reduceMotion: reduceMotion, at: Date())
+        // A new recording starts with nothing beside the mark.
+        if next?.id != markCycle?.id { shown = nil }
+        markCycle = next
+    }
+
+    // A status replaces the one shown; one that clears stays until the mark's cycle ends.
+    private func updateShown(_ status: DictationStatus?) {
+        guard let status, markCycle != nil else { return }
+        shown = ShownStatus(status: status, appeared: shown?.appeared ?? Date())
     }
 
     // A cycle whose text is typed leaves the stack when its exit has finished. A new cycle
@@ -110,24 +122,20 @@ struct RiverIndicatorView: View {
     private func removeMarkCycleWhenGone() async {
         guard let cycle = markCycle, let end = cycle.end(reduceMotion: reduceMotion) else { return }
         try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
-        if !Task.isCancelled, markCycle == cycle { markCycle = nil }
+        if !Task.isCancelled, markCycle == cycle {
+            markCycle = nil
+            shown = nil
+        }
     }
 
     private var hasMessage: Bool {
-        appState.toast != nil || loadingLabel != nil || notice != nil
-    }
-
-    private var isPreparingLabelOnly: Bool {
-        loadingLabel != nil && appState.toast == nil && notice == nil
+        appState.toast != nil || notice != nil
     }
 
     private var messages: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let toast = appState.toast {
                 ToastRow(toast: toast)
-            }
-            if let label = loadingLabel {
-                Text(label).font(.callout)
             }
             if let notice {
                 Text(notice)
@@ -137,9 +145,7 @@ struct RiverIndicatorView: View {
             }
         }
         .padding(Constants.hudMessagePadding)
-        // The preparing label alone hugs its text and centers under the mark; toasts and
-        // notices keep the full width their wrapped prose needs.
-        .frame(width: isPreparingLabelOnly ? nil : Constants.hudMessageWidth, alignment: .leading)
+        .frame(width: Constants.hudMessageWidth, alignment: .leading)
         .foregroundStyle(Color(nsColor: Palette.HUD.for(colorScheme).text))
         .modifier(HUDSurface(cornerRadius: Constants.hudMessageCornerRadius, edge: .window))
         .accessibilityElement(children: .combine)
@@ -147,19 +153,23 @@ struct RiverIndicatorView: View {
 }
 
 /// The panel around the mark, and the mark's accessible name: the strokes are decorative, so
-/// the panel speaks the state and, while listening, the elapsed time. While preparing, the
-/// label above speaks instead. Its opacity and rise come from the cycle's timeline.
+/// the panel speaks the state and, while listening, the elapsed time. Its opacity and rise come
+/// from the cycle's timeline. The status row hangs off its right side, 8 pt away, with a
+/// timeline of its own, so it keeps moving while the panel holds still through a wait.
 private struct MarkPanel: View {
     let cycle: KawaIndicatorCycle
     let activity: MarkActivity
     // Read here, not by the stack above, so a level reading (about 14 a second) redraws only
     // the mark's panel, not the transcript and messages beside it.
     let appState: AppState
+    let shown: ShownStatus?
+    let statusRing: StatusRingCycle?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voice = KawaIndicatorVoice()
     @State private var recordingStart = Date()
-    // True while nothing on the panel can move (preparing, a dead microphone), so the timeline
-    // stops redrawing a still frame at display rate; a model download can take minutes.
+    // True while nothing on the panel can move (a dead microphone, a dictation waiting for the
+    // model), so the timeline stops redrawing a still frame at display rate; a model download
+    // can take minutes.
     @State private var isStill = false
 
     var body: some View {
@@ -172,7 +182,13 @@ private struct MarkPanel: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(activity == .transcribing ? "Transcribing" : "Listening")
                 .accessibilityValue(activity == .listening ? elapsed(at: context.date) : "")
-                .accessibilityHidden(activity == .rest || activity == .preparing)
+                .accessibilityHidden(activity == .rest)
+        }
+        .overlay(alignment: .leading) {
+            if let shown {
+                StatusRow(shown: shown, markCycle: cycle, appState: appState, ring: statusRing)
+                    .offset(x: Constants.indicatorPanelWidth + Constants.statusRowGap)
+            }
         }
         .onChange(of: activity, initial: true) { _, newActivity in
             if newActivity == .listening { recordingStart = Date() }

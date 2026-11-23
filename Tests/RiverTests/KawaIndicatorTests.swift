@@ -198,15 +198,20 @@ struct KawaIndicatorTimelineTests {
     // must never stop while audio could drive the layer or an exit is to come.
     @Test("the panel is still once the muted strokes are in and nothing else is coming")
     func stillPoint() throws {
-        let preparing = KawaIndicatorEvents(press: 0.3)
-        let still = try #require(KawaIndicatorTimeline.stillFrom(preparing))
-        for reduceMotion in [false, true] {
-            let atStill = at(still, preparing, reduceMotion: reduceMotion)
-            let later = at(still + 60, preparing, reduceMotion: reduceMotion)
-            #expect(abs(atStill.muted - later.muted) < 1e-9 && atStill.panel == later.panel && atStill.rise == later.rise)
+        let dead = KawaIndicatorEvents(press: 0.3)
+        // Released and waiting for the model (planning 0004): a download can take minutes.
+        let waiting = KawaIndicatorEvents(press: 0.3, audio: 0.32, release: 4)
+        for events in [dead, waiting] {
+            let still = try #require(KawaIndicatorTimeline.stillFrom(events))
+            for reduceMotion in [false, true] {
+                let atStill = at(still, events, reduceMotion: reduceMotion)
+                let later = at(still + 60, events, reduceMotion: reduceMotion)
+                #expect(abs(atStill.muted - later.muted) < 1e-9 && atStill.panel == later.panel && atStill.rise == later.rise)
+                #expect(atStill.form < 1e-9 && atStill.inkUp < 1e-9)
+            }
         }
         #expect(KawaIndicatorTimeline.stillFrom(dictation) == nil)
-        #expect(KawaIndicatorTimeline.stillFrom(KawaIndicatorEvents(press: 0.3, release: 2)) == nil)
+        #expect(KawaIndicatorTimeline.stillFrom(KawaIndicatorEvents(press: 0.3, release: 2, typed: 2.5)) == nil)
     }
 
     // The coordinator keeps the window up this long; any longer exit would be cut off.
@@ -475,13 +480,10 @@ struct KawaIndicatorCycleTests {
         #expect(cycle.events.release == cycle.events.typed)
     }
 
-    @Test("without audio, and while preparing, the layer's event never comes")
+    @Test("without audio, the layer's event never comes")
     func noAudio() throws {
         let dead = try #require(next(next(nil, .listening, at: 0), .listening, at: 3))
         #expect(!dead.events.audio.isFinite)
-        let preparing = try #require(next(next(nil, .preparing, audio: true, at: 0), .rest, at: 3))
-        #expect(!preparing.events.audio.isFinite)
-        #expect(preparing.events.release == preparing.events.typed)
     }
 
     @Test("rest with no cycle shows nothing")
@@ -507,12 +509,14 @@ struct KawaIndicatorCycleTests {
 
 @Suite("MarkActivity")
 struct MarkActivityTests {
-    @Test("the mark listens while recording, transcribes while processing, and prepares only at idle")
+    @Test("the mark listens while recording, transcribes while processing, and rests at idle unless a status holds it")
     func mapping() {
-        #expect(MarkActivity.of(state: .recording, isModelPreparing: false) == .listening)
-        #expect(MarkActivity.of(state: .processing, isModelPreparing: false) == .transcribing)
-        #expect(MarkActivity.of(state: .idle, isModelPreparing: true) == .preparing)
-        #expect(MarkActivity.of(state: .idle, isModelPreparing: false) == .rest)
+        #expect(MarkActivity.of(state: .recording, holdsPanel: false) == .listening)
+        #expect(MarkActivity.of(state: .processing, holdsPanel: false) == .transcribing)
+        #expect(MarkActivity.of(state: .idle, holdsPanel: false) == .rest)
+        // planning 0004: a failed load or held text is said after River is idle, so the panel
+        // stays up for it, and nothing at all shows at launch while the model loads.
+        #expect(MarkActivity.of(state: .idle, holdsPanel: true) == .transcribing)
     }
 }
 

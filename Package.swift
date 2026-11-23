@@ -10,7 +10,8 @@ let package = Package(
         // 0.18.0's tokenizer search order. Raise it on purpose, after testing.
         .package(url: "https://github.com/argmaxinc/WhisperKit", exact: "0.18.0"),
         // Exact for the same reason (planning 0037): pre-1.0, and FluidAudioLoader calls
-        // 0.18.3's model folder layout and ASR API directly.
+        // 0.18.3's model folder layout and ASR API directly, and reads its download progress
+        // by 0.18.3's weighting (`Constants.fluidAudioDownloadShare`).
         .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.18.3"),
         // Auto-update for the DMG channel (planning 0009). upToNextMajor so 2.x
         // patch/minor updates flow in but a 3.0 (potential API break) is opt-in.

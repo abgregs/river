@@ -353,9 +353,9 @@ struct HotkeyManagerTapTests {
     @MainActor
     @Test("single tap: after a refused start the next tap starts, it is not eaten as a stop")
     func singleTapAfterRefusedStartStarts() {
-        // The session refuses a start while the model is preparing, a permission is
-        // denied, or a dictation is still transcribing, and stays idle. The next tap
-        // must be another start. The tap machine once kept its own "recording" flag
+        // The session refuses a start while a permission is denied, or a dictation is
+        // still transcribing or waiting for the model, and stays where it is. The next
+        // tap must be another start. The tap machine once kept its own "recording" flag
         // and read that tap as a stop the session ignored, costing a keypress.
         let manager = makeManager(mode: .singleTap)
         var activates = 0

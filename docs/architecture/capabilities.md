@@ -72,7 +72,7 @@ Each capability's `recheck()` queries the most authoritative *non-prompting* sta
 | `AccessibilityCapability` | `AXIsProcessTrusted()` | authoritative `Bool` → `.granted` / `.denied` |
 | `InputMonitoringCapability` | `IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)` | true tri-state → `.granted` / `.denied` / `.unknown`, 1:1 |
 
-The mapping functions are `static` and `internal` so tests pin them deterministically without a real TCC grant (see [../conventions/tests.md](../conventions/tests.md)). Input Monitoring deliberately does **not** probe by creating a throwaway `CGEventTap`: that would call `CGEvent.tapCreate` on the main run loop and violate the [threading invariant](threading-invariant.md). The synthesized-action probe described in *Self-detection* below is the **M7 Accessibility bundle-misidentification detector** — a separate concern from status detection.
+The mapping functions are `static` and `internal` so tests pin them deterministically without a real TCC grant (see [../conventions/test-seams.md](../conventions/test-seams.md)). Input Monitoring deliberately does **not** probe by creating a throwaway `CGEventTap`: that would call `CGEvent.tapCreate` on the main run loop and violate the [threading invariant](threading-invariant.md). The synthesized-action probe described in *Self-detection* below is the **M7 Accessibility bundle-misidentification detector** — a separate concern from status detection.
 
 ## Why "no lying"
 

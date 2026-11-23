@@ -54,6 +54,8 @@ enum TranscriptionError: Error, LocalizedError {
     /// surfaces this in the log; M7 will fold it into the user-visible error
     /// surface alongside paste failures.
     case modelNotLoaded
+    /// The model a dictation waited for failed to load (`waitUntilReady`, planning 0004).
+    case modelLoadFailed
     case transcriptionFailed(underlying: Error)
     /// The engine returned no text for a non-empty audio buffer. Distinct from
     /// the no-audio path (`AudioCaptureError.noAudioCaptured` in M5) so the
@@ -77,6 +79,8 @@ enum TranscriptionError: Error, LocalizedError {
         switch self {
         case .modelNotLoaded:
             return "Transcription model is not loaded yet."
+        case .modelLoadFailed:
+            return "The transcription model failed to load."
         case .transcriptionFailed(let underlying):
             return "Transcription failed: \(underlying.localizedDescription)"
         case .emptyTranscription:
@@ -134,6 +138,10 @@ final class TranscriptionManager {
     // `deleteModel` asks this as well as the selection.
     private var modelsLoading: [String: Int] = [:]
 
+    // The waits for the model in use (`waitUntilReady`), ended by `update` once its state settles.
+    private var readyWaiters: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var nextWaiterID = 0
+
     // The one record of the model in use, its load state and the model loading beside it.
     // Every change sends a whole value, so no reader sees a half-made switch. Initialized from
     // a synchronous disk check so the first value is already correct when `bind(transcription:)`
@@ -144,13 +152,26 @@ final class TranscriptionManager {
     var selection: AnyPublisher<ModelSelection, Never> { selectionSubject.eraseToAnyPublisher() }
     var currentSelection: ModelSelection { selectionSubject.value }
 
+    // How far each downloading model has got, kept apart from `selectionSubject`: it changes a
+    // few times a second, and the Model section reads the models folder on every selection
+    // change. An entry lasts while the selection says its model is downloading, and stays once
+    // that download fails, so the failed ring shows how far it got (planning 0004).
+    private let progressSubject = CurrentValueSubject<[String: Double], Never>([:])
+
+    /// How far each downloading model has got, 0 to 1, by name (planning 0004): the model in use
+    /// and the one loading beside it, and where a failed download stopped. A model's fraction
+    /// only rises.
+    var downloadProgress: AnyPublisher<[String: Double], Never> { progressSubject.eraseToAnyPublisher() }
+    var currentDownloadProgress: [String: Double] { progressSubject.value }
+
     /// The in-use model's load lifecycle: the menu bar shows an honest "Downloading…" /
     /// "Preparing…" / "Ready" from it.
     var modelLoadState: AnyPublisher<ModelLoadState, Never> {
         selectionSubject.map(\.inUseState).removeDuplicates().eraseToAnyPublisher()
     }
 
-    /// Synchronous accessor for the session's model-readiness gate.
+    /// Synchronous accessor: the session reads it to decide whether a dictation waits for the
+    /// model.
     var currentModelLoadState: ModelLoadState { selectionSubject.value.inUseState }
     // internal for testability — the model loading beside the one in use.
     var currentModelSwitch: ModelSwitch? { selectionSubject.value.next }
@@ -186,7 +207,7 @@ final class TranscriptionManager {
     private func isDownloaded(_ name: String) -> Bool { store.isDownloaded(name) }
 
     // internal for testability — drives the load state without touching the real
-    // model, so session tests can exercise the model-readiness gate.
+    // model, so session tests can drive a dictation's wait for the model.
     func setModelLoadStateForTesting(_ state: ModelLoadState) {
         update { $0.inUseState = state }
     }
@@ -227,7 +248,7 @@ final class TranscriptionManager {
         logger.info("Loading model \(self.modelName, privacy: .public)")
         let modelName = self.modelName
 
-        let task = makeLoadTask(modelName: modelName) { [weak self] state in
+        let task = makeLoadTask(modelName: modelName, phase: { [weak self] state in
             // Generation-guarded like the completion paths: a superseded load finishing
             // its download must not mislabel the *newer* switch's published state (e.g.
             // flip "Downloading model…" to "Preparing model…" while another model's
@@ -235,7 +256,9 @@ final class TranscriptionManager {
             if let self, self.loadGeneration == generation {
                 self.emitLoadState(state)
             }
-        }
+        }, progress: { [weak self] fraction in
+            if let self, self.loadGeneration == generation { self.setProgress(fraction, of: modelName) }
+        })
         loadTask = task
         do {
             let loaded = try await task.value
@@ -256,20 +279,25 @@ final class TranscriptionManager {
     }
 
     // A load of `modelName` through `store`, counted in `modelsLoading` from now until
-    // it ends, cancelled or not. Shared by the model in use and a staged switch.
+    // it ends, cancelled or not. Shared by the model in use and a staged switch. Its reports
+    // pass only while it runs: a loader can send one from another queue that lands after the
+    // load has returned, and it must not reopen the state the load settled.
     private func makeLoadTask(
-        modelName: String, phase: @escaping @MainActor (ModelLoadState) -> Void
+        modelName: String, phase: @escaping @MainActor (ModelLoadState) -> Void,
+        progress: @escaping @MainActor (Double) -> Void
     ) -> Task<any LoadedModel, Error> {
         modelsLoading[modelName, default: 0] += 1
         let store = store
         return Task { [weak self] in
+            let reports = LoadReports(phase: phase, progress: progress)
             defer {
+                reports.end()
                 if let self {
                     self.modelsLoading[modelName, default: 1] -= 1
                     if self.modelsLoading[modelName] == 0 { self.modelsLoading[modelName] = nil }
                 }
             }
-            return try await store.load(modelName, phase: phase)
+            return try await store.load(modelName, phase: reports.phase, progress: reports.progress)
         }
     }
 
@@ -284,7 +312,86 @@ final class TranscriptionManager {
     private func update(_ change: (inout ModelSelection) -> Void) {
         var selection = selectionSubject.value
         change(&selection)
-        if selection != selectionSubject.value { selectionSubject.send(selection) }
+        guard selection != selectionSubject.value else { return }
+        selectionSubject.send(selection)
+        let progress = progressSubject.value.filter {
+            Self.isDownloading($0.key, in: selection) || Self.hasFailed($0.key, in: selection)
+        }
+        if progress != progressSubject.value { progressSubject.send(progress) }
+        endWaits(at: selection.inUseState)
+    }
+
+    /// Returns once the model in use is ready, or throws `TranscriptionError.modelLoadFailed`
+    /// once its load fails (planning 0004): a dictation that ends before the model is ready
+    /// waits here. A model chosen during the wait is waited for in its place. It waits on the
+    /// published state, not on `loadModel()`, which would start a failed load again.
+    /// Cancelling the waiting task ends the wait with `CancellationError`.
+    func waitUntilReady() async throws {
+        try Task.checkCancellation()
+        if try isSettled(currentModelLoadState) { return }
+        // A state that says the model is loading, with no load running, would never settle.
+        if model == nil, loadTask == nil {
+            Task { [weak self] in try? await self?.loadModel() }
+        }
+        let id = nextWaiterID
+        nextWaiterID += 1
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (waiter: CheckedContinuation<Void, Error>) in
+                do {
+                    if try isSettled(currentModelLoadState) { waiter.resume() } else { readyWaiters[id] = waiter }
+                } catch {
+                    waiter.resume(throwing: error)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.readyWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError())
+            }
+        }
+    }
+
+    // internal for testability — how many waits for the model in use are open.
+    var openWaitCount: Int { readyWaiters.count }
+
+    // Whether a wait for the model ends at `state`: `true` once ready, throws once failed.
+    // Downloading and Preparing keep it waiting.
+    private func isSettled(_ state: ModelLoadState) throws -> Bool {
+        switch state {
+        case .ready: return true
+        case .failed: throw TranscriptionError.modelLoadFailed
+        case .downloading, .loading: return false
+        }
+    }
+
+    private func endWaits(at state: ModelLoadState) {
+        guard !readyWaiters.isEmpty, state == .ready || state == .failed else { return }
+        let waiters = readyWaiters.values
+        readyWaiters.removeAll()
+        for waiter in waiters {
+            if state == .ready { waiter.resume() } else { waiter.resume(throwing: TranscriptionError.modelLoadFailed) }
+        }
+    }
+
+    // Keeps the highest fraction a load has reported for `model`, while the selection says the
+    // model is downloading: a report that lands after it has moved on is dropped.
+    private func setProgress(_ fraction: Double, of model: String) {
+        guard Self.isDownloading(model, in: selectionSubject.value) else { return }
+        var progress = progressSubject.value
+        let value = max(progress[model] ?? 0, min(max(fraction, 0), 1))
+        guard value != progress[model] else { return }
+        progress[model] = value
+        progressSubject.send(progress)
+    }
+
+    private static func isDownloading(_ model: String, in selection: ModelSelection) -> Bool {
+        (selection.inUse == model && selection.inUseState == .downloading)
+            || (selection.next?.target == model && selection.next?.phase == .downloading)
+    }
+
+    // Only a download adds a fraction, so a failed model keeps one only if it failed downloading.
+    private static func hasFailed(_ model: String, in selection: ModelSelection) -> Bool {
+        (selection.inUse == model && selection.inUseState == .failed)
+            || (selection.next?.target == model && selection.next?.phase == .failed)
     }
 
     // internal for testability — the model picker's current selection, so session
@@ -317,9 +424,10 @@ final class TranscriptionManager {
     // transcript retention, insertion) without a loaded model.
     var transcribeResultForTesting: String?
 
-    /// Chooses a model (planning 0036, Model). Called from `RiverSession` at any time: a
-    /// dictation only starts with a ready model, so a choice made during one always loads
-    /// beside it and never replaces the model a recording is using.
+    /// Chooses a model (planning 0036, Model). Called from `RiverSession` at any time. A ready
+    /// model is never replaced mid-dictation: a choice made during one loads beside it. A
+    /// dictation that started before the model was ready waits for whichever model is in use
+    /// when it ends (`waitUntilReady`).
     /// - While the model in use is ready, the new one loads beside it and the session commits
     ///   the switch once it is ready (`commitModelSwitch`); dictation keeps the current model
     ///   until then.
@@ -367,10 +475,12 @@ final class TranscriptionManager {
         let generation = stageGeneration
         update { $0.next = ModelSwitch(target: target, phase: isDownloaded(target) ? .preparing : .downloading) }
         logger.info("Loading model \(target, privacy: .public) beside the one in use")
-        let task = makeLoadTask(modelName: target) { [weak self] state in
+        let task = makeLoadTask(modelName: target, phase: { [weak self] state in
             guard let self, self.stageGeneration == generation else { return }
             self.update { $0.next = ModelSwitch(target: target, phase: state == .downloading ? .downloading : .preparing) }
-        }
+        }, progress: { [weak self] fraction in
+            if let self, self.stageGeneration == generation { self.setProgress(fraction, of: target) }
+        })
         stagedTask = task
         do {
             let loaded = try await task.value
@@ -415,8 +525,9 @@ final class TranscriptionManager {
     }
 
     /// Returns the transcribed text or throws. Throws `.modelNotLoaded` if
-    /// `loadModel` hasn't completed (the fail-fast surface — the session logs
-    /// and still returns the cycle to `.idle`).
+    /// `loadModel` hasn't completed: the session waits for the model first
+    /// (`waitUntilReady`), so only a live-text segment decoded mid-recording meets it,
+    /// and the stream then decodes from there in one piece at release.
     func transcribe(audioSamples: [Float]) async throws -> String {
         if let result = transcribeResultForTesting { return result }
         guard let model else { throw TranscriptionError.modelNotLoaded }
@@ -434,5 +545,28 @@ final class TranscriptionManager {
         guard !samples.isEmpty, Double(samples.count) < Constants.shortClipSeconds * sampleRate else { return samples }
         let silence = [Float](repeating: 0, count: Int(Constants.shortClipPadSeconds * sampleRate))
         return silence + samples + silence
+    }
+}
+
+// A load's reports to the manager, passed on only until the load ends (`end()`).
+@MainActor
+private final class LoadReports {
+    private var running = true
+    private let onPhase: @MainActor (ModelLoadState) -> Void
+    private let onProgress: @MainActor (Double) -> Void
+
+    init(phase: @escaping @MainActor (ModelLoadState) -> Void, progress: @escaping @MainActor (Double) -> Void) {
+        onPhase = phase
+        onProgress = progress
+    }
+
+    func end() { running = false }
+
+    var phase: @MainActor (ModelLoadState) -> Void {
+        { [self] state in if running { onPhase(state) } }
+    }
+
+    var progress: @MainActor (Double) -> Void {
+        { [self] fraction in if running { onProgress(fraction) } }
     }
 }

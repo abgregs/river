@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import os
@@ -18,15 +19,23 @@ final class TextInsertionManager {
     /// Waits between keystroke chunks. Injected so tests record the gaps instead of
     /// sleeping (the injectable-clock pattern of `TapStateMachine`).
     typealias Pause = @MainActor (_ seconds: Double) async -> Void
+    /// The process ID of the app in front. Injected so tests pass a fixed one.
+    typealias FrontmostApp = @MainActor () -> pid_t?
 
     private let accessibility: AccessibilityCapability
     private let pause: Pause
+    private let frontmostApp: FrontmostApp
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "insert")
 
-    init(accessibility: AccessibilityCapability, pause: Pause? = nil) {
+    init(accessibility: AccessibilityCapability, pause: Pause? = nil, frontmostApp: FrontmostApp? = nil) {
         self.accessibility = accessibility
         self.pause = pause ?? { seconds in try? await Task.sleep(for: .seconds(seconds)) }
+        self.frontmostApp = frontmostApp ?? { NSWorkspace.shared.frontmostApplication?.processIdentifier }
     }
+
+    /// The app in front now, by process ID: the session reads it at the release, and again
+    /// when the text is ready, to type only into the app dictated into (planning 0004).
+    func appInFront() -> pid_t? { frontmostApp() }
 
     /// Inserts `text` at the cursor by synthesizing Unicode key events — the app
     /// never touches the clipboard, so there is no snapshot/restore and the
