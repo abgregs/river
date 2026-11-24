@@ -271,13 +271,19 @@ struct RiverSessionTests {
         env.store.setValue(streaming, for: Settings.streamingDictation)
         try await loadModel(env, transcribing: "heard before the loss")
         var errors: [RiverError] = []
-        let token = env.session.errors.sink { errors.append($0) }
+        var typedWhenReported: String?
+        let token = env.session.errors.sink { error in
+            errors.append(error)
+            typedWhenReported = env.accessibility.postedKeyDownTextForTesting.joined()
+        }
         defer { token.cancel() }
 
         env.session.handleActivate()
         try await Task.sleep(nanoseconds: 20_000_000)
-        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // a second heard
-        env.clock.now += 3                                                          // then two lost
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 2 s heard
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }            // a pause: streaming cuts here
+        for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 1 s more
+        env.clock.now += 6                                                          // then about 2 s lost
         await env.session.handleDeactivate()
 
         // Plain locals: a failing #expect reflects every value it names, and reflecting the
@@ -285,9 +291,14 @@ struct RiverSessionTests {
         let typed = env.accessibility.postedKeyDownTextForTesting.joined()
         let clips = env.loader.clipSeconds
         let errorCount = errors.count
+        let typedFirst = typedWhenReported
         #expect(typed == "heard before the loss")
-        #expect(clips.count == 1)
+        // Streaming decoded the segment, then the tail with the segment's end in front of it;
+        // with it off, the recording was decoded in one piece.
+        #expect(clips.count == (streaming ? 2 : 1))
         #expect(errorCount == 1)
+        // Typed first, then reported.
+        #expect(typedFirst == "heard before the loss")
         guard case .audioCapture(let underlying) = errors.first,
               case AudioCaptureError.captureIncomplete = underlying else {
             Issue.record("expected .captureIncomplete, got \(String(describing: errors.first))")
@@ -1702,6 +1713,9 @@ struct RiverSessionTests {
         for _ in 0..<10 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // the tail
         await env.session.handleDeactivate()
 
+        // The segment, then the tail: the streamed path ran, not a decode in one piece.
+        let clips = env.loader.clipSeconds
+        #expect(clips.count == 2)
         #expect(errors.isEmpty)
         #expect(env.accessibility.postedEventCountForTesting == 0)
         #expect(!env.session.hasLastTranscript)

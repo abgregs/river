@@ -162,6 +162,33 @@ struct TextInsertionManagerTests {
     }
 
     @MainActor
+    @Test("deliveries waiting their turn type in the order they arrived", .timeLimit(.minutes(1)))
+    func waitingDeliveriesKeepTheirOrder() async throws {
+        // Two Paste last presses behind a long insert must type in the order pressed. The first
+        // holds the turn until both others are waiting, so the turn's hand-off decides the order.
+        let accessibility = AccessibilityCapability()
+        accessibility.skipPostForTesting = true
+        accessibility.setStatusForTesting(.granted)
+        accessibility.focusedTargetForTesting = .editable
+        var held: CheckedContinuation<Void, Never>?
+        var pauses = 0
+        let manager = TextInsertionManager(accessibility: accessibility, pause: { _ in
+            pauses += 1
+            if pauses == 1 { await withCheckedContinuation { held = $0 } } else { await Task.yield() }
+        })
+        let a = String(repeating: "a", count: 50), b = String(repeating: "b", count: 50), c = String(repeating: "c", count: 50)
+
+        let first = Task { @MainActor in try await manager.deliver(a, to: nil) }
+        for _ in 0..<200 where held == nil { await Task.yield() }
+        let second = Task { @MainActor in try await manager.deliver(b, to: nil) }
+        let third = Task { @MainActor in try await manager.deliver(c, to: nil) }
+        for _ in 0..<20 { await Task.yield() }
+        held?.resume()
+        _ = try await (first.value, second.value, third.value)
+        #expect(accessibility.postedKeyDownTextForTesting.joined() == a + b + c)
+    }
+
+    @MainActor
     @Test("a delivery that fails part-way still passes its turn to the next", .timeLimit(.minutes(1)))
     func failurePassesTheTurn() async throws {
         let accessibility = AccessibilityCapability()
