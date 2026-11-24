@@ -1412,8 +1412,7 @@ struct RiverSessionTests {
         // The shortcut reuses the typing path, so what it types can't drift from what was
         // typed, and the clipboard is never touched (spec 0036).
         let env = makeSession()
-        env.session.pasteLastTranscript()
-        try await Task.sleep(for: .milliseconds(50))
+        await env.session.pasteLastTranscript()
         #expect(env.accessibility.postedKeyDownTextForTesting.isEmpty)
 
         try await loadModel(env, transcribing: "hello again")
@@ -1424,12 +1423,28 @@ struct RiverSessionTests {
         let first = env.accessibility.postedKeyDownTextForTesting.joined()
         #expect(first == "hello again")
 
-        env.session.pasteLastTranscript()
-        let deadline = Date().addingTimeInterval(5)
-        while env.accessibility.postedKeyDownTextForTesting.joined().count < first.count * 2, Date() < deadline {
-            try await Task.sleep(for: .milliseconds(20))
-        }
+        await env.session.pasteLastTranscript()
         #expect(env.accessibility.postedKeyDownTextForTesting.joined() == first + first)
+    }
+
+    @MainActor
+    @Test("Paste last pressed twice types the text twice, one after the other")
+    func pasteLastTwiceTakesTurns() async throws {
+        // Each paste waits for the one still typing, so their chunks never mix (planning 0039).
+        let env = makeSession()
+        try await loadModel(env, transcribing: "long enough to type in more than one chunk")
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        let once = env.accessibility.postedKeyDownTextForTesting.joined()
+
+        let session = env.session
+        let first = Task { @MainActor in await session.pasteLastTranscript() }
+        let second = Task { @MainActor in await session.pasteLastTranscript() }
+        await first.value
+        await second.value
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == once + once + once)
     }
 
     @MainActor
@@ -1479,8 +1494,7 @@ struct RiverSessionTests {
 
         env.session.handleActivate()
         #expect(env.session.currentState == .recording)
-        env.session.pasteLastTranscript()
-        try await Task.sleep(for: .milliseconds(100))
+        await env.session.pasteLastTranscript()
         #expect(env.accessibility.postedKeyDownTextForTesting.joined() == typed)
     }
 

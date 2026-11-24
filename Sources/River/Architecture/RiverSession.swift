@@ -194,7 +194,9 @@ final class RiverSession {
         }
         hotkey.onCancel = { [weak self] in self?.handleCancel() }
         hotkey.onDiscard = { [weak self] in self?.handleDiscard() }
-        hotkey.onPasteLast = { [weak self] in self?.pasteLastTranscript() }
+        hotkey.onPasteLast = { [weak self] in
+            Task { @MainActor in await self?.pasteLastTranscript() }
+        }
         hotkey.onCopyLast = { [weak self] in self?.copyLastTranscript() }
         hotkey.onToggleLiveText = { [weak self] in self?.toggleLiveText() }
         hotkey.isRecording = { [weak self] in self?.currentState == .recording }
@@ -453,17 +455,15 @@ final class RiverSession {
     // Retains the transcript, then types it at the cursor. Retained before the paste
     // attempt: recovery is available even when insertion fails (planning 0019 AC1).
     // Content is never logged — only its count is; see logging.md anti-pattern #4.
-    // When `app`, the app in front at the release, is no longer in front, River types nothing
-    // and holds the text: it would land in an app the user never dictated into (planning 0004).
+    // When `app`, the app in front at the release, leaves the front before or while River types,
+    // the delivery stops and River holds the text: it would land in an app the user never
+    // dictated into (planning 0004, 0039).
     private func deliver(_ text: String, into app: pid_t?) async {
         lastTranscript = text
-        if let app, textInsertion.appInFront() != app {
-            logger.info("The app in front changed after the release; holding \(text.count, privacy: .public) chars")
-            eventSubject.send(.textHeld)
-            return
-        }
         do {
-            try await textInsertion.insertText(text)
+            if try await textInsertion.deliver(text, to: app) == .held {
+                eventSubject.send(.textHeld)
+            }
         } catch {
             logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             errorSubject.send(.textInsertion(underlying: error))
@@ -651,22 +651,22 @@ final class RiverSession {
     }
 
     /// Paste last transcription's shortcut (spec 0036): types the last transcription again at
-    /// the cursor through the same insertion path, so the clipboard is never touched. Does
-    /// nothing with no transcription yet, or while a dictation is recording or processing.
-    func pasteLastTranscript() {
+    /// the cursor through the same insertion path, so the clipboard is never touched, after any
+    /// insert still typing (planning 0039). Does nothing with no transcription yet, or while a
+    /// dictation is recording or processing. A change of app while it types stops it and shows
+    /// nothing: the panel draws a status only during a dictation, and the text stays the last
+    /// transcript.
+    func pasteLastTranscript() async {
         guard currentState == .idle, let text = lastTranscript else {
             logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
             return
         }
         logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                try await self.textInsertion.insertText(text)
-            } catch {
-                self.logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-                self.errorSubject.send(.textInsertion(underlying: error))
-            }
+        do {
+            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront())
+        } catch {
+            logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+            errorSubject.send(.textInsertion(underlying: error))
         }
     }
 

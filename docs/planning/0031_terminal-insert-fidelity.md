@@ -8,7 +8,7 @@ When River inserted a transcript into Claude Code's TUI (VS Code's integrated te
 
 ## The two deliveries hold the same text
 
-`RiverSession.deliver(_:)` retains the transcript as `lastTranscript` and then types that same string; `copyLastTranscript` writes `lastTranscript`. Nothing transforms either copy. A test now pins it: a full cycle with emoji, a combining accent, and quotes types exactly the transcript, and "Copy last transcription" copies exactly what was typed.
+`RiverSession.deliver(_:)` retains the transcript as `lastTranscript` and then types that same string; `copyLastTranscript` writes `lastTranscript`. Nothing transforms either copy, except that a newline is typed as a space ([0039](0039_pipeline-rule-owners.md)), and no transcript holds one today. A test now pins it: a full cycle with emoji, a combining accent, and quotes types exactly the transcript, and "Copy last transcription" copies exactly what was typed.
 
 ## Cause
 

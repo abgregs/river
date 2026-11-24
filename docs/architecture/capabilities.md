@@ -91,8 +91,8 @@ final class TextInsertionManager {
         self.accessibility = accessibility
     }
 
-    func insertText(_ text: String) throws {
-        // chunk `text`, then for each chunk:
+    func deliver(_ text: String, to app: pid_t?) async throws -> Delivery {
+        // wait its turn, chunk `text`, then for each chunk while `app` stays in front:
         try accessibility.postKeyEvent(makeUnicodeKeyEvent(chunk, keyDown: true))
         try accessibility.postKeyEvent(makeUnicodeKeyEvent(chunk, keyDown: false))
     }

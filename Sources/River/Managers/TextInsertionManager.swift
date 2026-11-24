@@ -14,6 +14,13 @@ enum TextInsertionError: Error, LocalizedError {
     }
 }
 
+/// What a delivery did with its text: typed it all, or stopped and held it because the app it
+/// was meant for left the front (planning 0004, 0039).
+enum Delivery {
+    case typed
+    case held
+}
+
 @MainActor
 final class TextInsertionManager {
     /// Waits between keystroke chunks. Injected so tests record the gaps instead of
@@ -26,6 +33,9 @@ final class TextInsertionManager {
     private let pause: Pause
     private let frontmostApp: FrontmostApp
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "insert")
+    // One delivery types at a time; the rest wait here, in order.
+    private var isTyping = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
 
     init(accessibility: AccessibilityCapability, pause: Pause? = nil, frontmostApp: FrontmostApp? = nil) {
         self.accessibility = accessibility
@@ -33,45 +43,79 @@ final class TextInsertionManager {
         self.frontmostApp = frontmostApp ?? { NSWorkspace.shared.frontmostApplication?.processIdentifier }
     }
 
-    /// The app in front now, by process ID: the session reads it at the release, and again
-    /// when the text is ready, to type only into the app dictated into (planning 0004).
+    /// The app in front now, by process ID: the session reads it at the release, and the
+    /// delivery reads it again before each chunk, to type only into the app dictated into
+    /// (planning 0004).
     func appInFront() -> pid_t? { frontmostApp() }
 
-    /// Inserts `text` at the cursor by synthesizing Unicode key events — the app
-    /// never touches the clipboard, so there is no snapshot/restore and the
-    /// clipboard-restore race is gone *by construction* (planning 0011). The
-    /// keystrokes route through `AccessibilityCapability.postKeyEvent`, the one
-    /// `CGEvent.post` site, so the `.granted` gate still applies.
+    /// Types `text` at the cursor as Unicode key events, after any delivery still typing — the
+    /// app never touches the clipboard, so the clipboard-restore race is gone *by construction*
+    /// (planning 0011). The keystrokes route through `AccessibilityCapability.postKeyEvent`,
+    /// the one `CGEvent.post` site, so the `.granted` gate still applies. A newline is typed as
+    /// a space: Return sends a message in most chat apps (planning 0039).
     ///
-    /// Skips (throwing `TextInsertionError.noEditableTarget`) when the focused
-    /// element is clearly non-editable — the insertion guard (planning 0001).
-    func insertText(_ text: String) async throws {
+    /// Returns `.held` when `app` is not in front before a chunk, and stops there. Throws
+    /// `TextInsertionError.noEditableTarget` when the focused element is clearly non-editable —
+    /// the insertion guard (planning 0001).
+    func deliver(_ text: String, to app: pid_t?) async throws -> Delivery {
+        await waitForTurn()
+        defer { endTurn() }
+        // Before the guard, so a switch to an app with no text field holds the text rather
+        // than reporting no field.
+        if hasLeft(app) { return held(text) }
         // Insertion guard (planning 0001): typing into a non-editable target is
         // indistinguishable from success after the fact, so check the focused
         // element's role first. `.unknown` fails open — only a clearly
         // non-editable role skips.
         if accessibility.classifyFocusedTarget() == .nonEditable {
-            logger.info("insertText: skipped — focused element is not editable")
+            logger.info("deliver: skipped — focused element is not editable")
             throw TextInsertionError.noEditableTarget
         }
-        let chunks = Self.chunk(text, maxUnits: Constants.keystrokeChunkUnits)
-        logger.info("insertText: injecting \(text.count, privacy: .public) chars in \(chunks.count, privacy: .public) chunk(s)")
+        let chunks = Self.chunk(String(text.map { $0.isNewline ? " " : $0 }), maxUnits: Constants.keystrokeChunkUnits)
+        logger.info("deliver: injecting \(text.count, privacy: .public) chars in \(chunks.count, privacy: .public) chunk(s)")
         do {
             for (index, chunk) in chunks.enumerated() {
-                // Paced, so a terminal hands the target a few chunks per read rather than
-                // the whole transcript at once (planning 0031).
-                if index > 0 { await pause(Constants.keystrokeChunkGapSeconds) }
+                if index > 0 {
+                    // Paced, so a terminal hands the target a few chunks per read rather than
+                    // the whole transcript at once (planning 0031).
+                    await pause(Constants.keystrokeChunkGapSeconds)
+                    if hasLeft(app) { return held(text) }
+                }
                 try accessibility.postKeyEvent(Self.makeUnicodeKeyEvent(chunk, keyDown: true))
                 try accessibility.postKeyEvent(Self.makeUnicodeKeyEvent(chunk, keyDown: false))
             }
-            logger.info("insertText: done")
+            logger.info("deliver: done")
+            return .typed
         } catch {
-            // The only throw here is `postKeyEvent`'s `.notGranted`, which fires on
-            // the *first* event — before any character is injected. There is no clipboard to restore. Log and
-            // rethrow so `RiverSession` surfaces the error.
-            logger.error("insertText: failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+            // `postKeyEvent`'s `.notGranted`: on the first chunk nothing was typed, but a grant
+            // lost during the pauses stops a delivery part-way. Rethrown for `RiverSession`.
+            logger.error("deliver: failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             throw error
         }
+    }
+
+    private func hasLeft(_ app: pid_t?) -> Bool {
+        guard let app else { return false }
+        return frontmostApp() != app
+    }
+
+    private func held(_ text: String) -> Delivery {
+        logger.info("deliver: the app in front changed; holding \(text.count, privacy: .public) chars")
+        return .held
+    }
+
+    // Not cancellable: a delivery that stopped waiting would type out of turn.
+    private func waitForTurn() async {
+        guard isTyping else {
+            isTyping = true
+            return
+        }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    // The turn passes straight to the next delivery in line, so none can cut in.
+    private func endTurn() {
+        if waiting.isEmpty { isTyping = false } else { waiting.removeFirst().resume() }
     }
 
     // internal for testability — splits `text` into chunks of at most `maxUnits`

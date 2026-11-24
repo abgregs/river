@@ -1,6 +1,6 @@
 # Planning: One Owner per Dictation Pipeline Rule (0039)
 
-**Status: A built 2026-11-23 on `refactor/pipeline-owners`; B and C follow in the same PR, D after it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
+**Status: A and B built 2026-11-23 on `refactor/pipeline-owners`; C follows in the same PR, D after it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
 
 ## Why
 
@@ -38,9 +38,9 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 
 ### B. One delivery module
 
-- `TextInsertionManager` takes the text and the app it was meant for, and reports typed, held, skipped (no editable field) or failed. It owns the hold check, Paste last, Copy Last Transcription's pasteboard write ([0007](0007_transient-pasteboard-markers.md)'s markers), the chunk plan, the pacing and the newline rule. The session keeps the last transcript ([0019](0019_last-transcript-recovery.md)) and the state.
+- `TextInsertionManager.deliver(_:to:)` takes the text and the app it was meant for, and reports typed or held; a field that isn't editable and a lost grant still throw. It owns the turn, the hold check, the insertion guard, the chunk plan, the pacing and the newline rule. The session keeps the last transcript ([0019](0019_last-transcript-recovery.md)), the state, Paste last's guard, and Copy Last Transcription. **Why Copy stays out** (maintainer, 2026-11-23, replacing this plan's first draft): [0011](0011_keystroke-injection.md) requires no pasteboard APIs in `TextInsertionManager`, so typing can never touch the clipboard by structure, and 0019 keeps the copy a user command outside the typing path.
 - **One insert at a time.** A second insert waits for the first, so Paste last pressed twice types the text twice, in order.
-- **The app in front is read again before each chunk.** If it changed, typing stops and the text is held, as when it changes before typing starts.
+- **The app in front is read again before each chunk.** If it changed, typing stops and the text is held, as when it changes before typing starts. The first read comes before the insertion guard, so a switch to an app with no text field holds the text rather than reporting no field. A Paste last stopped this way shows nothing: at `.idle` the panel draws a status only during a dictation.
 - **A newline is typed as a space.** **Why:** Return sends a message in most chat apps, and River's own joins already avoid newlines.
 - **No chunk is a single character:** the last two chunks share the remainder. Checked on device in Claude Code at 20n+1 and 20n+2 characters before it ships.
 - Unchanged: the one post in `AccessibilityCapability`; Paste last's wait for the shortcut's keys in `HotkeyManager`; keystrokes, never the clipboard, for typing ([0011](0011_keystroke-injection.md)).
@@ -100,7 +100,7 @@ A, B and C ship as one PR, `refactor/pipeline-owners`, with a commit series per 
 
 - Fixing a model's text, such as Phonon-2's glued digits: the later linting layer (decision 2).
 - Stripping annotations inside speech: 0023 keeps them.
-- Pasting long transcripts, about 1,000 characters and up: 0031's agreed direction, which would land in B's module.
+- Pasting long transcripts, about 1,000 characters and up: 0031's agreed direction. Its pasteboard write would need its own home, outside `TextInsertionManager`, as Copy has.
 - A "no speech heard" notice: 0023's feedback surface.
 - Rules per app beyond the one-character rule: [0031](0031_terminal-insert-fidelity.md) turned down a strategy per terminal.
 

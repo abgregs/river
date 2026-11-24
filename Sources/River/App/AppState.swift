@@ -14,7 +14,7 @@ enum DictationStatus: Equatable {
     /// The model's state while a dictation waits for it, then ready, or failed with the
     /// recording kept.
     case model(StatusRing.Phase)
-    /// The app dictated into isn't in front: River typed nothing and holds the text.
+    /// The app dictated into left the front: River stopped typing and holds the text.
     case held
 }
 
