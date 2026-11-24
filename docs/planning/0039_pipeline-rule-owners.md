@@ -34,7 +34,7 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 - **What each engine needs from its audio** moves behind the seam too: the short-clip padding (Whisper's context, which also meets FluidAudio's 0.3 s minimum), and each engine's window, written down in its adapter.
 - **Callers.** The stream's segments and tail, the one-piece decode and kept recordings stop catching engine errors, and read nothing said the same way.
 - Unchanged: each engine imported only by its adapter ([0037](0037_fluidaudio-engine.md)); the Whisper adapter's retry without the custom-dictionary prompt.
-- **Tests.** Each adapter's nothing said is tested on raw text, with no model loaded. `FakeModel` returns given text, or nothing said, and replaces `transcribeResultForTesting` (the PR #97 review's "Retire the last two test flags"); [ADR 0001](../decisions/0001-defer-cycle-protocol-seams.md)'s 2026-11-19 note is amended.
+- **Tests.** Each adapter's nothing said is tested on raw text, with no model loaded. `FakeModel` returns given text, or nothing said, and replaces `transcribeResultForTesting` (the PR #97 review's "Retire the last two test flags"); [ADR 0001](../decisions/0001-defer-cycle-protocol-seams.md) gets a 2026-11-23 note after its 2026-11-19 one.
 
 ### B. One delivery module
 
@@ -42,13 +42,13 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 - **One insert at a time.** A second insert waits for the first, so Paste last pressed twice types the text twice, in order.
 - **The app in front is read again before each chunk.** If it changed, typing stops and the text is held, as when it changes before typing starts. The first read comes before the insertion guard, so a switch to an app with no text field holds the text rather than reporting no field. A Paste last stopped this way shows nothing: at `.idle` the panel draws a status only during a dictation.
 - **A newline is typed as a space.** **Why:** Return sends a message in most chat apps, and River's own joins already avoid newlines.
-- **No chunk is a single character:** the last two chunks share the remainder. Checked on device in Claude Code at 20n+1 and 20n+2 characters before it ships.
+- **No plan ends on a one-character chunk:** the last two chunks share the remainder ([0031](0031_terminal-insert-fidelity.md) names the one exception, text no speech model writes). Checked on device in Claude Code at 21, 41 and 61 characters, the 20n+1 lengths where the bug appeared (2026-11-24); a transcript of 20n+2 never ended on one character, before or after.
 - Unchanged: the one post in `AccessibilityCapability`; Paste last's wait for the shortcut's keys in `HotkeyManager`; keystrokes, never the clipboard, for typing ([0011](0011_keystroke-injection.md)).
 - **Tests.** Chunk plans for every length; queue order with the injected pause; each outcome, with no polling; a change of app mid-insert.
 
 ### C. One module decides what audio each decode gets
 
-- `DictationStream` turns a recording into text on every path: the segments cut while the user speaks, the tail at release, the live text, and every one-piece case (no cut, a failed segment, a kept recording, streaming off, a capture failure). The session hands it the recording and gets text back; a kept recording becomes a request to the same module (`DictationStream.transcribe(_:decode:)`).
+- `DictationStream` turns a recording into text on every path: the segments cut while the user speaks, the tail at release, the live text, and every one-piece case (no cut, a failed segment, a kept recording, streaming off); a capture failure finishes the same way, with the audio that did arrive. The session hands it the recording and gets text back; a kept recording becomes a request to the same module (`DictationStream.transcribe(_:decode:)`).
 - It takes the silence trim from `AudioCaptureManager` and runs it on each clip right before its decode. The recording is converted to 16 kHz once, live, where there were two conversions: `AudioCaptureManager` resamples each buffer as it arrives, finishes each format run's resampler at its end so no sample is held back, and keeps no copy. The one-piece decode is written once. **Why the conversion stays in capture** (built 2026-11-23, in place of the stream converting): `AudioCaptureManager` owns the device formats and their runs ([0032](0032_first-recording-device-switch.md)), and the stream's input stays plain 16 kHz samples, which D's replay feeds from files.
 - **The wait for the model moves to the decode.** The stream asks the session to wait (`finish(whenReady:)`) just before a one-piece decode, and only for a clip that holds speech after the trim, so a stray tap never waits; the clip it hands over is what a failed load keeps. The tail needs no wait: a segment decoded before it.
 - The hidden `streamingDictation` switch stays, as one path inside the module.
@@ -60,7 +60,7 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 
 - `TranscriptionEvalTests` becomes one on-device replay: each clip goes through C's module, with streaming on and off, and through each real model behind A. It scores word errors as today (`WordErrorRate`) and, apart, reports each model's text shape against the reference as written (digits, punctuation, capitals), so a model's update or the later linting layer is judged against it. It is rerun after any engine or model upgrade, the check 0037 asks for after a FluidAudio upgrade.
 - Gated by `RIVER_EVAL_CORPUS` and `RIVER_EVAL_MODEL` as today; it loads real models, so it runs on its own, never beside a build.
-- **The corpus** (`~/river-eval-corpus`, format in [test-harnesses.md](../conventions/test-harnesses.md)). Record each clip in QuickTime Player (File › New Audio Recording, built-in microphone), then convert it: `afconvert -f WAVE -d LEI16@16000 -c 1 clip.m4a clip.wav`. Read each script as written; note any change in its reference.
+- **The corpus** (`~/river-eval-corpus`, format in [test-harnesses.md](../conventions/test-harnesses.md)). Record each clip in QuickTime Player (File › New Audio Recording, built-in microphone), then convert it: `afconvert -f WAVE -d LEI16@16000 -c 1 clip.m4a clip.wav`. Read each script as written; note any change in its reference. **Before recording,** read the PR #100 review's open item in [_index.md](_index.md): clips recorded through River, with a debug-only build since the app saves no audio, carry its pre-roll and the key's clicks, which a QuickTime recording lacks.
   1. `numbers-01`: "Dictating for 30 seconds, then about 10 to 15 seconds more."
   2. `numbers-02`: "The call moved from 3:45 to 4:15 on November 23, 2026."
   3. `numbers-03`: "It costs $20, about 15 percent of the 140 we budgeted."
@@ -95,7 +95,7 @@ A, B and C ship as one PR, `refactor/pipeline-owners`, with a commit series per 
 ## Acceptance criteria
 
 1. **A.** An empty result from either engine types nothing, shows no error, and keeps live streaming. No caller catches an engine's own error, and session tests reach typed text through `FakeModel`, with `transcribeResultForTesting` gone.
-2. **B.** Paste last pressed twice types the text twice, in order (tested). No chunk is one character, and on device a 421-character transcript types in order in Claude Code. A change of app mid-insert stops typing and holds the text.
+2. **B.** Paste last pressed twice types the text twice, in order (tested). No plan ends on a one-character chunk, and on device transcripts of 20n+1 characters, such as 421, type in order in Claude Code (21, 41 and 61 checked, 2026-11-24). A change of app mid-insert stops typing and holds the text.
 3. **C.** Tests see every clip an engine gets, on every path; the one-piece decode exists once; the conversion runs once per recording, and the trim in one place, the module, before each decode.
 4. **D.** The replay runs a model over the corpus with streaming on and off and writes word errors and text-shape results; a clip over 30 s types in full on every model.
 
