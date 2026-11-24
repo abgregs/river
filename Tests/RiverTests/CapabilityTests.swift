@@ -317,18 +317,18 @@ struct FocusedTargetClassificationTests {
     }
 
     @MainActor
-    @Test("nothing focused skips the paste, so a failed paste is reported, not typed into nowhere")
-    func nothingFocusedSkips() {
-        // With no text field focused, macOS answers kAXErrorNoValue (-25212). Typing then
-        // vanished with no word to the user (maintainer, on device, 2026-11-24); skipping turns
-        // it into Couldn't paste.
+    @Test("\"nothing focused\" still types: VS Code's terminal reports it while it has focus")
+    func nothingFocusedFailsOpen() {
+        // On device (2026-11-24) the system-wide read answered kAXErrorNoValue (-25212) for
+        // VS Code's focused terminal. Skipping on it refused every dictation into the terminal,
+        // so it must stay .unknown, like any other read that fails.
         let capability = AccessibilityCapability()
         capability.setStatusForTesting(.granted)
         capability.focusedElementReadForTesting = { (nil, nil, .noValue) }
-        #expect(capability.classifyFocusedTarget() == .nonEditable)
-        // A read that fails any other way still types.
-        capability.focusedElementReadForTesting = { (nil, nil, .failure) }
         #expect(capability.classifyFocusedTarget() == .unknown)
+        // The window itself focused, with no control in it, still skips.
+        capability.focusedElementReadForTesting = { ("AXWindow", "AXStandardWindow", nil) }
+        #expect(capability.classifyFocusedTarget() == .nonEditable)
     }
 }
 
