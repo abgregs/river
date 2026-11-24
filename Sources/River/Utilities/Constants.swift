@@ -357,7 +357,7 @@ enum Constants {
     static let hudContactShadowOpacity: Double = 0.22
     static let hudContactShadowRadius: Double = 1
     static let hudContactShadowOffset: Double = 1
-    // Secondary text on the HUD (a toast's hint, the notice): the text color at this opacity.
+    // Secondary text on the HUD (a status's detail): the text color at this opacity.
     // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface; 0.8 holds
     // 4.5:1 on both tints (PaletteTests).
     static let hudSecondaryTextOpacity: Double = 0.8
@@ -476,7 +476,8 @@ enum Constants {
 
     // The status in the mark's place (planning 0004): it enters this long after the mark's panel
     // has gone (maintainer, 2026-11-24), so the two never share the place; a failed load, held
-    // text or an error stays this long on screen, and Ready this long once its check is drawn.
+    // text or an error stays at least this long on screen, and Ready this long once its check is
+    // drawn, or until the text has typed if that is later.
     static let statusEntryBeatSeconds: Double = 0.12
     static let statusHoldSeconds: Double = 4
     static let statusReadyHoldSeconds: Double = 0.6

@@ -67,7 +67,7 @@ final class AppState {
     /// indicator draws it once the mark's panel has gone.
     private(set) var dictationStatus: DictationStatus?
     /// How far each downloading model has got, 0 to 1, by name, and where a failed download
-    /// stopped (planning 0004): the status ring beside the indicator and in Settings.
+    /// stopped (planning 0004): the status ring in the indicator's place and in Settings.
     private(set) var downloadProgress: [String: Double] = [:]
     /// How many recordings a failed load kept, for Settings' "1 recording kept".
     private(set) var keptRecordingCount = 0
@@ -84,6 +84,9 @@ final class AppState {
     @ObservationIgnored private var statusReveal: AnyCancellable?
     @ObservationIgnored private var statusHold: AnyCancellable?
     @ObservationIgnored private var isRevealDue = false
+    // Runs for the longest panel exit after River returns to idle: a status set meanwhile, such
+    // as Paste last failing just after a dictation, waits for that panel.
+    @ObservationIgnored private var panelLeaving: AnyCancellable?
 
     // `nil` default (resolved to `liveScheduler` in this isolated init body)
     // rather than a default-argument reference to the main-actor static, which
@@ -155,6 +158,7 @@ final class AppState {
     // the live recording, so it clears the moment that recording ends.
     func apply(_ newState: RiverState) {
         let wasRecording = state == .recording
+        let wasIdle = state == .idle
         if state == .recording && newState != .recording {
             lastRecordingWasDiscarded = isDiscardPending
             lastRecordingWasCanceled = newState == .idle && !isDiscardPending
@@ -162,9 +166,16 @@ final class AppState {
         }
         state = newState
         switch newState {
-        case .recording: clearStatus()
-        case .processing: if wasRecording { scheduleReveal() }
-        case .idle: settleStatus()
+        case .recording:
+            clearStatus()
+            panelLeaving = nil
+        case .processing:
+            if wasRecording { scheduleReveal() }
+        case .idle:
+            settleStatus()
+            if !wasIdle {
+                panelLeaving = schedule(KawaIndicatorTimeline.longestExit) { [weak self] in self?.panelLeaving = nil }
+            }
         }
         if newState == .recording {
             errorMessage = nil
@@ -249,7 +260,7 @@ final class AppState {
         downloadProgress = progress
     }
 
-    /// How far the model in use has downloaded, for the row beside the indicator: while it
+    /// How far the model in use has downloaded, for the status in the indicator's place: while it
     /// downloads, and where a failed download stopped. Nil otherwise.
     var downloadFraction: Double? { downloadProgress[modelSelection.inUse] }
 
@@ -300,11 +311,18 @@ final class AppState {
         }
     }
 
-    // A status set while the panel is still up shows only after the hand-off, so its hold adds
-    // that time: it stays `statusHoldSeconds` on screen.
+    // A status set while a panel may still be up (River is busy, or idle with the panel still
+    // leaving) shows once that panel has gone, at most the hand-off later, so its hold adds the
+    // hand-off: it stays at least `statusHoldSeconds` on screen. One that replaces a wait's status
+    // takes its place at once, since a wait's status shows only once the panel has gone.
     private func show(_ status: DictationStatus) {
+        let replacesWait: Bool = switch dictationStatus {
+        case .model(.downloading), .model(.preparing), .model(.ready): true
+        default: false
+        }
         dictationStatus = status
-        let handOff = state != .idle && !isRevealDue ? KawaIndicatorTimeline.statusHandOff : 0
+        let panelMayBeUp = state != .idle || panelLeaving != nil
+        let handOff = panelMayBeUp && !replacesWait ? KawaIndicatorTimeline.statusHandOff : 0
         switch status {
         case .model(.failed), .held, .error:
             statusHold = schedule(handOff + Constants.statusHoldSeconds) { [weak self] in self?.endHold() }
@@ -317,6 +335,8 @@ final class AppState {
         }
     }
 
+    // A hold that runs out while River still decodes or types keeps its status until River is
+    // idle: Ready then stays until the text has typed, so something shows through the decode.
     private func endHold() {
         statusHold = nil
         if state == .idle { dictationStatus = nil }

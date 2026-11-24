@@ -420,7 +420,7 @@ struct AppStateDictationStatusTests {
         let (state, timers) = waiting(.loading)
         state.apply(modelLoadState: .ready)
         state.apply(.idle)
-        #expect(timers.pendingDelays.isEmpty)
+        #expect(!timers.pendingDelays.contains(handOff))
         #expect(state.dictationStatus == nil)
     }
 
@@ -442,7 +442,8 @@ struct AppStateDictationStatusTests {
         state.apply(.idle)
         #expect(state.dictationStatus == .model(.failed))
         // The status was already on screen, so the hold is the plain 4 s.
-        #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
+        #expect(timers.pendingDelays.contains(Constants.statusHoldSeconds))
+        #expect(!timers.pendingDelays.contains(handOff + Constants.statusHoldSeconds))
         timers.fire(after: Constants.statusHoldSeconds)
         #expect(state.dictationStatus == nil)
     }
@@ -486,6 +487,52 @@ struct AppStateDictationStatusTests {
         state.apply(.idle)
         #expect(state.dictationStatus == .held)
         timers.fire(after: handOff + Constants.statusHoldSeconds)
+        #expect(state.dictationStatus == nil)
+    }
+
+    @Test("an error after a long decode still waits for the panel and stays 4 s on screen")
+    func lateErrorWaitsForThePanel() {
+        // The hand-off timer runs on every dictation; once it has fired the panel may still be
+        // transcribing. A paste failing after a 1 s decode lets the panel go only then, so its
+        // hold still adds the hand-off (adversarial review, 2026-11-24).
+        let (state, timers) = make(.ready)
+        state.apply(.recording)
+        state.apply(.processing)
+        timers.fire(after: handOff)
+        state.apply(RiverError.textInsertion(underlying: NSError(domain: "x", code: 1)))
+        #expect(state.hidesPanel)
+        #expect(timers.pendingDelays.contains(handOff + Constants.statusHoldSeconds))
+    }
+
+    @Test("Paste last failing just after a dictation waits for the leaving panel; later it shows at once")
+    func errorAtIdleWaitsOnlyForALeavingPanel() {
+        let (state, timers) = make(.ready)
+        state.apply(.recording)
+        state.apply(.processing)
+        state.apply(.idle)
+        state.apply(RiverError.textInsertion(underlying: NSError(domain: "x", code: 1)))
+        #expect(timers.pendingDelays.contains(handOff + Constants.statusHoldSeconds))
+        // Once the panel has had time to leave, nothing is in the way.
+        let (later, laterTimers) = make(.ready)
+        later.apply(.recording)
+        later.apply(.processing)
+        later.apply(.idle)
+        laterTimers.fire(after: KawaIndicatorTimeline.longestExit)
+        later.apply(RiverError.textInsertion(underlying: NSError(domain: "x", code: 1)))
+        #expect(laterTimers.pendingDelays.contains(Constants.statusHoldSeconds))
+        #expect(!laterTimers.pendingDelays.contains(handOff + Constants.statusHoldSeconds))
+    }
+
+    @Test("Ready stays until the text has typed, however long the decode")
+    func readyStaysThroughTheDecode() {
+        // The panel has gone; Ready is the only thing on screen while the recording decodes and
+        // types, so it leaves only once River is idle.
+        let (state, timers) = waiting()
+        timers.fire(after: handOff)
+        state.apply(modelLoadState: .ready)
+        timers.fire(after: checkSeconds + Constants.statusReadyHoldSeconds)
+        #expect(state.dictationStatus == .model(.ready))
+        state.apply(.idle)
         #expect(state.dictationStatus == nil)
     }
 

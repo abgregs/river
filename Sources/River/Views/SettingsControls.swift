@@ -129,7 +129,6 @@ struct RiverPopUp<Value: Hashable>: View {
     let options: [(value: Value, label: String)]
     @Binding var selection: Value
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         Menu {

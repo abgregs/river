@@ -37,8 +37,9 @@ struct KawaIndicatorEvents: Equatable {
     var audio: Double = .infinity
     /// The recording ends.
     var release: Double = .infinity
-    /// The text is typed and River is idle again, and no status holds the panel (planning
-    /// 0004). The same moment as `release` for a cancel.
+    /// The panel leaves: the text is typed and River is idle again, or a dictation still
+    /// processing lets it go for a status (planning 0004). The same moment as `release` for a
+    /// cancel.
     var typed: Double = .infinity
 }
 
