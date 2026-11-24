@@ -340,6 +340,32 @@ struct AudioCaptureConvertTests {
     }
 
     @MainActor
+    @Test("a run no converter can take is dropped, the rest delivered, and release throws .conversionFailed")
+    func unconvertibleRunFailsLoudly() async throws {
+        // Without the throw, a recording with a hole in it would type as if it were whole. The
+        // 44.1 kHz run converts; the 24 kHz run gets no resampler.
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { 100 }, makeResampler: { format in
+            format.sampleRate == 24_000 ? nil : IncrementalResampler(from: format)
+        })
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 24_000))
+
+        do {
+            try await manager.stopRecording()
+            Issue.record("expected .conversionFailed, got a recording")
+        } catch AudioCaptureError.conversionFailed {
+            // the hole is reported, not passed off as the whole recording
+        } catch {
+            Issue.record("expected .conversionFailed, got \(error)")
+        }
+        #expect(abs(samples.count - 1_600) <= 1)
+    }
+
+    @MainActor
     @Test("a format no converter can take makes no resampler")
     func unconvertibleFormatHasNoResampler() throws {
         // A zero-channel source has no conversion path to 16 kHz mono. `AudioCaptureManager`

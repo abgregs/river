@@ -88,14 +88,20 @@ final class AudioCaptureManager {
     /// `architecture/river-pipeline.md` "The ready microphone and the pre-roll".
     static let warmupWaitSeconds: Double = 0.3
 
+    // internal for testability — makes each format run's resampler, so a test can make one
+    // format fail and see the run dropped and `.conversionFailed` thrown at release.
+    private let makeResampler: (AVAudioFormat) -> IncrementalResampler?
+
     init(
         microphone: MicrophoneCapability,
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-        watchdogInterval: Double = Constants.captureWatchdogIntervalSeconds
+        watchdogInterval: Double = Constants.captureWatchdogIntervalSeconds,
+        makeResampler: @escaping (AVAudioFormat) -> IncrementalResampler? = { IncrementalResampler(from: $0) }
     ) {
         self.microphone = microphone
         self.now = now
         self.watchdogInterval = watchdogInterval
+        self.makeResampler = makeResampler
     }
 
     /// Keeps the capture unit running between recordings, or not (planning 0033). While
@@ -213,7 +219,7 @@ final class AudioCaptureManager {
         bufferCount += 1
         if run?.format != buffer.format {
             finishRun()
-            let resampler = IncrementalResampler(from: buffer.format)
+            let resampler = makeResampler(buffer.format)
             if resampler == nil {
                 conversionFailed = true
                 logger.error("No converter from \(Int(buffer.format.sampleRate), privacy: .public) Hz, \(buffer.format.channelCount, privacy: .public) channels to 16 kHz mono")
@@ -225,8 +231,9 @@ final class AudioCaptureManager {
         do {
             deliver(try resampler.convert(buffer))
         } catch {
+            // Logged once: a converter that keeps failing would log every buffer, about 90 a second.
+            if !conversionFailed { logger.error("A buffer failed to convert to 16 kHz") }
             conversionFailed = true
-            logger.error("A buffer failed to convert to 16 kHz")
         }
     }
 
