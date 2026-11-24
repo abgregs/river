@@ -480,6 +480,9 @@ enum Constants {
     static let statusEntryBeatSeconds: Double = 0.12
     static let statusHoldSeconds: Double = 4
     static let statusReadyHoldSeconds: Double = 0.6
+    // A status still showing when a new recording starts leaves on a fade this quick, never cut
+    // (maintainer, 2026-11-24: "at least some subtle fade", 50 to 100 ms).
+    static let statusInterruptedFadeSeconds: Double = 0.1
     // The row (maintainer, size B, 2026-11-24): the glyph inset 6 pt in a 26 pt tile with a hairline
     // on its edge, the tile padded 5 pt inside the surface, so the row is 36 pt tall and its corner,
     // the tile's plus the padding, is 11 pt, the mark's panel's. The words 10 pt after the tile, at

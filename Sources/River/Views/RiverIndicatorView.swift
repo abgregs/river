@@ -89,6 +89,11 @@ struct RiverIndicatorView: View {
         .timingCurve(0.23, 1, 0.32, 1, duration: Constants.hudFadeSeconds)
     }
 
+    // A status a new recording interrupts: the same fade, quick enough that the two barely meet.
+    private var interruptedFade: Animation {
+        .timingCurve(0.23, 1, 0.32, 1, duration: Constants.statusInterruptedFadeSeconds)
+    }
+
     private var isTranscriptShown: Bool {
         TranscriptPanelView.isVisible(state: appState.state, isShown: appState.isLiveTextShown)
     }
@@ -100,11 +105,10 @@ struct RiverIndicatorView: View {
     private func updateMarkCycle() {
         let next = KawaIndicatorCycle.next(markCycle, activity: activity, isAudioFlowing: appState.isAudioFlowing,
                                            reduceMotion: reduceMotion, at: Date())
-        // A new recording takes the place at once: a status still showing goes without its fade.
+        // A new recording takes the place almost at once: a status still showing leaves on a
+        // quick fade while the panel comes in.
         if let next, next.id != markCycle?.id, shown != nil {
-            var instant = Transaction()
-            instant.disablesAnimations = true
-            withTransaction(instant) { shown = nil }
+            withAnimation(interruptedFade) { shown = nil }
         }
         markCycle = next
     }
@@ -113,7 +117,7 @@ struct RiverIndicatorView: View {
     // `showStatusWhenPanelGone`.
     private func updateShown(_ status: DictationStatus?) {
         guard let status else {
-            withAnimation(statusFade) { shown = nil }
+            withAnimation(appState.state == .recording ? interruptedFade : statusFade) { shown = nil }
             return
         }
         if shown != nil { shown = status }
