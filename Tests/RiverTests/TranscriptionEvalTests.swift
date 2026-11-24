@@ -44,20 +44,16 @@ struct TranscriptionEvalTests {
         var rows: [ScorecardRow] = []
         for clip in corpus.clips {
             let samples = try WhisperKitLoader.loadAudioSamples(fromPath: corpus.wavPath(for: clip))
-            // Mirror the production front-end: the app trims silence before
-            // decode (planning 0023), so the eval must too — otherwise silence
-            // clips would be judged on un-trimmed audio the app never sees.
-            let trimmed = AudioCaptureManager.trimSilence(samples)
-
+            // The app's own one-piece path (planning 0039): the silence trim (planning 0023),
+            // no decode for a clip the trim leaves empty, and the text as the app joins it, so
+            // silence clips are judged on the audio the app would decode. Nothing said comes
+            // back empty, the honest result for this eval, not a harness failure.
             let decodeStart = Date()
-            let output: String
-            if trimmed.isEmpty {
-                output = ""   // the app reads this as "nothing was said"; no decode
-            } else {
-                // A model that heard no speech (planning 0023, 0039) is the honest "empty
-                // output" result for this eval, not a harness failure.
-                output = try await manager.transcribe(audioSamples: trimmed) ?? ""
+            let outcome = await DictationStream.transcribe(samples) { clip in
+                try await manager.transcribe(audioSamples: clip)
             }
+            if let error = outcome.error { throw error }
+            let output = outcome.text
             let latency = Date().timeIntervalSince(decodeStart)
 
             rows.append(ScorecardRow(clip: clip, output: output, latencySeconds: latency))

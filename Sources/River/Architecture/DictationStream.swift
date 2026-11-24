@@ -1,23 +1,26 @@
 import Foundation
 import os
 
-/// One dictation transcribed while it is being spoken (0025 streaming prototype). Owned by
-/// `RiverSession` for a single recording: the capture feeds it 16 kHz samples as they arrive,
-/// `SpeechSegmenter` cuts them at pauses, each segment is decoded in order behind a serial
-/// queue, and `SegmentJoiner` stitches the results. At release `finish()` decodes only what
-/// was said since the last cut, so release-to-text is one short decode instead of the whole
-/// dictation.
+/// One dictation's audio, from the press to the text, and the one place that decides what audio
+/// each decode gets (planning 0039). Owned by `RiverSession` for a single recording: the capture
+/// feeds it the recording as 16 kHz samples as they arrive, and `finish()` turns it into text at
+/// release. The engine only ever sees "transcribe this clip" (the injected `decode`); the silence
+/// trim, the cuts, the overlap, the joins and the one-piece fallbacks are River's, the same for
+/// every model. What one engine needs of a clip, such as padding a short one, sits behind it.
 ///
-/// The engine only ever sees "transcribe this clip" (the injected `decode`); cut policy,
-/// overlap and joins are River's, the same for every model.
+/// While the user speaks (0025 streaming), `SpeechSegmenter` cuts the samples at pauses, each
+/// segment is decoded in order behind a serial queue, and `SegmentJoiner` stitches the results.
+/// At release `finish()` decodes only what was said since the last cut, so release-to-text is one
+/// short decode instead of the whole dictation. Between cuts, the phrase still being spoken is
+/// decoded every so often while the queue is idle, so the panel has text before the first pause.
+/// That provisional text is for the panel only: a committed segment replaces it, and it is never
+/// part of the outcome.
 ///
-/// Between cuts, the phrase still being spoken is decoded every so often while the queue is
-/// idle, so the panel has text before the first pause. That provisional text is for the panel
-/// only: a committed segment replaces it, and it is never part of the outcome.
-///
-/// Failure never leaves a hole: when a segment fails, streaming stops and everything from that
-/// segment's start is decoded in one piece at release, which is today's one-shot path. A segment
-/// the model hears no speech in is not a failure: it adds nothing, and streaming goes on.
+/// Every other dictation is decoded in one piece at release: one with no pause long enough to
+/// cut, one recorded with streaming off (the hidden `streamingDictation` switch), and one whose
+/// segment failed, from that segment's start, so a failure never leaves a hole. A segment the
+/// model hears no speech in is not a failure: it adds nothing, and streaming goes on. A recording
+/// a failed load kept is decoded the same way later (`transcribe(_:decode:)`).
 @MainActor
 final class DictationStream {
     /// The text, or nil when the model heard no speech (`TranscriptionManager.transcribe`).
@@ -33,12 +36,13 @@ final class DictationStream {
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "stream")
     private let decode: Decode
     private let sampleRate: Double = 16_000
+    private let streams: Bool
     private let overlapSamples: Int
     private let tailMinVoicedSeconds: Double
     private let provisionalIntervalSamples: Int?
     private let provisionalMinVoicedSeconds: Double
 
-    private(set) var samples: [Float] = []
+    private var samples: [Float] = []
     private var segmenter: SpeechSegmenter
     private var joiner = SegmentJoiner()
     private var queue: [(range: Range<Int>, cutAt: ContinuousClock.Instant)] = []
@@ -55,8 +59,8 @@ final class DictationStream {
     private var provisionalFrom = 0
     private(set) var provisionalCount = 0
 
-    /// Segments cut so far. Zero means the dictation never paused long enough to cut, and the
-    /// session decodes it the ordinary way.
+    /// Segments cut so far. Zero means the dictation never paused long enough to cut, or
+    /// streaming was off, and release decodes it in one piece.
     private(set) var cutCount = 0
 
     /// Called whenever the shown text changes: the transcript, then any provisional text.
@@ -71,8 +75,11 @@ final class DictationStream {
     var text: String { joiner.text }
     var shownText: String { [joiner.text, provisional].filter { !$0.isEmpty }.joined(separator: " ") }
 
+    /// `streaming` false keeps every decode for release: nothing is cut or decoded while the
+    /// user speaks, and the recording is decoded in one piece.
     init(
         decode: @escaping Decode,
+        streaming: Bool = true,
         segmenter: SpeechSegmenter = SpeechSegmenter(),
         overlapSeconds: Double = Constants.streamingOverlapSeconds,
         tailMinVoicedSeconds: Double = Constants.streamingTailMinVoicedSeconds,
@@ -80,6 +87,7 @@ final class DictationStream {
         provisionalMinVoicedSeconds: Double = Constants.streamingProvisionalMinVoicedSeconds
     ) {
         self.decode = decode
+        self.streams = streaming
         self.segmenter = segmenter
         self.overlapSamples = Int(overlapSeconds * 16_000)
         self.tailMinVoicedSeconds = tailMinVoicedSeconds
@@ -87,11 +95,19 @@ final class DictationStream {
         self.provisionalMinVoicedSeconds = provisionalMinVoicedSeconds
     }
 
+    /// A recording a failed load kept (planning 0004), decoded in one piece through the same
+    /// path as a dictation's release. There is no wait: it runs once the model is ready.
+    static func transcribe(_ recording: [Float], decode: @escaping Decode) async -> Outcome {
+        let stream = DictationStream(decode: decode, streaming: false)
+        stream.append(recording)
+        return await stream.finish()
+    }
+
     /// Adds newly captured 16 kHz mono samples and queues any segment they complete.
     func append(_ newSamples: [Float]) {
         guard !isCanceled else { return }
         samples.append(contentsOf: newSamples)
-        guard failedFrom == nil else { return }
+        guard streams, failedFrom == nil else { return }
         let start = segmenter.segmentStart
         var from = start
         for cut in segmenter.advance(over: samples) {
@@ -102,32 +118,39 @@ final class DictationStream {
         pump()
     }
 
-    /// Waits for queued segments, decodes what is left after the last cut, and returns the
-    /// transcript. Call once, after the capture has delivered its last samples.
-    func finish() async -> Outcome {
+    /// Waits for queued segments, decodes what is left, and returns the transcript: the tail
+    /// after the last cut, or else everything not yet decoded, in one piece. Call once, after the
+    /// capture has delivered its last samples. The shown text ends as the transcript, with no
+    /// provisional text after it.
+    ///
+    /// `whenReady` is the session's wait for the model (planning 0004). It runs before a
+    /// one-piece decode, and only when its clip holds speech after the trim, so a stray tap never
+    /// waits; it gets that clip, which a failed load keeps, and returns false when the dictation
+    /// ends there, which cancels the stream. The tail needs no wait: a segment decoded before it.
+    func finish(whenReady: @MainActor (_ clip: [Float]) async -> Bool = { _ in true }) async -> Outcome {
         isFinishing = true
         await settle()
         guard !isCanceled else { return Outcome(text: "", error: nil) }
-        let tail = (failedFrom ?? segmenter.segmentStart)..<samples.count
-        let start = ContinuousClock.now
-        var tailError: Error?
-        if failedFrom == nil, !joiner.isEmpty, segmenter.voicedSeconds(in: tail) < tailMinVoicedSeconds {
-            // Room tone or a breath after the last phrase: decoding it is how "Thank you." gets in.
-            logger.info("Tail skipped: \(self.seconds(tail.count), privacy: .public) s with no speech")
-        } else if !tail.isEmpty {
-            do {
-                if failedFrom != nil {
-                    try await decodeCold(tail)
-                } else {
-                    try await decodeSegment(tail)
+        let rest = (failedFrom ?? segmenter.segmentStart)..<samples.count
+        var failure: Error?
+        do {
+            if failedFrom == nil, cutCount > 0 {
+                try await decodeTail(rest)
+            } else {
+                guard try await decodeInOnePiece(rest, whenReady: whenReady) else {
+                    cancel()
+                    return Outcome(text: "", error: nil)
                 }
-            } catch {
-                tailError = error
-                logger.error("Tail decode failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             }
-            logger.info("Tail: \(self.seconds(tail.count), privacy: .public) s of audio decoded in \(self.elapsed(since: start), privacy: .public) s")
+        } catch {
+            failure = error
+            logger.error("Release decode failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
         }
-        return Outcome(text: joiner.text, error: tailError)
+        if !provisional.isEmpty {
+            provisional = ""
+            onTextChange?(shownText)
+        }
+        return Outcome(text: joiner.text, error: failure)
     }
 
     /// Drops everything not yet decoded and ignores any decode still running.
@@ -138,16 +161,44 @@ final class DictationStream {
         worker = nil
     }
 
-    /// `cancel()`, then waits for a decode still running, so the engine is free for the next.
-    func cancelAndWait() async {
-        let running = worker
-        cancel()
-        await running?.value
-    }
-
     // internal for testability — waits for the segments queued so far to be decoded.
     func settle() async {
         while let worker { await worker.value }
+    }
+
+    // internal for testability — leading/trailing silence trim on a 16 kHz mono clip, run on
+    // every clip right before it is decoded. Whisper's worst failure mode is inventing text
+    // ("Thank you for watching.") from silent audio: an accidental activation captures pure
+    // silence, and every real utterance carries trailing breath. Drop quiet RMS windows at
+    // both ends, keeping `leadSeconds` before detected speech and `tailSeconds` after it, so a
+    // word's soft onset survives. The gate is `energyThreshold` for normal speech and drops
+    // toward `floor` for a quiet recording, tracking its loudest window, so a whispered
+    // dictation is kept rather than discarded whole. All-silence in → [] out: nothing was
+    // said, so nothing is decoded (planning 0023). Pure.
+    nonisolated static func trimSilence(
+        _ samples: [Float],
+        sampleRate: Double = 16_000,
+        energyThreshold: Float = Constants.silenceTrimEnergyThreshold,
+        peakRatio: Float = Constants.silenceTrimPeakRatio,
+        floor: Float = Constants.silenceTrimFloor,
+        leadSeconds: Double = Constants.silenceTrimLeadSeconds,
+        tailSeconds: Double = Constants.silenceTrimTailSeconds
+    ) -> [Float] {
+        guard !samples.isEmpty else { return [] }
+        let window = max(1, Int(sampleRate * 0.02))  // 20 ms RMS window
+        let windows = stride(from: 0, to: samples.count, by: window).map { start in
+            let end = min(start + window, samples.count)
+            var sumSquares: Float = 0
+            for i in start..<end { sumSquares += samples[i] * samples[i] }
+            return (start: start, end: end, rms: (sumSquares / Float(end - start)).squareRoot())
+        }
+        let peak = windows.map(\.rms).max() ?? 0
+        let threshold = max(floor, min(energyThreshold, peak * peakRatio))
+        let voiced = windows.filter { $0.rms >= threshold }
+        guard let first = voiced.first?.start, let last = voiced.last?.end else { return [] }
+        let lower = max(0, first - Int(sampleRate * leadSeconds))
+        let upper = min(samples.count, last + Int(sampleRate * tailSeconds))
+        return Array(samples[lower..<upper])
     }
 
     // Starts the worker when idle: queued segments first, else a provisional decode if due.
@@ -206,6 +257,34 @@ final class DictationStream {
         }
     }
 
+    // What was said since the last cut. Room tone or a breath after the last phrase is left
+    // out: decoding it is how "Thank you." gets in.
+    private func decodeTail(_ tail: Range<Int>) async throws {
+        if !joiner.isEmpty, segmenter.voicedSeconds(in: tail) < tailMinVoicedSeconds {
+            logger.info("Tail skipped: \(self.seconds(tail.count), privacy: .public) s with no speech")
+            return
+        }
+        guard !tail.isEmpty else { return }
+        let start = ContinuousClock.now
+        try await decodeSegment(tail)
+        logger.info("Tail: \(self.seconds(tail.count), privacy: .public) s of audio decoded in \(self.elapsed(since: start), privacy: .public) s")
+    }
+
+    // The one-piece decode: `range` trimmed once, waited for, and decoded in one call. False
+    // when `whenReady` ended the dictation.
+    private func decodeInOnePiece(_ range: Range<Int>, whenReady: @MainActor (_ clip: [Float]) async -> Bool) async throws -> Bool {
+        let clip = Self.trimSilence(Array(samples[range]))
+        guard !clip.isEmpty else {
+            logger.info("One piece: no speech in \(self.seconds(range.count), privacy: .public) s, nothing to decode")
+            return true
+        }
+        guard await whenReady(clip) else { return false }
+        let start = ContinuousClock.now
+        join(try await decode(clip), decodedAlone: range)
+        logger.info("One piece: \(self.seconds(clip.count), privacy: .public) s of audio decoded in \(self.elapsed(since: start), privacy: .public) s")
+        return true
+    }
+
     // Decodes a segment with the previous one's end in front of it, falling back to a cold
     // decode when the overlap can't be aligned.
     private func decodeSegment(_ range: Range<Int>) async throws {
@@ -222,12 +301,13 @@ final class DictationStream {
                 logger.info("Overlap did not align; decoding the segment on its own")
             }
         }
-        try await decodeCold(range)
+        join(try await decodeClip(range), decodedAlone: range)
     }
 
-    private func decodeCold(_ range: Range<Int>) async throws {
-        guard let decoded = try await decodeClip(range) else {
-            // Nothing said: the next segment has no overlap to align against.
+    // A clip decoded on its own joins the transcript as it is. Nothing said adds nothing, and
+    // the next segment has no overlap to align against.
+    private func join(_ decoded: String?, decodedAlone range: Range<Int>) {
+        guard let decoded else {
             previous = nil
             if !provisional.isEmpty {
                 provisional = ""
@@ -244,7 +324,7 @@ final class DictationStream {
 
     // The clip with silence trimmed, decoded; nil when it holds no speech.
     private func decodeClip(_ range: Range<Int>) async throws -> String? {
-        let clip = AudioCaptureManager.trimSilence(Array(samples[range]))
+        let clip = Self.trimSilence(Array(samples[range]))
         guard !clip.isEmpty else { return nil }
         return try await decode(clip)
     }

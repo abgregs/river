@@ -1,6 +1,6 @@
 # Planning: One Owner per Dictation Pipeline Rule (0039)
 
-**Status: A and B built 2026-11-23 on `refactor/pipeline-owners`; C follows in the same PR, D after it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
+**Status: A, B and C built 2026-11-23 on `refactor/pipeline-owners`, one PR; D follows it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
 
 ## Why
 
@@ -48,11 +48,13 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 
 ### C. One module decides what audio each decode gets
 
-- `DictationStream` turns a recording into text on every path: the segments cut while the user speaks, the tail at release, the live text, and every one-piece case (no cut, a failed segment, a kept recording, streaming off, a capture failure). The session hands it the recording and gets text back; a kept recording becomes a request to the same module.
-- It takes the silence trim from `AudioCaptureManager`, and makes one 16 kHz conversion of the recording (the live one, finished at the end) where there are two today. The one-piece decode is written once.
+- `DictationStream` turns a recording into text on every path: the segments cut while the user speaks, the tail at release, the live text, and every one-piece case (no cut, a failed segment, a kept recording, streaming off, a capture failure). The session hands it the recording and gets text back; a kept recording becomes a request to the same module (`DictationStream.transcribe(_:decode:)`).
+- It takes the silence trim from `AudioCaptureManager` and runs it on each clip right before its decode. The recording is converted to 16 kHz once, live, where there were two conversions: `AudioCaptureManager` resamples each buffer as it arrives, finishes each format run's resampler at its end so no sample is held back, and keeps no copy. The one-piece decode is written once. **Why the conversion stays in capture** (built 2026-11-23, in place of the stream converting): `AudioCaptureManager` owns the device formats and their runs ([0032](0032_first-recording-device-switch.md)), and the stream's input stays plain 16 kHz samples, which D's replay feeds from files.
+- **The wait for the model moves to the decode.** The stream asks the session to wait (`finish(whenReady:)`) just before a one-piece decode, and only for a clip that holds speech after the trim, so a stray tap never waits; the clip it hands over is what a failed load keeps. The tail needs no wait: a segment decoded before it.
 - The hidden `streamingDictation` switch stays, as one path inside the module.
+- **What a user can see change.** With streaming off, a recording cut short now types what was heard, as it does with streaming on; before, it typed nothing. With no cut, the live text ends on the typed text rather than on the last provisional decode. A one-piece transcript is joined like a streamed one, so the spacing between its words is one space.
 - Unchanged: the cut, overlap and join rules (0025, [0034](0034_live-text-and-microphone-settings.md)); the wait for the model ([0004](0004_model-loading-indicator.md)).
-- **Tests.** A fake decoder records every clip on every path; session tests stop needing held loads and polling.
+- **Tests.** A fake decoder records every clip the stream hands the engine, on every path, and a fake wait records what a failed load keeps; `FakeModel` records the clips session tests reach. Session tests keep held loads only where the wait for the model is what they test.
 
 ### D. Replay harness
 
@@ -93,7 +95,7 @@ A, B and C ship as one PR, `refactor/pipeline-owners`, with a commit series per 
 
 1. **A.** An empty result from either engine types nothing, shows no error, and keeps live streaming. No caller catches an engine's own error, and session tests reach typed text through `FakeModel`, with `transcribeResultForTesting` gone.
 2. **B.** Paste last pressed twice types the text twice, in order (tested). No chunk is one character, and on device a 421-character transcript types in order in Claude Code. A change of app mid-insert stops typing and holds the text.
-3. **C.** Tests see every clip an engine gets, on every path; the one-piece decode exists once; the trim and the conversion run once per recording.
+3. **C.** Tests see every clip an engine gets, on every path; the one-piece decode exists once; the conversion runs once per recording, and the trim in one place, the module, before each decode.
 4. **D.** The replay runs a model over the corpus with streaming on and off and writes word errors and text-shape results; a clip over 30 s types in full on every model.
 
 ## Not in this plan

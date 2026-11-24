@@ -21,6 +21,10 @@ final class FakeModelLoader: ModelLoader {
     /// What each model hears in any audio, in place of its own name; "" means no speech.
     var texts: [String: String] = [:]
 
+    /// The length of every clip a model was given, in seconds at 16 kHz, in order: the audio
+    /// River handed its engine's adapter (planning 0039).
+    private(set) var clipSeconds: [Double] = []
+
     /// Whether each transcription waits for `finishTranscriptions()`, so a test can hold one
     /// open and see what else runs meanwhile.
     var holdsTranscriptions = false
@@ -62,7 +66,8 @@ final class FakeModelLoader: ModelLoader {
         for transcription in held { transcription.resume() }
     }
 
-    fileprivate func transcriptionStarted() async {
+    fileprivate func transcriptionStarted(_ samples: [Float]) async {
+        clipSeconds.append(Double(samples.count) / 16_000)
         transcriptionsRunning += 1
         mostTranscriptionsAtOnce = max(mostTranscriptionsAtOnce, transcriptionsRunning)
         if holdsTranscriptions { await withCheckedContinuation { heldTranscriptions.append($0) } }
@@ -102,7 +107,7 @@ final class FakeModel: LoadedModel {
     }
 
     func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String? {
-        await loader?.transcriptionStarted()
+        await loader?.transcriptionStarted(samples)
         loader?.transcriptionEnded()
         let text = loader?.texts[name] ?? name
         return text.isEmpty ? nil : text

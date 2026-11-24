@@ -46,7 +46,7 @@ A local directory **outside the repo** (and outside `~/Desktop`|`Documents`|`Dow
 - `reference` — the hand-verified transcript. Normalization is applied at score time, so casing and punctuation here don't matter.
 - `tags` — any of `commands`, `long-form`, `silence-heavy`. **`silence-heavy` clips are scored pass/fail on emptiness, not WER** (an empty output is the correct answer, which WER can't express); give them an empty `reference`. They are [0023](../planning/0023_silence-decoding-hardening.md)'s regression fixtures — a silence clip that produces text fails the run.
 
-The harness mirrors the production front-end: it trims silence ([0023](../planning/0023_silence-decoding-hardening.md)) before decode, so silence clips are judged on the audio the app actually sees.
+The harness runs each clip through the app's own one-piece path, `DictationStream.transcribe(_:decode:)` ([0039](../planning/0039_pipeline-rule-owners.md)): the silence trim ([0023](../planning/0023_silence-decoding-hardening.md)) before decode, and no decode for a clip the trim leaves empty, so silence clips are judged on the audio the app actually sees.
 
 ### Running
 
