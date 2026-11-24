@@ -52,8 +52,9 @@ final class RiverSession {
     }
     private let lastTranscriptAvailableSubject = CurrentValueSubject<Bool, Never>(false)
 
-    // Recordings a failed load kept, in order, for the next load that succeeds (planning 0004).
-    // Memory only, like `lastTranscript`: a quit loses them. Never logged.
+    // Recordings a failed load kept, in order, for the next load that succeeds (planning 0004):
+    // each the clip its dictation would have decoded, silence already trimmed. Memory only,
+    // like `lastTranscript`: a quit loses them. Never logged.
     private var keptRecordings: [[Float]] = [] {
         didSet { keptCountSubject.send(keptRecordings.count) }
     }
@@ -64,7 +65,8 @@ final class RiverSession {
     // so the engine runs one decode at a time.
     private var keptDecode: Task<Void, Never>?
 
-    // The recording's live transcription when streaming is on (0025 prototype); nil otherwise.
+    // The recording's audio and its transcription, made at every press (planning 0039); nil
+    // between recordings.
     private var stream: DictationStream?
     // The text transcribed so far for the transcript panel. Unlike `lastTranscript` this
     // content does reach the UI layer: showing it is the point. Still never logged.
@@ -194,7 +196,9 @@ final class RiverSession {
         }
         hotkey.onCancel = { [weak self] in self?.handleCancel() }
         hotkey.onDiscard = { [weak self] in self?.handleDiscard() }
-        hotkey.onPasteLast = { [weak self] in self?.pasteLastTranscript() }
+        hotkey.onPasteLast = { [weak self] in
+            Task { @MainActor in await self?.pasteLastTranscript() }
+        }
         hotkey.onCopyLast = { [weak self] in self?.copyLastTranscript() }
         hotkey.onToggleLiveText = { [weak self] in self?.toggleLiveText() }
         hotkey.isRecording = { [weak self] in self?.currentState == .recording }
@@ -243,26 +247,30 @@ final class RiverSession {
         liveTextAllowedSubject.send(transcription.currentModelLoadState == .ready)
         // Made even while the model isn't ready: its segments fail until it is, and it then
         // decodes from the first failed one in one piece at release.
-        let stream = settings.value(for: Settings.streamingDictation) ? makeStream() : nil
+        let stream = makeStream(streaming: settings.value(for: Settings.streamingDictation))
         self.stream = stream
         let audio = self.audio
         Task { @MainActor in
-            await audio.startRecording(onSamples: stream.map { stream in { stream.append($0) } })
+            await audio.startRecording { stream.append($0) }
         }
     }
 
-    private func makeStream() -> DictationStream {
-        let stream = DictationStream { [weak self] samples in
+    // Each decode takes its turn after any kept recordings' decode. Only a streaming dictation
+    // shows text while it is spoken; with streaming off the live text stays empty.
+    private func makeStream(streaming: Bool) -> DictationStream {
+        let stream = DictationStream(decode: { [weak self] samples in
             guard let self else { throw CancellationError() }
             return try await self.transcribeInTurn(samples)
+        }, streaming: streaming)
+        if streaming {
+            stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
+            stream.showsPreview = settings.value(for: Settings.showLiveText)
         }
-        stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
-        stream.showsPreview = settings.value(for: Settings.showLiveText)
         return stream
     }
 
     // internal for testability — full cycle: `.recording` → `.processing` →
-    // capture/convert/transcribe/paste → `.idle`. Async so tests can `await`
+    // capture/transcribe/paste → `.idle`. Async so tests can `await`
     // the complete cycle. Each step's failure is caught independently so the
     // cycle always returns to `.idle` and pending reconfiguration applies;
     // getting stuck in `.processing` would freeze the app (river-pipeline.md).
@@ -282,85 +290,38 @@ final class RiverSession {
         let stream = self.stream
         self.stream = nil
         let released = ContinuousClock.now
+        var captureError: Error?
         do {
-            let samples = try await audio.stopRecording()
-            logger.info("Captured \(samples.count, privacy: .public) samples")
-            if let stream, stream.cutCount > 0 {
-                guard await waitForModel(keeping: samples) else {
-                    stream.cancel()
-                    return
-                }
-                // Streaming: the segments are already decoded; only the tail is left.
-                let outcome = await stream.finish()
-                logger.info("Streamed \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
-                if let error = outcome.error {
-                    errorSubject.send(.transcription(underlying: error))
-                }
-                if outcome.text.isEmpty {
-                    logger.info("Stream found no speech; skipping paste")
-                } else {
-                    liveTranscriptSubject.send(outcome.text)
-                    await deliver(outcome.text, into: app)
-                }
-            } else if samples.isEmpty {
-                stream?.cancel()
-                // Buffers arrived but the silence trim removed everything: an
-                // all-silence recording (a stray key-brush, an accidental tap). The
-                // user said nothing — NOT a failure. Drop silently: don't decode
-                // (Whisper hallucinates text from silence), don't paste, don't raise
-                // the error glyph. The `notices` channel clears on recording-end
-                // (AppState) so a post-recording message wouldn't survive there, and
-                // a stray brush shouldn't nag; logged for observability (planning
-                // 0023). A recording that DID contain speech but decoded empty still
-                // throws `.emptyTranscription` below and surfaces loudly.
-                logger.info("Recording was all silence after trim; skipping decode")
-            } else {
-                // No pause long enough to cut (or streaming off): the one-shot decode,
-                // after any provisional decode still running, so the two never overlap.
-                if let stream {
-                    await stream.cancelAndWait()
-                    logger.info("Stream made no cut (\(stream.provisionalCount, privacy: .public) provisional); decoding in one piece")
-                }
-                guard await waitForModel(keeping: samples) else { return }
-                do {
-                    let text = try await transcribeInTurn(samples)
-                    logger.info("Transcribed \(text.count, privacy: .public) chars; release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
-                    await deliver(text, into: app)
-                } catch TranscriptionError.noSpeechDetected {
-                    // Decode heard only non-speech (breath, room tone, music the
-                    // trim didn't catch): same policy as the all-silence branch
-                    // above — nothing was said, so no paste and no error glyph
-                    // (planning 0023). When the 0002/0018/0020 feedback surface
-                    // lands, it becomes the home for a friendly "no speech
-                    // detected" notice; until then this is log-only.
-                    logger.info("Decode found no speech; skipping paste")
-                } catch {
-                    logger.error("Transcription failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-                    errorSubject.send(.transcription(underlying: error))
-                }
-            }
+            try await audio.stopRecording()
         } catch {
             logger.error("Audio capture failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-            // Type what was heard (decided 2026-10-23): the stream decoded the audio that
-            // did arrive, and discarding it would lose the user's words along with the
-            // ones the microphone never delivered. The error follows the text. Not when no
-            // live audio arrived: then the stream holds only the pre-roll, audio from before
-            // the press, which is never typed on its own (planning 0033).
-            if case AudioCaptureError.noAudioCaptured = error {
-                stream?.cancel()
-            } else if let stream {
-                if await waitForModel(keeping: AudioCaptureManager.trimSilence(stream.samples)) {
-                    let outcome = await stream.finish()
-                    if !outcome.text.isEmpty {
-                        logger.info("Typing the \(outcome.text.count, privacy: .public) chars heard before capture failed")
-                        liveTranscriptSubject.send(outcome.text)
-                        await deliver(outcome.text, into: app)
-                    }
-                } else {
-                    stream.cancel()
-                }
+            captureError = error
+        }
+        if case AudioCaptureError.noAudioCaptured? = captureError {
+            // No live audio arrived, so the stream holds only the pre-roll, audio from before the
+            // press, which is never typed on its own (planning 0033).
+            stream?.cancel()
+        } else if let stream {
+            // The stream decodes what is left, on every path (planning 0039). After a capture
+            // failure that is the audio that did arrive: discarding it would lose the user's words
+            // along with the ones the microphone never delivered, so the text is typed and the
+            // error follows it (decided 2026-10-23). A recording the trim leaves empty (a stray
+            // key-brush, an accidental tap) decodes nothing and never waits for the model. Nothing
+            // said is not a failure: no paste, no error, and no notice, since a stray brush
+            // shouldn't nag (planning 0023).
+            let outcome = await stream.finish { [weak self] clip in
+                await self?.waitForModel(keeping: clip) ?? false
             }
-            errorSubject.send(.audioCapture(underlying: error))
+            logger.info("Released after \(stream.cutCount, privacy: .public) segments, \(stream.provisionalCount, privacy: .public) provisional; \(outcome.text.count, privacy: .public) chars, release-to-text \(String(format: "%.2f", Self.seconds(since: released)), privacy: .public) s with \(self.transcription.currentModelName, privacy: .public)")
+            if let error = outcome.error {
+                errorSubject.send(.transcription(underlying: error))
+            }
+            if !outcome.text.isEmpty {
+                await deliver(outcome.text, into: app)
+            }
+        }
+        if let captureError {
+            errorSubject.send(.audioCapture(underlying: captureError))
         }
     }
 
@@ -376,8 +337,10 @@ final class RiverSession {
 
     // Waits in `.processing` for a model still downloading or getting ready (planning 0004),
     // so a press meanwhile is ignored; `true` once it is ready to decode. `false` when the
-    // dictation ends here: the load failed and `recording` is kept for the next load that
-    // succeeds, or Cancel Dictation threw it away. A load that has already failed fails at once.
+    // dictation ends here: the load failed and `recording`, the clip the stream would have
+    // decoded, is kept for the next load that succeeds, or Cancel Dictation threw it away. A
+    // load that has already failed fails at once. The stream asks only for a clip that holds
+    // speech, so a stray tap never waits.
     private func waitForModel(keeping recording: [Float]) async -> Bool {
         let state = transcription.currentModelLoadState
         guard state != .ready else { return true }
@@ -392,7 +355,6 @@ final class RiverSession {
             logger.info("Model ready; transcribing the dictation that waited")
             return true
         } catch TranscriptionError.modelLoadFailed {
-            guard !recording.isEmpty else { return false }
             keptRecordings.append(recording)
             logger.info("Model failed to load; \(self.keptRecordings.count, privacy: .public) recordings kept")
             eventSubject.send(.recordingKept)
@@ -404,30 +366,36 @@ final class RiverSession {
     }
 
     // A decode for the current dictation, after any kept recordings' decode still running.
-    private func transcribeInTurn(_ samples: [Float]) async throws -> String {
+    private func transcribeInTurn(_ samples: [Float]) async throws -> String? {
         await keptDecode?.value
         return try await transcription.transcribe(audioSamples: samples)
     }
 
     // Transcribes the recordings a failed load kept, once the model is ready and River is idle
-    // (planning 0004): one at a time, stopping when a dictation starts. The text is joined with
-    // a space, since Paste last types it and a newline is Return, and held as the last
+    // (planning 0004): one at a time, stopping when a dictation starts, each in one piece through
+    // `DictationStream`, as its dictation would have been (planning 0039). The text is joined
+    // with a space, since Paste last types it and a newline is Return, and held as the last
     // transcript, never typed. Idempotent; the work runs in a task, after the caller returns.
     private func transcribeKeptRecordings() {
         guard keptDecode == nil, !keptRecordings.isEmpty, currentState == .idle,
               transcription.currentModelLoadState == .ready else { return }
+        let transcription = self.transcription
         keptDecode = Task { @MainActor [weak self] in
             guard let self else { return }
             var texts: [String] = []
             while let recording = self.keptRecordings.first, self.currentState == .idle,
                   self.transcription.currentModelLoadState == .ready {
-                do {
-                    texts.append(try await self.transcription.transcribe(audioSamples: recording))
-                } catch TranscriptionError.noSpeechDetected, TranscriptionError.emptyTranscription {
-                    self.logger.info("A kept recording held no speech")
-                } catch {
+                // Straight to the engine: this decode is the turn a dictation's decodes wait for.
+                let outcome = await DictationStream.transcribe(recording) { samples in
+                    try await transcription.transcribe(audioSamples: samples)
+                }
+                if let error = outcome.error {
                     self.logger.error("Kept recording failed to transcribe: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
                     self.errorSubject.send(.transcription(underlying: error))
+                } else if outcome.text.isEmpty {
+                    self.logger.info("A kept recording held no speech")
+                } else {
+                    texts.append(outcome.text)
                 }
                 self.keptRecordings.removeFirst()
             }
@@ -454,17 +422,15 @@ final class RiverSession {
     // Retains the transcript, then types it at the cursor. Retained before the paste
     // attempt: recovery is available even when insertion fails (planning 0019 AC1).
     // Content is never logged — only its count is; see logging.md anti-pattern #4.
-    // When `app`, the app in front at the release, is no longer in front, River types nothing
-    // and holds the text: it would land in an app the user never dictated into (planning 0004).
+    // When `app`, the app in front at the release, leaves the front before or while River types,
+    // the delivery stops and River holds the text: it would land in an app the user never
+    // dictated into (planning 0004, 0039).
     private func deliver(_ text: String, into app: pid_t?) async {
         lastTranscript = text
-        if let app, textInsertion.appInFront() != app {
-            logger.info("The app in front changed after the release; holding \(text.count, privacy: .public) chars")
-            eventSubject.send(.textHeld)
-            return
-        }
         do {
-            try await textInsertion.insertText(text)
+            if try await textInsertion.deliver(text, to: app) == .held {
+                eventSubject.send(.textHeld)
+            }
         } catch {
             logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             errorSubject.send(.textInsertion(underlying: error))
@@ -652,22 +618,22 @@ final class RiverSession {
     }
 
     /// Paste last transcription's shortcut (spec 0036): types the last transcription again at
-    /// the cursor through the same insertion path, so the clipboard is never touched. Does
-    /// nothing with no transcription yet, or while a dictation is recording or processing.
-    func pasteLastTranscript() {
+    /// the cursor through the same insertion path, so the clipboard is never touched, after any
+    /// insert still typing (planning 0039). Does nothing with no transcription yet, or while a
+    /// dictation is recording or processing. A change of app while it types stops it and shows
+    /// nothing: the panel draws a status only during a dictation, and the text stays the last
+    /// transcript.
+    func pasteLastTranscript() async {
         guard currentState == .idle, let text = lastTranscript else {
             logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
             return
         }
         logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                try await self.textInsertion.insertText(text)
-            } catch {
-                self.logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
-                self.errorSubject.send(.textInsertion(underlying: error))
-            }
+        do {
+            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront())
+        } catch {
+            logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
+            errorSubject.send(.textInsertion(underlying: error))
         }
     }
 

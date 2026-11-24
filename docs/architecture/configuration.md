@@ -30,7 +30,7 @@ Settings keys (the target set; declared progressively as their consumers land �
 | `copyLastShortcut` | `Shortcut` (a combination) | `Constants.defaultCopyLastShortcut` (⌃⌥C) | `RiverSession` → `HotkeyManager.setShortcut(_:for:)` |
 | `liveTextShortcut` | `Shortcut` (a combination) | `Constants.defaultLiveTextShortcut` (⌃⌥L) | `RiverSession` → `HotkeyManager.setShortcut(_:for:)` |
 | `showLiveText` | `Bool` | `false` | Written by `RiverSession.toggleLiveText()`; read by the recording's `DictationStream` and, through `AppState`, the indicator ([0034](../planning/0034_live-text-and-microphone-settings.md)) |
-| `streamingDictation` | `Bool` | `true` | `RiverSession`, at each recording's start; no UI, a `defaults write` fallback to the one-shot decode ([0034](../planning/0034_live-text-and-microphone-settings.md), decision 1) |
+| `streamingDictation` | `Bool` | `true` | `RiverSession`, at each recording's start, which hands it to the recording's `DictationStream`; no UI, a `defaults write` fallback that decodes each recording in one piece at release ([0034](../planning/0034_live-text-and-microphone-settings.md), decision 1; [0039](../planning/0039_pipeline-rule-owners.md)) |
 | `customDictionaryTerms` | `[String]` | `Constants.defaultDictionaryTerms` | *no planned consumer — the [0008](../planning/0008_custom-dictionary-redesign.md) redesign was dropped 2026-07-06; key and prompt plumbing retained in code pending removal* |
 | `selectedModel` | `String` | `Constants.defaultModel` | Written by `RiverSession` once a model is in use and ready; read by `AppDelegate` at launch |
 | `launchAtLogin` | `Bool` | `false` | Settings window, General → `SMAppService` |

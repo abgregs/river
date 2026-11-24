@@ -9,7 +9,7 @@ enum AudioCaptureError: Error, LocalizedError {
     /// `requirements/core-feature.md` item 2 — short taps must not silently
     /// produce a zero-length recording.
     case noAudioCaptured
-    /// `AVAudioConverter` initialization or `convert` returned an error.
+    /// `AVAudioConverter` couldn't be made for a buffer's format, or a conversion returned an error.
     case conversionFailed
     /// Buffers arrived, but they cover far less of the recording than its wall time:
     /// the engine stopped part-way (an audio device change it could not recover from)
@@ -34,7 +34,6 @@ final class AudioCaptureManager {
     private let microphone: MicrophoneCapability
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "audio")
 
-    private var buffers: [AVAudioPCMBuffer] = []
     // One standing subscription to the capability's buffers, installed on first use. The
     // sink routes each buffer by state: into the recording, into the pre-roll window
     // while the microphone is ready between recordings, or nowhere.
@@ -50,10 +49,18 @@ final class AudioCaptureManager {
     // Audio seeded from the window at the press, for the log line only: it is kept out
     // of `capturedSeconds` and the first-buffer clock, which measure live capture.
     private var seededSeconds: Double = 0
-    // Live 16 kHz feed for streaming (0025 prototype): each buffer is also resampled as it
-    // arrives and handed to `onSamples`. The batch conversion at stop time is unchanged.
-    private var onSamples: (@MainActor ([Float]) -> Void)?
-    private var resampler: IncrementalResampler?
+    // The recording's one conversion (planning 0039): each buffer is resampled to 16 kHz mono
+    // as it arrives and handed to `onSamples`, the dictation that decodes it. Each run of
+    // same-format buffers has its own resampler, finished when the format changes and when the
+    // recording stops, so the samples its filter holds back are delivered too.
+    private var onSamples: @MainActor ([Float]) -> Void = { _ in }
+    private var run: (format: AVAudioFormat, resampler: IncrementalResampler?)?
+    // Set when a buffer couldn't be converted; `stopRecording` then throws `.conversionFailed`.
+    private var conversionFailed = false
+    // For the log line only: what the recording delivered, and the rate of each format run.
+    private var bufferCount = 0
+    private var sampleCount = 0
+    private var runRates: [Int] = []
     // Injectable clock so the gap check is tested without waiting out a real recording.
     private let now: () -> TimeInterval
     private var recordingStartedAt: TimeInterval?
@@ -81,14 +88,20 @@ final class AudioCaptureManager {
     /// `architecture/river-pipeline.md` "The ready microphone and the pre-roll".
     static let warmupWaitSeconds: Double = 0.3
 
+    // internal for testability — makes each format run's resampler, so a test can make one
+    // format fail and see the run dropped and `.conversionFailed` thrown at release.
+    private let makeResampler: (AVAudioFormat) -> IncrementalResampler?
+
     init(
         microphone: MicrophoneCapability,
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-        watchdogInterval: Double = Constants.captureWatchdogIntervalSeconds
+        watchdogInterval: Double = Constants.captureWatchdogIntervalSeconds,
+        makeResampler: @escaping (AVAudioFormat) -> IncrementalResampler? = { IncrementalResampler(from: $0) }
     ) {
         self.microphone = microphone
         self.now = now
         self.watchdogInterval = watchdogInterval
+        self.makeResampler = makeResampler
     }
 
     /// Keeps the capture unit running between recordings, or not (planning 0033). While
@@ -119,9 +132,8 @@ final class AudioCaptureManager {
             guard let self else { return }
             if isRecording {
                 if firstBufferAt == nil { firstBufferAt = now() }
-                buffers.append(buffer)
                 capturedSeconds += Double(buffer.frameLength) / buffer.format.sampleRate
-                forwardLive(buffer)
+                convert(buffer)
             } else if ready {
                 window.append(buffer)
             }
@@ -137,13 +149,17 @@ final class AudioCaptureManager {
     /// can't start. `stopRecording` is the fail-loud surface (throws `.noAudioCaptured`
     /// if no live buffer arrived).
     ///
-    /// `onSamples`, when given, receives each buffer as 16 kHz mono samples as soon as it
-    /// arrives, for transcribing while the user speaks; the pre-roll goes through it first.
-    func startRecording(onSamples: (@MainActor ([Float]) -> Void)? = nil) async {
+    /// `onSamples` receives the recording as 16 kHz mono samples: the pre-roll first, then
+    /// each buffer as soon as it arrives, and the last few when `stopRecording` finishes the
+    /// conversion. It is the recording's only copy at 16 kHz; this manager keeps none.
+    func startRecording(onSamples: @escaping @MainActor ([Float]) -> Void = { _ in }) async {
         guard !isRecording else { return }
-        buffers.removeAll(keepingCapacity: true)
         self.onSamples = onSamples
-        resampler = nil
+        run = nil
+        conversionFailed = false
+        bufferCount = 0
+        sampleCount = 0
+        runRates = []
         firstBufferAt = nil
         capturedSeconds = 0
         seededSeconds = 0
@@ -151,8 +167,7 @@ final class AudioCaptureManager {
         if ready, microphone.isCapturing {
             let seed = window.drain()
             seededSeconds = seed.reduce(0) { $0 + Double($1.frameLength) / $1.format.sampleRate }
-            buffers = seed
-            for buffer in seed { forwardLive(buffer) }
+            for buffer in seed { convert(buffer) }
             isRecording = true
             recordingStartedAt = now()
         } else {
@@ -196,29 +211,64 @@ final class AudioCaptureManager {
         return now() - firstBufferAt - capturedSeconds > Constants.captureGapMaximumSeconds
     }
 
-    private func forwardLive(_ buffer: AVAudioPCMBuffer) {
-        guard let onSamples else { return }
-        // A device switch mid-recording changes the format; start a new converter for it.
-        if resampler?.sourceFormat != buffer.format {
-            resampler = IncrementalResampler(from: buffer.format)
+    // Resamples one buffer into the recording. A device change mid-recording changes the
+    // format (24 kHz AirPods, then the 48 kHz built-in microphone): the run before it is
+    // finished and a new resampler starts, since one converter fed both would resample the
+    // second run at the first run's rate (planning 0032).
+    private func convert(_ buffer: AVAudioPCMBuffer) {
+        bufferCount += 1
+        if run?.format != buffer.format {
+            finishRun()
+            let resampler = makeResampler(buffer.format)
+            if resampler == nil {
+                conversionFailed = true
+                logger.error("No converter from \(Int(buffer.format.sampleRate), privacy: .public) Hz, \(buffer.format.channelCount, privacy: .public) channels to 16 kHz mono")
+            }
+            run = (buffer.format, resampler)
+            runRates.append(Int(buffer.format.sampleRate))
         }
-        guard let samples = resampler?.convert(buffer), !samples.isEmpty else { return }
+        guard let resampler = run?.resampler else { return }
+        do {
+            deliver(try resampler.convert(buffer))
+        } catch {
+            // Logged once: a converter that keeps failing would log every buffer, about 90 a second.
+            if !conversionFailed { logger.error("A buffer failed to convert to 16 kHz") }
+            conversionFailed = true
+        }
+    }
+
+    // Delivers what the current run's resampler still holds, and ends the run.
+    private func finishRun() {
+        defer { run = nil }
+        guard let resampler = run?.resampler else { return }
+        do {
+            deliver(try resampler.finish())
+        } catch {
+            conversionFailed = true
+            logger.error("A format run failed to finish converting to 16 kHz")
+        }
+    }
+
+    private func deliver(_ samples: [Float]) {
+        guard !samples.isEmpty else { return }
+        sampleCount += samples.count
         onSamples(samples)
     }
 
     /// Waits up to `warmupWaitSeconds` for the first live buffer (so short taps still
-    /// produce audio), ends the recording, converts the accumulated buffers to 16 kHz
-    /// mono Float32, and trims leading/trailing silence. The unit stops unless ready
-    /// mode keeps it running. Throws `.noAudioCaptured` if the wait expired with no
-    /// live buffer, whatever the pre-roll held: the pre-roll predates the press and is
-    /// never typed on its own. The caller (RiverSession) surfaces this rather than
-    /// letting a zero-length recording silently succeed. Returns `[]` when buffers
-    /// arrived but the trim removed everything (an all-silence recording): the caller
-    /// reads that as "nothing was said," not a failure (planning 0023).
+    /// produce audio), delivers the samples the conversion still holds, and ends the
+    /// recording. The unit stops unless ready mode keeps it running. Throws
+    /// `.noAudioCaptured` if the wait expired with no live buffer, whatever the pre-roll
+    /// held: the pre-roll predates the press and is never typed on its own. The caller
+    /// (RiverSession) surfaces this rather than letting a zero-length recording silently
+    /// succeed. Throws `.captureIncomplete` when the audio stopped well short of the
+    /// recording, and `.conversionFailed` when a buffer couldn't be converted. Samples
+    /// delivered before a throw stay delivered: the session types what was heard, unless no
+    /// live audio arrived.
     ///
     /// `warmupWait` exists for tests: a loaded test machine can oversleep the 0.3 s window,
     /// so the late-buffer test passes a long one. The wait still ends at the first buffer.
-    func stopRecording(warmupWait: Double = AudioCaptureManager.warmupWaitSeconds) async throws -> [Float] {
+    func stopRecording(warmupWait: Double = AudioCaptureManager.warmupWaitSeconds) async throws {
         watchdog?.cancel()
         watchdog = nil
         let deadline = Date().addingTimeInterval(warmupWait)
@@ -226,13 +276,13 @@ final class AudioCaptureManager {
             try? await Task.sleep(nanoseconds: 5_000_000)
         }
 
-        let collected = buffers
-        buffers.removeAll(keepingCapacity: true)
+        finishRun()
         let recordingSeconds = recordingStartedAt.map { now() - $0 } ?? 0
         let startupSeconds = (firstBufferAt ?? 0) - (recordingStartedAt ?? 0)
         let heardSeconds = firstBufferAt.map { now() - $0 } ?? 0
         let heardLiveAudio = firstBufferAt != nil
         let preRollSeconds = seededSeconds
+        let conversionFailed = self.conversionFailed
         recordingStartedAt = nil
         firstBufferAt = nil
         seededSeconds = 0
@@ -254,28 +304,28 @@ final class AudioCaptureManager {
             logger.error("stopRecording: captured \(capturedSeconds, format: .fixed(precision: 2), privacy: .public) s of a \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s recording")
             throw AudioCaptureError.captureIncomplete(capturedSeconds: capturedSeconds, recordingSeconds: recordingSeconds)
         }
+        guard !conversionFailed else {
+            logger.error("stopRecording: part of the recording couldn't be converted to 16 kHz")
+            throw AudioCaptureError.conversionFailed
+        }
 
-        let samples = try Self.convert(collected)
-        let trimmed = Self.trimSilence(samples)
-        let formats = Self.formatRuns(collected).map { "\(Int($0.format.sampleRate)) Hz" }.joined(separator: " -> ")
-        logger.info("Captured \(samples.count, privacy: .public) samples (16 kHz mono) from \(collected.count, privacy: .public) buffers @ \(formats, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, pre-roll \(preRollSeconds, format: .fixed(precision: 2), privacy: .public) s, startup \(startupSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s; \(trimmed.count, privacy: .public) after silence trim")
-        return trimmed
+        let rates = runRates.map { "\($0) Hz" }.joined(separator: " -> ")
+        logger.info("Captured \(self.sampleCount, privacy: .public) samples (16 kHz mono) from \(self.bufferCount, privacy: .public) buffers @ \(rates, privacy: .public) over \(recordingSeconds, format: .fixed(precision: 2), privacy: .public) s, pre-roll \(preRollSeconds, format: .fixed(precision: 2), privacy: .public) s, startup \(startupSeconds, format: .fixed(precision: 2), privacy: .public) s, gap \(gapSeconds, format: .fixed(precision: 2), privacy: .public) s")
     }
 
-    /// Discards an in-flight recording (planning 0017): ends the recording and drops
-    /// every captured buffer WITHOUT converting, trimming, or returning them. The
-    /// cancel-path counterpart to `stopRecording` — there is no audio to transcribe or
-    /// paste, so it neither waits for warmup nor throws `.noAudioCaptured` (an empty
-    /// buffer list is the expected outcome, not a failure). Safe to call when nothing
-    /// is recording.
+    /// Discards an in-flight recording (planning 0017): ends the recording and stops its
+    /// conversion, delivering nothing more. The cancel-path counterpart to `stopRecording`:
+    /// there is no audio to transcribe or paste, so it neither waits for warmup nor throws
+    /// `.noAudioCaptured` (no buffer at all is the expected outcome, not a failure). The
+    /// session cancels the dictation the samples went to. Safe to call when nothing is
+    /// recording.
     func discardRecording() async {
         watchdog?.cancel()
         watchdog = nil
         recordingStartedAt = nil
         firstBufferAt = nil
         seededSeconds = 0
-        let dropped = buffers.count
-        buffers.removeAll(keepingCapacity: true)
+        let dropped = bufferCount
         endRecording()
         logger.info("discardRecording: dropped \(dropped, privacy: .public) buffers; no transcription")
     }
@@ -285,138 +335,20 @@ final class AudioCaptureManager {
     // always did. This is also where a readiness change made during the recording lands.
     private func endRecording() {
         isRecording = false
-        onSamples = nil
-        resampler = nil
+        onSamples = { _ in }
+        run = nil
         if !ready {
             microphone.stopEngine()
         }
     }
-
-    // internal for testability — converts a recording whose format may change part-way
-    // (the engine restarted on a new device: 24 kHz AirPods, then the 48 kHz built-in
-    // mic) to one continuous 16 kHz mono stream. Each run of same-format buffers gets
-    // its own converter; one converter fed both would resample the second run at the
-    // first run's rate.
-    static func convert(_ buffers: [AVAudioPCMBuffer], toSampleRate: Double = 16_000) throws -> [Float] {
-        var samples: [Float] = []
-        for run in formatRuns(buffers) {
-            samples += try convert(run.buffers, from: run.format, toSampleRate: toSampleRate)
-        }
-        return samples
-    }
-
-    // internal for testability — consecutive buffers grouped by format, in order.
-    static func formatRuns(_ buffers: [AVAudioPCMBuffer]) -> [(format: AVAudioFormat, buffers: [AVAudioPCMBuffer])] {
-        var runs: [(format: AVAudioFormat, buffers: [AVAudioPCMBuffer])] = []
-        for buffer in buffers {
-            if let last = runs.indices.last, runs[last].format == buffer.format {
-                runs[last].buffers.append(buffer)
-            } else {
-                runs.append((buffer.format, [buffer]))
-            }
-        }
-        return runs
-    }
-
-    // internal for testability — pure conversion from N same-format buffers
-    // to a single 16 kHz mono Float32 sample array. Done once at stop time
-    // rather than inside the tap callback (river-pipeline.md step 3).
-    static func convert(
-        _ buffers: [AVAudioPCMBuffer],
-        from sourceFormat: AVAudioFormat,
-        toSampleRate: Double = 16_000
-    ) throws -> [Float] {
-        guard !buffers.isEmpty else { return [] }
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: toSampleRate,
-            channels: 1,
-            interleaved: false
-        ) else { throw AudioCaptureError.conversionFailed }
-        guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
-            throw AudioCaptureError.conversionFailed
-        }
-
-        let inputFrames = buffers.reduce(0) { $0 + Int($1.frameLength) }
-        // Conservative capacity: input × rate ratio + headroom for resampler latency.
-        let outputCapacity = AVAudioFrameCount(
-            ceil(Double(inputFrames) * (toSampleRate / sourceFormat.sampleRate)) + 1024
-        )
-
-        var feedIndex = 0
-        let inputBlock: AVAudioConverterInputBlock = { _, statusOut in
-            guard feedIndex < buffers.count else {
-                statusOut.pointee = .endOfStream
-                return nil
-            }
-            statusOut.pointee = .haveData
-            let buffer = buffers[feedIndex]
-            feedIndex += 1
-            return buffer
-        }
-
-        var samples: [Float] = []
-        samples.reserveCapacity(Int(outputCapacity))
-
-        while true {
-            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputCapacity) else {
-                throw AudioCaptureError.conversionFailed
-            }
-            var error: NSError?
-            let status = converter.convert(to: outputBuffer, error: &error, withInputFrom: inputBlock)
-            if error != nil { throw AudioCaptureError.conversionFailed }
-            let frames = Int(outputBuffer.frameLength)
-            if frames > 0, let channelData = outputBuffer.floatChannelData?[0] {
-                samples.append(contentsOf: UnsafeBufferPointer(start: channelData, count: frames))
-            }
-            if status == .endOfStream || status == .inputRanDry || status == .error || frames == 0 {
-                break
-            }
-        }
-
-        return samples
-    }
-
-    // internal for testability — leading/trailing silence trim on the converted
-    // 16 kHz mono buffer. Whisper's worst failure mode is inventing text
-    // ("Thank you for watching.") from silent audio: an accidental activation
-    // captures pure silence, and every real utterance carries trailing breath.
-    // Drop quiet RMS windows at both ends, keeping `leadSeconds` before detected speech
-    // and `tailSeconds` after it, so a word's soft onset survives. The gate is
-    // `energyThreshold` for normal speech and drops toward `floor` for a quiet
-    // recording, tracking its loudest window, so a whispered dictation is kept rather
-    // than discarded whole. All-silence in → [] out, which the session reads as
-    // "nothing was said" (planning 0023). Pure; runs at stop time on the `convert` output.
-    static func trimSilence(
-        _ samples: [Float],
-        sampleRate: Double = 16_000,
-        energyThreshold: Float = Constants.silenceTrimEnergyThreshold,
-        peakRatio: Float = Constants.silenceTrimPeakRatio,
-        floor: Float = Constants.silenceTrimFloor,
-        leadSeconds: Double = Constants.silenceTrimLeadSeconds,
-        tailSeconds: Double = Constants.silenceTrimTailSeconds
-    ) -> [Float] {
-        guard !samples.isEmpty else { return [] }
-        let window = max(1, Int(sampleRate * 0.02))  // 20 ms RMS window
-        let windows = stride(from: 0, to: samples.count, by: window).map { start in
-            let end = min(start + window, samples.count)
-            var sumSquares: Float = 0
-            for i in start..<end { sumSquares += samples[i] * samples[i] }
-            return (start: start, end: end, rms: (sumSquares / Float(end - start)).squareRoot())
-        }
-        let peak = windows.map(\.rms).max() ?? 0
-        let threshold = max(floor, min(energyThreshold, peak * peakRatio))
-        let voiced = windows.filter { $0.rms >= threshold }
-        guard let first = voiced.first?.start, let last = voiced.last?.end else { return [] }
-        let lower = max(0, first - Int(sampleRate * leadSeconds))
-        let upper = min(samples.count, last + Int(sampleRate * tailSeconds))
-        return Array(samples[lower..<upper])
-    }
 }
 
-/// Resamples a recording to 16 kHz mono one buffer at a time, keeping the converter's state
-/// between buffers so the output is continuous. The live counterpart of
-/// `AudioCaptureManager.convert`, which converts the whole recording at once at stop time.
+/// Resamples one run of same-format buffers to 16 kHz mono, a buffer at a time, keeping the
+/// converter's state between buffers so the output is continuous; `finish()` delivers what
+/// the converter's filter still holds once the run's last buffer is in. Together, they give
+/// the same samples as converting the whole run at once. A recording's only conversion
+/// (`AudioCaptureManager`, planning 0039), done on the main actor as each buffer arrives,
+/// never inside the capture unit's render callback.
 final class IncrementalResampler {
     let sourceFormat: AVAudioFormat
     private let targetFormat: AVAudioFormat
@@ -430,24 +362,39 @@ final class IncrementalResampler {
         self.converter = converter
     }
 
-    func convert(_ buffer: AVAudioPCMBuffer) -> [Float] {
+    /// `buffer` at 16 kHz, less the few samples the filter holds for the next call.
+    func convert(_ buffer: AVAudioPCMBuffer) throws -> [Float] {
         let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * targetFormat.sampleRate / sourceFormat.sampleRate) + 64)
         var supplied = false
+        // `.noDataNow` after the one buffer keeps the converter open for the next call;
+        // `.endOfStream` would flush and close it.
+        return try drain(capacity: capacity) { _, statusOut in
+            if supplied {
+                statusOut.pointee = .noDataNow
+                return nil
+            }
+            supplied = true
+            statusOut.pointee = .haveData
+            return buffer
+        }
+    }
+
+    /// The samples the filter still holds, once the run's last buffer is in. The resampler
+    /// takes no buffer after this.
+    func finish() throws -> [Float] {
+        try drain(capacity: 1_024) { _, statusOut in
+            statusOut.pointee = .endOfStream
+            return nil
+        }
+    }
+
+    // Runs the converter until it has nothing more to give for this input.
+    private func drain(capacity: AVAudioFrameCount, input: @escaping AVAudioConverterInputBlock) throws -> [Float] {
         var samples: [Float] = []
         while let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) {
             var error: NSError?
-            // `.noDataNow` after the one buffer keeps the converter open for the next call;
-            // `.endOfStream` would flush and close it.
-            let status = converter.convert(to: output, error: &error) { _, statusOut in
-                if supplied {
-                    statusOut.pointee = .noDataNow
-                    return nil
-                }
-                supplied = true
-                statusOut.pointee = .haveData
-                return buffer
-            }
-            if error != nil { return samples }
+            let status = converter.convert(to: output, error: &error, withInputFrom: input)
+            if error != nil || status == .error { throw AudioCaptureError.conversionFailed }
             let frames = Int(output.frameLength)
             if frames > 0, let channel = output.floatChannelData?[0] {
                 samples.append(contentsOf: UnsafeBufferPointer(start: channel, count: frames))

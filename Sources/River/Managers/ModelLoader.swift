@@ -3,10 +3,21 @@ import Foundation
 /// A model in memory, ready to transcribe 16 kHz mono samples.
 @MainActor
 protocol LoadedModel: AnyObject {
-    /// The text, or `TranscriptionError.emptyTranscription` / `.noSpeechDetected` when there is
-    /// none. `dictionaryTerms` bias an engine that supports them (Whisper's prompt); others
-    /// ignore them (planning 0037).
-    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String
+    /// The text, or nil when the engine heard no speech; it throws only when the engine fails
+    /// (`.transcriptionFailed`, planning 0039). `dictionaryTerms` bias an engine that supports
+    /// them (Whisper's prompt); others ignore them (planning 0037).
+    func transcribe(_ samples: [Float], dictionaryTerms: [String]) async throws -> String?
+}
+
+/// The silence a short clip gets on each side before an engine decodes it.
+enum ShortClip {
+    // internal for testability — Whisper needs this context to hear a short word at all, and
+    // it lifts any clip past FluidAudio's 0.3 s minimum; longer clips decode as captured.
+    static func padded(_ samples: [Float], sampleRate: Double = 16_000) -> [Float] {
+        guard !samples.isEmpty, Double(samples.count) < Constants.shortClipSeconds * sampleRate else { return samples }
+        let silence = [Float](repeating: 0, count: Int(Constants.shortClipPadSeconds * sampleRate))
+        return silence + samples + silence
+    }
 }
 
 /// One engine's models on disk and in memory (planning 0037, ADR 0001). `ModelStore` is the

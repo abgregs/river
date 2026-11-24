@@ -7,19 +7,23 @@ import Testing
 @Suite("AudioCaptureManager capture cycle")
 struct AudioCaptureCycleTests {
     @MainActor
-    @Test("stopRecording returns 16 kHz samples when a buffer was published")
-    func stopRecordingReturnsSamples() async throws {
-        // Happy path: a single 100 ms buffer at 44.1 kHz → ~1600 samples at 16 kHz.
-        // A *voiced* buffer — stopRecording now trims silence, so a zero buffer
-        // would trim to empty (see AudioCaptureSilenceTrimTests).
+    @Test("a recording reaches the dictation as 16 kHz samples, every one of them, with its signal")
+    func recordingDeliversEverySample() async throws {
+        // A 100 ms buffer at 44.1 kHz is 1,600 samples at 16 kHz. The converter holds a few back
+        // for the next buffer; stopping the recording delivers them, or each dictation would lose
+        // its last milliseconds (planning 0039). A converter that emitted zeros of the right
+        // length would pass a length check, so the 440 Hz sine must keep its energy too (a
+        // 0.5-amplitude sine is about 0.35 RMS).
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone)
-        await manager.startRecording()
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
         microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
-        let samples = try await manager.stopRecording()
-        #expect(samples.count > 1500)
-        #expect(samples.count < 1700)
+        try await manager.stopRecording()
+        #expect(abs(samples.count - 1_600) <= 1)
+        let rms = (samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
+        #expect(rms > 0.1)
     }
 
     @MainActor
@@ -32,7 +36,7 @@ struct AudioCaptureCycleTests {
         let manager = AudioCaptureManager(microphone: microphone)
         await manager.startRecording()
         await #expect(throws: AudioCaptureError.self) {
-            _ = try await manager.stopRecording()
+            try await manager.stopRecording()
         }
     }
 
@@ -55,16 +59,16 @@ struct AudioCaptureCycleTests {
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone, now: { 100 })
-        await manager.startRecording()
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
 
         let stopTask = Task { @MainActor in
             try await manager.stopRecording(warmupWait: 10)
         }
         await Task.yield()
-        // Voiced buffer: stopRecording trims silence, so zeros would trim to empty.
         microphone.publishForTest(makeSineBuffer(milliseconds: 50, frequency: 440, amplitude: 0.5))
 
-        let samples = try await stopTask.value
+        try await stopTask.value
         #expect(samples.count > 700)  // ~50 ms at 16 kHz ≈ 800 samples (margin keeps all)
         #expect(samples.count < 900)
     }
@@ -92,7 +96,7 @@ struct AudioCaptureGapTests {
         clock += 14                                   // 1.5 s of audio for a 14 s recording
 
         await #expect(throws: AudioCaptureError.self) {
-            _ = try await manager.stopRecording()
+            try await manager.stopRecording()
         }
     }
 
@@ -111,7 +115,7 @@ struct AudioCaptureGapTests {
         clock += 300
 
         await #expect(throws: AudioCaptureError.self) {
-            _ = try await manager.stopRecording()
+            try await manager.stopRecording()
         }
     }
 
@@ -154,7 +158,7 @@ struct AudioCaptureGapTests {
         #expect(fired == 1)
 
         await #expect(throws: AudioCaptureError.self) {   // and release reports it
-            _ = try await manager.stopRecording()
+            try await manager.stopRecording()
         }
     }
 
@@ -170,8 +174,9 @@ struct AudioCaptureGapTests {
         let manager = AudioCaptureManager(microphone: microphone, now: { clock }, watchdogInterval: 0.005)
         var fired = 0
         manager.onCaptureGapExceeded = { fired += 1 }
+        var samples: [Float] = []
 
-        await manager.startRecording()
+        await manager.startRecording { samples += $0 }
         clock += 2.0                                      // start-up slower than the 1 s gap bound
         for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
         #expect(fired == 0)
@@ -180,7 +185,7 @@ struct AudioCaptureGapTests {
         for _ in 0..<10 { try await Task.sleep(nanoseconds: 2_000_000) }
         #expect(fired == 0)
 
-        let samples = try await manager.stopRecording()   // and release returns the audio
+        try await manager.stopRecording()                 // and release delivers the audio
         #expect(!samples.isEmpty)
     }
 
@@ -203,8 +208,8 @@ struct AudioCaptureGapTests {
         #expect(fired == 1)
 
         do {
-            _ = try await manager.stopRecording(warmupWait: 0.01)
-            Issue.record("expected .noAudioCaptured, got samples")
+            try await manager.stopRecording(warmupWait: 0.01)
+            Issue.record("expected .noAudioCaptured, got a recording")
         } catch AudioCaptureError.noAudioCaptured {
             // release reports the dead engine, not a gap
         } catch {
@@ -213,20 +218,21 @@ struct AudioCaptureGapTests {
     }
 
     @MainActor
-    @Test("a recording whose audio tracks its wall time is returned")
+    @Test("a recording whose audio tracks its wall time is delivered whole")
     func fullCoverageReturns() async throws {
         var clock: TimeInterval = 100
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+        var samples: [Float] = []
 
-        await manager.startRecording()
+        await manager.startRecording { samples += $0 }
         for _ in 0..<10 {
             microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
         }
         clock += 1.2                                  // 1.0 s of audio, 1.2 s since the first buffer: in flight at release
 
-        let samples = try await manager.stopRecording()
+        try await manager.stopRecording()
         #expect(samples.count > 15_000)
     }
 
@@ -237,28 +243,28 @@ struct AudioCaptureGapTests {
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone, now: { clock })
+        var samples: [Float] = []
 
-        await manager.startRecording()
+        await manager.startRecording { samples += $0 }
         microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
         clock += 0.9                                  // 0.1 s of audio for a 0.9 s tap
 
-        let samples = try await manager.stopRecording()
+        try await manager.stopRecording()
         #expect(!samples.isEmpty)
     }
 }
 
 @Suite("AudioCaptureManager discard")
 struct AudioCaptureDiscardTests {
-    // The cancel path (planning 0017): discardRecording drops captured buffers and
-    // stops the engine WITHOUT converting or returning them — the counterpart to
-    // stopRecording's convert-and-return.
+    // The cancel path (planning 0017): discardRecording ends the recording and delivers
+    // nothing more, where stopRecording finishes the conversion first.
 
     @MainActor
     @Test("discardRecording drops captured buffers so a later stop sees no audio")
     func discardDropsBuffers() async throws {
         // Capture a real (voiced) buffer, then discard. Re-arming a fresh recording
         // and stopping it with no new buffer must throw .noAudioCaptured — proof the
-        // discarded buffers were dropped, not carried into the next recording.
+        // discarded recording was dropped, not carried into the next one.
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone)
@@ -269,7 +275,7 @@ struct AudioCaptureDiscardTests {
 
         await manager.startRecording()  // fresh recording, no buffer published
         await #expect(throws: AudioCaptureError.self) {
-            _ = try await manager.stopRecording()
+            try await manager.stopRecording()
         }
     }
 
@@ -288,203 +294,89 @@ struct AudioCaptureDiscardTests {
 
 @Suite("AudioCaptureManager sample-rate conversion")
 struct AudioCaptureConvertTests {
-    @MainActor
-    @Test("convert([]) returns an empty sample array")
-    func convertEmpty() throws {
-        let format = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false
-        )!
-        let samples = try AudioCaptureManager.convert([], from: format)
-        #expect(samples.isEmpty)
-    }
+    // The recording's one conversion (planning 0039): each buffer is resampled to 16 kHz as it
+    // arrives, and each run of one format is finished when the format changes or the recording
+    // stops.
 
     @MainActor
-    @Test("convert downsamples 44.1 kHz mono Float32 to 16 kHz at the expected length")
-    func convertDownsamples() throws {
-        // 4410 frames @ 44.1 kHz = 100 ms → ~1600 frames @ 16 kHz. AVAudioConverter
-        // has resampler latency, so we allow some tolerance instead of an exact match.
-        let format = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false
-        )!
-        let samples = try AudioCaptureManager.convert([makeBuffer(milliseconds: 100)], from: format)
-        #expect(samples.count > 1500)
-        #expect(samples.count < 1700)
-    }
-
-    @MainActor
-    @Test("convert throws .conversionFailed when no converter can be built for the source format")
-    func convertThrowsWhenConverterUnbuildable() throws {
-        // The `.conversionFailed` guard: a zero-channel source format has no valid
-        // conversion path to 16 kHz mono, so `AVAudioConverter(from:to:)` returns
-        // nil. Buffers are non-empty (so the early empty-return doesn't mask this),
-        // but decoding never starts. Without this branch a converter failure would
-        // surface as a crash or a silent empty result instead of `.noAudioCaptured`'s
-        // sibling error the session can report.
-        let badFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 0, interleaved: false
-        )!
-        #expect(throws: AudioCaptureError.self) {
-            _ = try AudioCaptureManager.convert([makeBuffer(milliseconds: 100)], from: badFormat)
+    @Test("a run converted buffer by buffer, then finished, gives every sample the run holds")
+    func finishedRunGivesEverySample() throws {
+        // 20 × 1,024 frames at 48 kHz is 6,826.7 samples at 16 kHz. Each buffer's conversion
+        // holds a few back for the next; `finish` delivers them at the end of the run.
+        let format = try #require(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false))
+        let resampler = try #require(IncrementalResampler(from: format))
+        var total = 0
+        for _ in 0..<20 {
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1024))
+            buffer.frameLength = 1024
+            for i in 0..<1024 { buffer.floatChannelData![0][i] = 0.3 }
+            total += try resampler.convert(buffer).count
         }
+        let held = try resampler.finish().count
+        #expect(held > 0)
+        #expect(abs(Double(total + held) - 20 * 1_024 / 3) < 1)
     }
 
     @MainActor
-    @Test("convert joins runs of different formats into one continuous 16 kHz stream")
-    func convertJoinsFormatRuns() throws {
-        // After the engine restarts on a device change, a recording holds 24 kHz AirPods
-        // buffers and then 48 kHz built-in-mic buffers (planning 0032). One converter
-        // built for the first format would resample the second run at the wrong rate:
-        // 100 ms at 48 kHz read as 24 kHz comes out as 200 ms. Each run must convert
-        // at its own rate, so 100 ms + 100 ms is ~200 ms at 16 kHz, with its energy.
-        let airPods = makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 24_000)
-        let builtIn = makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 48_000)
+    @Test("each format run is converted at its own rate, and each is finished")
+    func formatRunsConvertAtTheirOwnRates() async throws {
+        // After the unit restarts on a device change, a recording holds 24 kHz AirPods buffers
+        // and then 48 kHz built-in-microphone buffers (planning 0032). One converter built for
+        // the first format would resample the second run at the wrong rate: 100 ms at 48 kHz read
+        // as 24 kHz comes out as 200 ms. Each run converts at its own rate and is finished before
+        // the next starts, so 100 ms + 100 ms is 3,200 samples at 16 kHz, with its energy.
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { 100 })
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 24_000))
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 48_000))
+        try await manager.stopRecording()
 
-        let samples = try AudioCaptureManager.convert([airPods, builtIn])
-
-        #expect(samples.count > 3_000)   // ~3200, less resampler latency per run
-        #expect(samples.count < 3_400)
+        #expect(abs(samples.count - 3_200) <= 2)
         let rms = (samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
         #expect(rms > 0.1)
-        #expect(AudioCaptureManager.formatRuns([airPods, builtIn, builtIn]).map(\.buffers.count) == [1, 2])
     }
 
     @MainActor
-    @Test("convert preserves signal energy, not just length, for a non-silent input")
-    func convertPreservesSignalEnergy() throws {
-        // The length tests feed silent zero buffers, so a converter that emitted
-        // zeros of the right length would pass them. Feed a real 440 Hz sine and
-        // assert the 16 kHz output carries energy (RMS well above zero) — proof the
-        // samples are actually resampled, not blanked. Energy/shape, not sample
-        // equality: AVAudioConverter latency makes exact-match brittle.
-        let format = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false
-        )!
-        let samples = try AudioCaptureManager.convert(
-            [makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5)], from: format
-        )
-        #expect(samples.count > 1500)   // same resampler-latency window as the silent case
-        #expect(samples.count < 1700)
-        let rms = (samples.reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
-        #expect(rms > 0.1)              // a 0.5-amplitude sine is ~0.35 RMS; zeros would be 0
-    }
-}
+    @Test("a run no converter can take is dropped, the rest delivered, and release throws .conversionFailed")
+    func unconvertibleRunFailsLoudly() async throws {
+        // Without the throw, a recording with a hole in it would type as if it were whole. The
+        // 44.1 kHz run converts; the 24 kHz run gets no resampler.
+        let microphone = MicrophoneCapability()
+        microphone.skipEngineForTesting = true
+        let manager = AudioCaptureManager(microphone: microphone, now: { 100 }, makeResampler: { format in
+            format.sampleRate == 24_000 ? nil : IncrementalResampler(from: format)
+        })
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5))
+        microphone.publishForTest(makeSineBuffer(milliseconds: 100, frequency: 440, amplitude: 0.5, sampleRate: 24_000))
 
-@Suite("AudioCaptureManager silence trim")
-struct AudioCaptureSilenceTrimTests {
-    // Whisper hallucinates text from silence — pasting words the user never spoke
-    // is this app's worst failure. `trimSilence` drops below-threshold audio at
-    // both ends of the 16 kHz buffer, keeping a margin so speech is never clipped.
-    // Same synthetic-input pattern as the convert tests. See planning 0023.
-
-    @MainActor
-    @Test("all-silence input trims to empty")
-    func allSilenceTrimsToEmpty() {
-        // An accidental activation captures pure silence. It must trim to empty so
-        // the session skips decode entirely — no hallucinated paste.
-        let silence = [Float](repeating: 0, count: 16_000)  // 1 s of digital silence
-        #expect(AudioCaptureManager.trimSilence(silence).isEmpty)
+        do {
+            try await manager.stopRecording()
+            Issue.record("expected .conversionFailed, got a recording")
+        } catch AudioCaptureError.conversionFailed {
+            // the hole is reported, not passed off as the whole recording
+        } catch {
+            Issue.record("expected .conversionFailed, got \(error)")
+        }
+        #expect(abs(samples.count - 1_600) <= 1)
     }
 
     @MainActor
-    @Test("empty input trims to empty")
-    func emptyTrimsToEmpty() {
-        #expect(AudioCaptureManager.trimSilence([]).isEmpty)
+    @Test("a format no converter can take makes no resampler")
+    func unconvertibleFormatHasNoResampler() throws {
+        // A zero-channel source has no conversion path to 16 kHz mono. `AudioCaptureManager`
+        // reads a missing resampler as a failed conversion and throws `.conversionFailed` at
+        // release, rather than passing off a recording with a hole in it as whole.
+        let badFormat = try #require(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 0, interleaved: false))
+        #expect(IncrementalResampler(from: badFormat) == nil)
     }
-
-    @MainActor
-    @Test("silence-padded speech keeps the speech with a margin, dropping the padding")
-    func paddedSpeechPreservesSpeech() {
-        // 1 s silence, 0.5 s voiced, 1 s silence at 16 kHz. The silence beyond the
-        // lead-in and tail margins must be dropped, but the speech and its margins
-        // must survive intact.
-        let pad = [Float](repeating: 0, count: 16_000)
-        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
-        let padded = pad + speech + pad
-
-        let out = AudioCaptureManager.trimSilence(padded)
-
-        #expect(out.count < padded.count)           // padding trimmed
-        #expect(out.count >= speech.count)          // speech + margins survive
-        #expect(out.count < padded.count - 16_000)  // most of the silence is gone
-        let rms = (out.reduce(Float(0)) { $0 + $1 * $1 } / Float(out.count)).squareRoot()
-        #expect(rms > 0.1)                         // preserved speech carries energy
-    }
-
-    @MainActor
-    @Test("speech-only input is returned untouched")
-    func speechOnlyUntouched() {
-        // No silence to trim: every window is voiced, so the whole buffer survives
-        // (the margin clamps to the array bounds). Length is unchanged.
-        let speech = sineSamples(count: 16_000, frequency: 440, amplitude: 0.5)
-        #expect(AudioCaptureManager.trimSilence(speech).count == speech.count)
-    }
-
-    // The maintainer's smoke: quiet talking on a built-in mic never reached transcription
-    // under the fixed -40 dBFS gate, so nothing was typed.
-    @MainActor
-    @Test("a quiet dictation survives the trim instead of being discarded whole")
-    func quietDictationSurvives() {
-        let pad = [Float](repeating: 0, count: 8_000)
-        let quiet = sineSamples(count: 8_000, frequency: 440, amplitude: sineAmplitude(decibels: -44))
-        let padded = pad + quiet + pad
-        let fixedGate = AudioCaptureManager.trimSilence(padded, peakRatio: 1, floor: Constants.silenceTrimEnergyThreshold)
-        #expect(fixedGate.isEmpty)
-        #expect(AudioCaptureManager.trimSilence(padded).count >= quiet.count)
-    }
-
-    // Planning 0023: room tone left after speech can decode as invented text, so a normal
-    // dictation's tail must be cut exactly where the fixed gate cut it.
-    @MainActor
-    @Test("normal speech keeps the fixed gate, so its quiet tail is still cut")
-    func normalSpeechTrimsAsBefore() {
-        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
-        let tail = sineSamples(count: 16_000, frequency: 440, amplitude: sineAmplitude(decibels: -45))
-        let recording = speech + tail
-        let trimmed = AudioCaptureManager.trimSilence(recording)
-        #expect(trimmed == AudioCaptureManager.trimSilence(recording, peakRatio: 1, floor: Constants.silenceTrimEnergyThreshold))
-        #expect(trimmed.count < speech.count + tail.count / 2)
-    }
-
-    // The maintainer's smoke (2026-09-26): with 0.1 s kept before a word, quick taps of
-    // "hello there" reached Whisper clipped mid-word and decoded to nothing; the lead-in
-    // is the context it needs. The tail stays short, since room tone after speech is what
-    // Whisper turns into invented text (planning 0023).
-    @MainActor
-    @Test("the trim keeps half a second before speech and a fifth of a second after")
-    func trimKeepsLeadInAndShortTail() {
-        let silence = [Float](repeating: 0, count: 16_000)
-        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
-        let out = AudioCaptureManager.trimSilence(silence + speech + silence)
-        #expect(Constants.silenceTrimLeadSeconds == 0.5)
-        #expect(Constants.silenceTrimTailSeconds == 0.2)
-        #expect(out.count == Int(Constants.silenceTrimLeadSeconds * 16_000) + speech.count + Int(Constants.silenceTrimTailSeconds * 16_000))
-    }
-
-    // An accidental activation in a quiet room must still decode nothing.
-    @MainActor
-    @Test("near-silence below the floor still trims to empty")
-    func nearSilenceTrimsToEmpty() {
-        let roomTone = sineSamples(count: 16_000, frequency: 440, amplitude: sineAmplitude(decibels: -56))
-        #expect(AudioCaptureManager.trimSilence(roomTone).isEmpty)
-    }
-}
-
-// Peak amplitude of a sine whose RMS is this many decibels of full scale.
-private func sineAmplitude(decibels: Double) -> Float {
-    Float(pow(10, decibels / 20) * 2.0.squareRoot())
-}
-
-// A 16 kHz mono Float32 sample array holding a pure sine — a synthetic "speech"
-// signal with known energy for the trim tests (mirrors makeSineBuffer, but as a
-// bare sample array since trimSilence operates on the converted buffer).
-private func sineSamples(
-    count: Int, frequency: Double, amplitude: Float, sampleRate: Double = 16_000
-) -> [Float] {
-    (0..<count).map { amplitude * Float(sin(2.0 * .pi * frequency * Double($0) / sampleRate)) }
 }
 
 // Synthesize a silent 44.1 kHz mono Float32 buffer of the requested duration.
-// Zeros are sufficient for length/conversion tests; M6 will exercise real audio.
 @MainActor
 private func makeBuffer(milliseconds: Int, sampleRate: Double = 44_100) -> AVAudioPCMBuffer {
     let format = AVAudioFormat(

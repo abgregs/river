@@ -8,7 +8,7 @@ When River inserted a transcript into Claude Code's TUI (VS Code's integrated te
 
 ## The two deliveries hold the same text
 
-`RiverSession.deliver(_:)` retains the transcript as `lastTranscript` and then types that same string; `copyLastTranscript` writes `lastTranscript`. Nothing transforms either copy. A test now pins it: a full cycle with emoji, a combining accent, and quotes types exactly the transcript, and "Copy last transcription" copies exactly what was typed.
+`RiverSession.deliver(_:)` retains the transcript as `lastTranscript` and then types that same string; `copyLastTranscript` writes `lastTranscript`. Nothing transforms either copy, except that a newline is typed as a space ([0039](0039_pipeline-rule-owners.md)), and no transcript holds one today. A test now pins it: a full cycle with emoji, a combining accent, and quotes types exactly the transcript, and "Copy last transcription" copies exactly what was typed.
 
 ## Cause
 
@@ -50,6 +50,10 @@ Alternatives, not taken:
 
 On the installed build with the 4 ms gap, a 176 s dictation (1,856 characters) typed into Claude Code 2.1.299 in VS Code's terminal lost one contiguous run of 1,022 characters, starting mid-word about 200 characters in. "Copy last transcription" pasted with ⌘V was whole. The loop above lost 2,044 characters (2 × 1,022) from about 190 characters in, so this is the same failure: the gap does not hold in the field. Either Claude Code's input handling changed since 2.1.296, or a busy terminal joins the chunks into one read despite the gap. The maintainer confirmed it as a bug to track and deferred the fix (Open items in [_index.md](_index.md)); the candidates are a longer gap or a real paste for terminals, with the costs listed under Fix.
 
+## A one-character last chunk lands early (2026-11-23)
+
+A 421-character Phonon-2 transcript typed into Claude Code in VS Code's terminal arrived with every character, but its final period sat 20 characters early when typed at the release and 100 early with Paste last, each time exactly on a chunk boundary. 421 is 21 chunks of 20 and one of 1: the prompt took the lone character at once, ahead of chunks it was still holding as a possible paste. Since then the last two chunks of `TextInsertionManager.chunk` share their characters (21 become 11 and 10), within the unit budget. Checked on device (2026-11-24): transcripts of 21, 41 and 61 characters typed into Claude Code in order, each period at its end. A plan of several chunks can still end on one character only when one of the text's last three graphemes holds seven or more UTF-16 units, such as a family emoji: no character can then move within the budget without leaving the chunk before shorter than the last. English text has no such graphemes. A text of one character is one chunk, with nothing ahead of it to overtake.
+
 ## Verify on device
 
 Dictate a long passage, 2,000 or more characters with streaming, into Claude Code in VS Code's terminal. The prompt should hold every word, in order, with no `[Pasted text #N]` placeholders. Compare it against "Copy last transcription" pasted into a text editor.
@@ -59,6 +63,7 @@ Dictate a long passage, 2,000 or more characters with streaming, into Claude Cod
 - `TextInsertionFidelityTests`:
   - the typed text is the whole transcript, in order;
   - chunks are spaced at least 1 ms apart, never before the first chunk or after the last.
+- `TextInsertionChunkTests`: no plan ends on a one-character chunk, for lengths 2 to 100 and graphemes of up to six UTF-16 units.
 - `RiverSessionTests`: the typed text equals what "Copy last transcription" copies.
 
 ## Related

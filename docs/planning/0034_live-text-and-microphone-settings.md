@@ -32,6 +32,10 @@ Direction from 2026-10-21, not final. The maintainer deferred all of it past `v0
 - Items: Show/Hide transcript, and Settings (gear).
 - A shortcut-driven show/hide gets a short animation, about 150 ms in and 120 ms out, strong ease-out, opacity plus a small rise, driven from state so a reversal mid-way retargets. The maintainer chose this over "no motion on keyboard actions" (2026-10-21).
 
+## Known limitations
+
+- **After a long pause, the live text can stall** (smoke test, 2026-11-24). A segment is cut only after 1.5 s of speech, so a pause of about 20 s stays inside the phrase being shown, and its preview decodes ran on clips of 15 to 19 s. Phonon-2 decodes a clip over 15 s in overlapping windows, and the shown text wavered for about 7 s (33, then 44, then 33 characters) until the segment was cut. The typed text was right. A fix to weigh later: start the preview at the speech after a long pause.
+
 ## Out of scope
 
 - The rest of the settings panel and the other shortcuts: [0036](0036_settings-and-shortcuts.md).

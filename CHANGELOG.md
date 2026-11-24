@@ -32,6 +32,7 @@ show as raw text. -->
 - The recording indicator draws 川 and is monochrome. When you press, the panel appears, then 川's strokes, faint, then the frosted glass once the microphone hears you; on release the glass leaves, the strokes stay while River transcribes, then the panel leaves. Nothing shows while River loads its model at launch.
 - The model's download and preparation show as a ring, with the real download percentage, beside the recording indicator, in Settings and in the menu bar, in place of Settings' sliding bar and the menu bar's arrow and ellipsis. A model that couldn't load shows the ring in red with an exclamation mark.
 - The floating panels (the indicator, messages and the live transcript) are now solid, lit from the upper left with a bright edge, so they look the same over any desktop.
+- A dictation in which the model hears no words now ends quietly with every model: nothing is typed and no error shows, and the live text keeps going. A Whisper model used to show "Couldn't transcribe".
 - The recording indicator reads your voice on a scale measured from real speech on the built-in microphone: a quiet room keeps it still, and soft, normal and raised speech look different. Before, normal speech already filled it.
 
 - The microphone stays ready while River can take a dictation (permissions granted, the Mac awake and unlocked, including while the model loads), and each recording starts from the last half second of audio, so a word spoken the instant you press keeps its first sound. The last half second is kept in memory and discarded continuously; nothing is saved, transcribed or typed until you press the key. The microphone indicator stays on while River is open and able to dictate.
@@ -44,6 +45,9 @@ show as raw text. -->
 - Pressing to dictate while the model is still loading no longer shows "Model still loading" and drops the press: the dictation records and waits (see Added above).
 - A recording no longer stops hearing you when the audio device changes part-way, for example when a microphone is unplugged. The first recording with AirPods connected used to come back empty for this reason.
 - A recording whose audio stops arriving part-way now ends on its own within a couple of seconds, types the words heard before the loss, and says so, instead of running on and typing the fragment as if it were the whole dictation.
+- The last character of a dictation typed into Claude Code no longer lands earlier in the text.
+- Pressing Paste last twice quickly types the text twice, one after the other, instead of mixing the two.
+- Switching apps while River types a dictation stops the typing there, instead of sending the rest into the other app. River holds the whole dictation for Paste last, the part already typed included.
 
 ## [0.2.1] - 2026-10-08
 

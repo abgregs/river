@@ -20,9 +20,10 @@ struct AudioCaptureReadyModeTests {
         #expect(microphone.isListening)
 
         for _ in 0..<10 { microphone.publishForTest(makeSineBuffer(milliseconds: 100)) }   // 1.0 s idle
-        await manager.startRecording()
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
         microphone.publishForTest(makeSineBuffer(milliseconds: 100))                        // live
-        let samples = try await manager.stopRecording()
+        try await manager.stopRecording()
 
         // 0.5 s of pre-roll to within one 100 ms buffer, plus 100 ms live, at 16 kHz: at
         // least 0.6 s and under 0.7 s. Without the seed this would be ~1,600 samples.
@@ -53,7 +54,7 @@ struct AudioCaptureReadyModeTests {
         clock += 1.2                                      // then a real hole
         #expect(manager.captureGapExceeded())
         await #expect(throws: AudioCaptureError.self) {
-            _ = try await manager.stopRecording()
+            try await manager.stopRecording()
         }
     }
 
@@ -70,13 +71,13 @@ struct AudioCaptureReadyModeTests {
 
         await manager.startRecording()
         await #expect(throws: AudioCaptureError.self) {
-            _ = try await manager.stopRecording(warmupWait: 0.01)
+            try await manager.stopRecording(warmupWait: 0.01)
         }
     }
 
     @MainActor
-    @Test("streaming receives the pre-roll before the live audio")
-    func streamingSeesThePreRoll() async throws {
+    @Test("the dictation receives the pre-roll before the live audio")
+    func dictationSeesThePreRoll() async throws {
         let microphone = MicrophoneCapability()
         microphone.skipEngineForTesting = true
         let manager = AudioCaptureManager(microphone: microphone, now: { 100 })
@@ -88,7 +89,7 @@ struct AudioCaptureReadyModeTests {
         #expect(streamed > 7_500)                         // 0.5 s at 16 kHz, already there
         microphone.publishForTest(makeSineBuffer(milliseconds: 100))
         #expect(streamed > 9_000)
-        _ = try await manager.stopRecording()
+        try await manager.stopRecording()
     }
 
     @MainActor
@@ -101,13 +102,14 @@ struct AudioCaptureReadyModeTests {
 
         await manager.startRecording()
         microphone.publishForTest(makeSineBuffer(milliseconds: 100))
-        _ = try await manager.stopRecording()
+        try await manager.stopRecording()
         #expect(microphone.isListening)
 
         for _ in 0..<3 { microphone.publishForTest(makeSineBuffer(milliseconds: 100)) }  // refills
-        await manager.startRecording()
+        var samples: [Float] = []
+        await manager.startRecording { samples += $0 }
         microphone.publishForTest(makeSineBuffer(milliseconds: 100))
-        let samples = try await manager.stopRecording()
+        try await manager.stopRecording()
         #expect(samples.count > 6_000)                    // 0.3 s seed + 0.1 s live
     }
 
@@ -127,7 +129,7 @@ struct AudioCaptureReadyModeTests {
         await manager.setReady(false)                     // the switch flipped mid-recording
         #expect(microphone.isListening)                   // the recording keeps its unit
         microphone.publishForTest(makeSineBuffer(milliseconds: 100))
-        _ = try await manager.stopRecording()
+        try await manager.stopRecording()
         #expect(!microphone.isListening)                  // applied at the recording's end
     }
 
@@ -141,7 +143,7 @@ struct AudioCaptureReadyModeTests {
         await manager.startRecording()
         #expect(microphone.isListening)
         microphone.publishForTest(makeSineBuffer(milliseconds: 100))
-        _ = try await manager.stopRecording()
+        try await manager.stopRecording()
         #expect(!microphone.isListening)
     }
 

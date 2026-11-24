@@ -146,15 +146,16 @@ struct SegmentJoinerTests {
     }
 }
 
-/// Canned decoder: returns the next answer per call and records what it was given.
+/// Canned decoder: returns the next answer per call and records what it was given; nil is a
+/// model that heard no speech, as once the answers run out.
 @MainActor
 private final class FakeDecoder {
-    var answers: [Result<String, Error>]
+    var answers: [Result<String?, Error>]
     private(set) var clipSeconds: [Double] = []
-    init(_ answers: [Result<String, Error>]) { self.answers = answers }
-    func decode(_ samples: [Float]) async throws -> String {
+    init(_ answers: [Result<String?, Error>]) { self.answers = answers }
+    func decode(_ samples: [Float]) async throws -> String? {
         clipSeconds.append(Double(samples.count) / Double(rate))
-        guard !answers.isEmpty else { return "" }
+        guard !answers.isEmpty else { return nil }
         return try answers.removeFirst().get()
     }
 }
@@ -171,7 +172,7 @@ private final class HeldDecoder {
     private var held: CheckedContinuation<Void, Never>?
     var isHolding: Bool { held != nil }
     init(_ answers: [String]) { self.answers = answers }
-    func decode(_ samples: [Float]) async throws -> String {
+    func decode(_ samples: [Float]) async throws -> String? {
         calls += 1
         if calls == 1 {
             await withCheckedContinuation { held = $0 }
@@ -244,9 +245,23 @@ struct DictationStreamTests {
     }
 
     @MainActor
+    @Test("a segment the model hears nothing in keeps streaming: both segments decode as the user speaks")
+    func nothingHeardKeepsStreaming() async {
+        // A failure in place of nil would stop streaming after the first segment (planning 0039).
+        let decoder = FakeDecoder([.success(nil), .success("Second phrase.")])
+        let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
+        stream.append(speech(2) + silence(1.2) + speech(2) + silence(1.2))
+        await stream.settle()
+        #expect(decoder.clipSeconds.count == 2)
+        let outcome = await stream.finish()
+        #expect(outcome.text == "Second phrase.")
+        #expect(outcome.error == nil)
+    }
+
+    @MainActor
     @Test("a segment that holds no speech is dropped, and the next decodes cold")
     func noSpeechSegment() async {
-        let decoder = FakeDecoder([.failure(TranscriptionError.noSpeechDetected), .success("Second phrase.")])
+        let decoder = FakeDecoder([.success(nil), .success("Second phrase.")])
         let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
         stream.append(speech(2) + silence(1.2) + speech(2))
         let outcome = await stream.finish()
@@ -407,22 +422,252 @@ struct DictationStreamTests {
         let outcome = await stream.finish()
         #expect(outcome.text.isEmpty)
     }
+
+    // MARK: Every path in one piece (planning 0039)
+
+    @MainActor
+    @Test("with no pause long enough to cut, release decodes the whole recording once, trimmed")
+    func noCutDecodesInOnePiece() async {
+        // Nothing was decoded while the user spoke, so release decodes all of it in one call, with
+        // the silence around the speech trimmed: 0.5 s kept before it and 0.2 s after.
+        let decoder = FakeDecoder([.success("Hello there.")])
+        let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
+        stream.append(silence(1) + speech(2) + silence(0.5))
+        await stream.settle()
+        #expect(decoder.clipSeconds.isEmpty)
+
+        let outcome = await stream.finish()
+        #expect(outcome.text == "Hello there.")
+        #expect(outcome.error == nil)
+        #expect(decoder.clipSeconds == [2.7])
+    }
+
+    @MainActor
+    @Test("with streaming off, nothing is decoded while speaking, and release decodes the recording once")
+    func streamingOffDecodesAtRelease() async {
+        // The hidden streamingDictation switch: a pause that would cut stays inside the one clip.
+        let decoder = FakeDecoder([.success("Hello there. General Kenobi.")])
+        let stream = DictationStream(decode: decoder.decode, streaming: false)
+        stream.append(speech(2) + silence(1.2) + speech(2))
+        await stream.settle()
+        #expect(stream.cutCount == 0)
+        #expect(decoder.clipSeconds.isEmpty)
+
+        let outcome = await stream.finish()
+        #expect(outcome.text == "Hello there. General Kenobi.")
+        #expect(decoder.clipSeconds == [5.2])
+    }
+
+    @MainActor
+    @Test("a recording the trim leaves empty is not decoded and never waits for the model")
+    func silenceNeverWaits() async {
+        // A stray tap while the model downloads would otherwise hold River in processing until the
+        // model is ready, and then decode room tone (planning 0004, 0023).
+        let decoder = FakeDecoder([.success("Thank you.")])
+        let stream = DictationStream(decode: decoder.decode)
+        stream.append(silence(2))
+        var waits = 0
+        let outcome = await stream.finish { _ in
+            waits += 1
+            return true
+        }
+        #expect(outcome.text.isEmpty)
+        #expect(outcome.error == nil)
+        #expect(waits == 0)
+        #expect(decoder.clipSeconds.isEmpty)
+    }
+
+    @MainActor
+    @Test("release waits before a one-piece decode, with the clip it then decodes")
+    func waitsWithTheClipItDecodes() async {
+        // A failed load keeps the clip the wait was given, so it must be the audio the decode would
+        // have had (planning 0004).
+        let decoder = FakeDecoder([.success("Hello there.")])
+        let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
+        stream.append(silence(1) + speech(2) + silence(0.5))
+        var waited: [Double] = []
+        let outcome = await stream.finish { clip in
+            #expect(decoder.clipSeconds.isEmpty)
+            waited.append(Double(clip.count) / Double(rate))
+            return true
+        }
+        #expect(waited == [2.7])
+        #expect(decoder.clipSeconds == waited)
+        #expect(outcome.text == "Hello there.")
+    }
+
+    @MainActor
+    @Test("a wait that ends the dictation decodes nothing and returns no text")
+    func endedWaitDecodesNothing() async {
+        // The load failed and the recording is kept, or Cancel Dictation threw it away: either way
+        // nothing is typed now (planning 0004).
+        let decoder = FakeDecoder([.success("Hello there.")])
+        let stream = DictationStream(decode: decoder.decode, provisionalIntervalSeconds: nil)
+        stream.append(speech(2))
+        let outcome = await stream.finish { _ in false }
+        #expect(outcome.text.isEmpty)
+        #expect(outcome.error == nil)
+        #expect(decoder.clipSeconds.isEmpty)
+    }
+
+    @MainActor
+    @Test("a streamed tail is decoded without a wait; the one piece after a failed segment waits")
+    func onlyOnePieceWaits() async {
+        // A segment decoded, so the model is ready for the tail. A failed segment can mean it
+        // isn't ready yet, so everything from there waits for it.
+        let streamed = FakeDecoder([.success("Hello there."), .success("hello there. General Kenobi.")])
+        let first = DictationStream(decode: streamed.decode, provisionalIntervalSeconds: nil)
+        first.append(speech(2) + silence(1.2) + speech(2))
+        var waits = 0
+        let tailOutcome = await first.finish { _ in
+            waits += 1
+            return true
+        }
+        #expect(tailOutcome.text == "Hello there. General Kenobi.")
+        #expect(waits == 0)
+
+        let failing = FakeDecoder([.failure(DecodeFailed()), .success("The whole thing.")])
+        let second = DictationStream(decode: failing.decode, provisionalIntervalSeconds: nil)
+        second.append(speech(2) + silence(1.2) + speech(2))
+        let outcome = await second.finish { _ in
+            waits += 1
+            return true
+        }
+        #expect(outcome.text == "The whole thing.")
+        #expect(waits == 1)
+    }
+
+    @MainActor
+    @Test("with no cut, the one-piece text replaces the provisional text")
+    func onePieceReplacesProvisional() async {
+        // The panel ends on what is typed, never on a phrase cut off mid-word.
+        let decoder = FakeDecoder([.success("Hello the"), .success("Hello there.")])
+        let stream = DictationStream(decode: decoder.decode)
+        var shown: [String] = []
+        stream.onTextChange = { shown.append($0) }
+        stream.append(speech(2))
+        await stream.settle()
+        let outcome = await stream.finish()
+        #expect(shown == ["Hello the", "Hello there."])
+        #expect(outcome.text == "Hello there.")
+    }
+
+    @MainActor
+    @Test("a kept recording is decoded in one piece, trimmed, and one with no speech not at all")
+    func keptRecordingInOnePiece() async {
+        // A recording a failed load kept is decoded later as its dictation would have been.
+        let decoder = FakeDecoder([.success("Hello there.")])
+        let outcome = await DictationStream.transcribe(silence(1) + speech(2) + silence(1.5), decode: decoder.decode)
+        #expect(outcome.text == "Hello there.")
+        #expect(decoder.clipSeconds == [2.7])
+
+        let silent = await DictationStream.transcribe(silence(1), decode: decoder.decode)
+        #expect(silent.text.isEmpty)
+        #expect(decoder.clipSeconds == [2.7])
+    }
 }
 
-@Suite("IncrementalResampler")
-struct IncrementalResamplerTests {
-    @Test("buffer by buffer, 48 kHz becomes 16 kHz with no gaps")
-    func resamplesContinuously() throws {
-        let format = try #require(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false))
-        let resampler = try #require(IncrementalResampler(from: format))
-        var total = 0
-        for _ in 0..<20 {
-            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1024))
-            buffer.frameLength = 1024
-            for i in 0..<1024 { buffer.floatChannelData![0][i] = 0.3 }
-            total += resampler.convert(buffer).count
-        }
-        // 20 × 1024 / 3 ≈ 6827; the converter may hold back a few frames of filter latency.
-        #expect(total > 6700 && total <= 6827)
+@Suite("DictationStream silence trim")
+struct DictationStreamSilenceTrimTests {
+    // Whisper hallucinates text from silence — pasting words the user never spoke
+    // is this app's worst failure. `trimSilence` drops below-threshold audio at
+    // both ends of each 16 kHz clip, keeping a margin so speech is never clipped.
+    // See planning 0023.
+
+    @Test("all-silence input trims to empty")
+    func allSilenceTrimsToEmpty() {
+        // An accidental activation captures pure silence. It must trim to empty so
+        // nothing is decoded — no hallucinated paste.
+        let silence = [Float](repeating: 0, count: 16_000)  // 1 s of digital silence
+        #expect(DictationStream.trimSilence(silence).isEmpty)
     }
+
+    @Test("empty input trims to empty")
+    func emptyTrimsToEmpty() {
+        #expect(DictationStream.trimSilence([]).isEmpty)
+    }
+
+    @Test("silence-padded speech keeps the speech with a margin, dropping the padding")
+    func paddedSpeechPreservesSpeech() {
+        // 1 s silence, 0.5 s voiced, 1 s silence at 16 kHz. The silence beyond the
+        // lead-in and tail margins must be dropped, but the speech and its margins
+        // must survive intact.
+        let pad = [Float](repeating: 0, count: 16_000)
+        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
+        let padded = pad + speech + pad
+
+        let out = DictationStream.trimSilence(padded)
+
+        #expect(out.count < padded.count)           // padding trimmed
+        #expect(out.count >= speech.count)          // speech + margins survive
+        #expect(out.count < padded.count - 16_000)  // most of the silence is gone
+        let rms = (out.reduce(Float(0)) { $0 + $1 * $1 } / Float(out.count)).squareRoot()
+        #expect(rms > 0.1)                         // preserved speech carries energy
+    }
+
+    @Test("speech-only input is returned untouched")
+    func speechOnlyUntouched() {
+        // No silence to trim: every window is voiced, so the whole buffer survives
+        // (the margin clamps to the array bounds). Length is unchanged.
+        let speech = sineSamples(count: 16_000, frequency: 440, amplitude: 0.5)
+        #expect(DictationStream.trimSilence(speech).count == speech.count)
+    }
+
+    // The maintainer's smoke: quiet talking on a built-in mic never reached transcription
+    // under the fixed -40 dBFS gate, so nothing was typed.
+    @Test("a quiet dictation survives the trim instead of being discarded whole")
+    func quietDictationSurvives() {
+        let pad = [Float](repeating: 0, count: 8_000)
+        let quiet = sineSamples(count: 8_000, frequency: 440, amplitude: sineAmplitude(decibels: -44))
+        let padded = pad + quiet + pad
+        let fixedGate = DictationStream.trimSilence(padded, peakRatio: 1, floor: Constants.silenceTrimEnergyThreshold)
+        #expect(fixedGate.isEmpty)
+        #expect(DictationStream.trimSilence(padded).count >= quiet.count)
+    }
+
+    // Planning 0023: room tone left after speech can decode as invented text, so a normal
+    // dictation's tail must be cut exactly where the fixed gate cut it.
+    @Test("normal speech keeps the fixed gate, so its quiet tail is still cut")
+    func normalSpeechTrimsAsBefore() {
+        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
+        let tail = sineSamples(count: 16_000, frequency: 440, amplitude: sineAmplitude(decibels: -45))
+        let recording = speech + tail
+        let trimmed = DictationStream.trimSilence(recording)
+        #expect(trimmed == DictationStream.trimSilence(recording, peakRatio: 1, floor: Constants.silenceTrimEnergyThreshold))
+        #expect(trimmed.count < speech.count + tail.count / 2)
+    }
+
+    // The maintainer's smoke (2026-09-26): with 0.1 s kept before a word, quick taps of
+    // "hello there" reached Whisper clipped mid-word and decoded to nothing; the lead-in
+    // is the context it needs. The tail stays short, since room tone after speech is what
+    // Whisper turns into invented text (planning 0023).
+    @Test("the trim keeps half a second before speech and a fifth of a second after")
+    func trimKeepsLeadInAndShortTail() {
+        let silence = [Float](repeating: 0, count: 16_000)
+        let speech = sineSamples(count: 8_000, frequency: 440, amplitude: 0.5)
+        let out = DictationStream.trimSilence(silence + speech + silence)
+        #expect(Constants.silenceTrimLeadSeconds == 0.5)
+        #expect(Constants.silenceTrimTailSeconds == 0.2)
+        #expect(out.count == Int(Constants.silenceTrimLeadSeconds * 16_000) + speech.count + Int(Constants.silenceTrimTailSeconds * 16_000))
+    }
+
+    // An accidental activation in a quiet room must still decode nothing.
+    @Test("near-silence below the floor still trims to empty")
+    func nearSilenceTrimsToEmpty() {
+        let roomTone = sineSamples(count: 16_000, frequency: 440, amplitude: sineAmplitude(decibels: -56))
+        #expect(DictationStream.trimSilence(roomTone).isEmpty)
+    }
+}
+
+// Peak amplitude of a sine whose RMS is this many decibels of full scale.
+private func sineAmplitude(decibels: Double) -> Float {
+    Float(pow(10, decibels / 20) * 2.0.squareRoot())
+}
+
+// A 16 kHz mono sample array holding a pure sine: a synthetic "speech" signal with known
+// energy for the trim tests.
+private func sineSamples(
+    count: Int, frequency: Double, amplitude: Float, sampleRate: Double = 16_000
+) -> [Float] {
+    (0..<count).map { amplitude * Float(sin(2.0 * .pi * frequency * Double($0) / sampleRate)) }
 }

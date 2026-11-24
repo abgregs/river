@@ -8,6 +8,8 @@ A queued backlog item from the 2026-07-06 UX review. Show a live input-level ind
 
 A muted mic, a dead headset, or the wrong input device produces silence — and today the user finds out only *after* the cycle, as "Couldn't transcribe: Transcription returned no text." That error is technically honest but diagnostically empty: the user re-records into the same silent mic. A live level meter converts this from a post-hoc mystery into immediate feedback ("the bars aren't moving — my mic is muted"), the same way every voice-memo and call app does.
 
+*2026-11-23 ([0039](0039_pipeline-rule-owners.md), A):* that error no longer appears. An empty result is quiet for every engine, so a microphone that delivers only silence types nothing and shows no error, and the live meter is the main sign of it.
+
 ## Design: level computed at the one capture site
 
 - **The level tap lives inside `MicrophoneCapability`** — the only place the capture unit is started, with `AudioOutputUnitStart` (load-bearing rule #3). It computes a cheap RMS/peak from the buffers already flowing through the existing `audioBuffers` tap; no second tap, no new OS surface.

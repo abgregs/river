@@ -32,7 +32,7 @@ The trim and padding changes in [0023](0023_silence-decoding-hardening.md) recov
 A long-lived capture unit sees every device change: AirPods connecting, headphones plugged in, the default input switching. Fixes 1 and 2 of [0032](0032_first-recording-device-switch.md) landed first (PR #75, branch `fix/device-switch`):
 
 - `MicrophoneCapability` observed `.AVAudioEngineConfigurationChange`, re-read the input format, reinstalled the tap and restarted the engine. Superseded by the HAL listeners below.
-- `AudioCaptureManager.convert` handles runs of buffers with different formats. Still current.
+- `AudioCaptureManager.convert` handles runs of buffers with different formats. Still current in substance: since [0039](0039_pipeline-rule-owners.md) the live conversion does it, one resampler per run, finished at each change, and `convert` is gone.
 
 With the HAL unit (below) the notification went away: a HAL unit pinned to one device does not follow the default. The capability instead listens to the default input device (`kAudioHardwarePropertyDefaultInputDevice`), the device list (`kAudioHardwarePropertyDevices`), and the pinned device's nominal sample rate and liveness (`kAudioDevicePropertyNominalSampleRate`, `kAudioDevicePropertyDeviceIsAlive`), re-runs the selection, and re-pins and restarts when the device or its rate changes (landed in PR #76). CoreAudio delivers one hardware event as a burst of 15–19 listener callbacks, so the handler runs once per burst (PR #78). The restart itself is the same shape as 0032's: tear down, pin, read the format, start, and the format-run conversion absorbs the rate change. The capture gap watchdog (0032 fixes 3 and 4) is the backstop for a pinned device that stops delivering.
 
