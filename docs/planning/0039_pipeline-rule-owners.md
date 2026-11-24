@@ -42,7 +42,7 @@ What holds, and stays: one import per engine; every decode through `Transcriptio
 - **One insert at a time.** A second insert waits for the first, so Paste last pressed twice types the text twice, in order.
 - **The app in front is read again before each chunk.** If it changed, typing stops and the text is held, as when it changes before typing starts. The first read comes before the insertion guard, so a switch to an app with no text field holds the text rather than reporting no field. A Paste last stopped this way shows nothing: at `.idle` the panel draws a status only during a dictation.
 - **A newline is typed as a space.** **Why:** Return sends a message in most chat apps, and River's own joins already avoid newlines.
-- **No plan ends on a one-character chunk:** the last two chunks share the remainder ([0031](0031_terminal-insert-fidelity.md) names the one exception, text no speech model writes). Checked on device in Claude Code at 21, 41 and 61 characters, the 20n+1 lengths where the bug appeared (2026-11-24); a transcript of 20n+2 never ended on one character, before or after.
+- **The last two chunks share the remainder,** so a plan of several chunks ends on one character only for text no speech model writes ([0031](0031_terminal-insert-fidelity.md)). Checked on device in Claude Code at 21, 41 and 61 characters, the 20n+1 lengths where the bug appeared (2026-11-24); a transcript of 20n+2 never ended on one character, before or after.
 - Unchanged: the one post in `AccessibilityCapability`; Paste last's wait for the shortcut's keys in `HotkeyManager`; keystrokes, never the clipboard, for typing ([0011](0011_keystroke-injection.md)).
 - **Tests.** Chunk plans for every length; queue order with the injected pause; each outcome, with no polling; a change of app mid-insert.
 
@@ -95,7 +95,7 @@ A, B and C ship as one PR, `refactor/pipeline-owners`, with a commit series per 
 ## Acceptance criteria
 
 1. **A.** An empty result from either engine types nothing, shows no error, and keeps live streaming. No caller catches an engine's own error, and session tests reach typed text through `FakeModel`, with `transcribeResultForTesting` gone.
-2. **B.** Paste last pressed twice types the text twice, in order (tested). No plan ends on a one-character chunk, and on device transcripts of 20n+1 characters, such as 421, type in order in Claude Code (21, 41 and 61 checked, 2026-11-24). A change of app mid-insert stops typing and holds the text.
+2. **B.** Paste last pressed twice types the text twice, in order (tested). The last two chunks share the remainder (tested), and on device transcripts of 20n+1 characters, such as 421, type in order in Claude Code (21, 41 and 61 checked, 2026-11-24). A change of app mid-insert stops typing and holds the text.
 3. **C.** Tests see every clip an engine gets, on every path; the one-piece decode exists once; the conversion runs once per recording, and the trim in one place, the module, before each decode.
 4. **D.** The replay runs a model over the corpus with streaming on and off and writes word errors and text-shape results; a clip over 30 s types in full on every model.
 
