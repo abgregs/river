@@ -254,7 +254,7 @@ struct FocusedTargetClassificationTests {
         "AXButton", "AXCheckBox", "AXRadioButton", "AXPopUpButton",
         "AXMenuButton", "AXMenuItem", "AXLink", "AXImage", "AXStaticText",
         "AXRow", "AXCell", "AXTable", "AXOutline", "AXList", "AXSlider",
-        "AXDisclosureTriangle"
+        "AXDisclosureTriangle", "AXWindow"
     ])
     func nonEditableRoles(role: String) {
         #expect(AccessibilityCapability.classifyFocusedTarget(role: role, subrole: nil) == .nonEditable)
@@ -313,6 +313,21 @@ struct FocusedTargetClassificationTests {
         capability.focusedElementReadForTesting = { ("AXButton", nil, nil) }
         #expect(capability.classifyFocusedTarget() == .nonEditable)
         capability.focusedElementReadForTesting = { (nil, nil, .cannotComplete) }
+        #expect(capability.classifyFocusedTarget() == .unknown)
+    }
+
+    @MainActor
+    @Test("nothing focused skips the paste, so a failed paste is reported, not typed into nowhere")
+    func nothingFocusedSkips() {
+        // With no text field focused, macOS answers kAXErrorNoValue (-25212). Typing then
+        // vanished with no word to the user (maintainer, on device, 2026-11-24); skipping turns
+        // it into Couldn't paste.
+        let capability = AccessibilityCapability()
+        capability.setStatusForTesting(.granted)
+        capability.focusedElementReadForTesting = { (nil, nil, .noValue) }
+        #expect(capability.classifyFocusedTarget() == .nonEditable)
+        // A read that fails any other way still types.
+        capability.focusedElementReadForTesting = { (nil, nil, .failure) }
         #expect(capability.classifyFocusedTarget() == .unknown)
     }
 }
