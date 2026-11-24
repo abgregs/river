@@ -45,6 +45,7 @@ show as raw text. -->
 - Pressing to dictate while the model is still loading no longer shows "Model still loading" and drops the press: the dictation records and waits (see Added above).
 - A recording no longer stops hearing you when the audio device changes part-way, for example when a microphone is unplugged. The first recording with AirPods connected used to come back empty for this reason.
 - A recording whose audio stops arriving part-way now ends on its own within a couple of seconds, types the words heard before the loss, and says so, instead of running on and typing the fragment as if it were the whole dictation.
+- The last character of a dictation typed into Claude Code no longer lands earlier in the text.
 
 ## [0.2.1] - 2026-10-08
 

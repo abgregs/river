@@ -38,6 +38,37 @@ struct TextInsertionChunkTests {
     func emptyYieldsNothing() {
         #expect(TextInsertionManager.chunk("", maxUnits: 20).isEmpty)
     }
+
+    @MainActor
+    @Test("a plan never ends on a lone character: the last two chunks share the remainder")
+    func lastChunkIsNeverOneCharacter() {
+        // Claude Code's prompt took a final one-character chunk at once, ahead of chunks it
+        // still held as a possible paste, so the last character landed early (planning 0031).
+        let a = { (count: Int) in String(repeating: "a", count: count) }
+        #expect(TextInsertionManager.chunk(a(21), maxUnits: 20).map(\.count) == [11, 10])
+        #expect(TextInsertionManager.chunk(a(41), maxUnits: 20).map(\.count) == [20, 11, 10])
+        #expect(TextInsertionManager.chunk(a(421), maxUnits: 20).map(\.count) == Array(repeating: 20, count: 20) + [11, 10])
+        #expect(TextInsertionManager.chunk(a(22), maxUnits: 20).map(\.count) == [20, 2])
+        let flag = "\u{1F1FA}\u{1F1F8}"   // one character, four UTF-16 units
+        #expect(TextInsertionManager.chunk(a(20) + flag, maxUnits: 20) == [a(11), a(9) + flag])
+        #expect(TextInsertionManager.chunk("a", maxUnits: 20) == ["a"])
+    }
+
+    @MainActor
+    @Test("every plan keeps the text whole, its characters intact, its chunks in budget and none alone", arguments: [
+        "a", "漢", "e\u{301}", "\u{1F44D}\u{1F3FD}", "\u{1F1FA}\u{1F1F8}", "\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}", "word ",
+    ])
+    func everyPlanHolds(unit: String) {
+        for count in 2...100 {
+            let text = String(repeating: unit, count: count)
+            let chunks = TextInsertionManager.chunk(text, maxUnits: 20)
+            #expect(chunks.joined() == text)
+            // A character split across chunks would count twice.
+            #expect(chunks.map(\.count).reduce(0, +) == text.count)
+            #expect(chunks.allSatisfy { $0.utf16.count <= 20 })
+            #expect(chunks.allSatisfy { $0.count >= 2 }, "\(count) × \(unit): \(chunks.map(\.count))")
+        }
+    }
 }
 
 @Suite("TextInsertionManager.insertText")

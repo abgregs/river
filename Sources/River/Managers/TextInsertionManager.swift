@@ -95,7 +95,23 @@ final class TextInsertionManager {
             currentUnits += units
         }
         if !current.isEmpty { chunks.append(current) }
-        return chunks
+        return balancedEnding(chunks, maxUnits: maxUnits)
+    }
+
+    // A target can take a lone character at once while it still holds earlier chunks back as
+    // a possible paste, so a last chunk of one character landed early in Claude Code (planning
+    // 0031): the last two chunks share their characters instead, within the unit budget.
+    private static func balancedEnding(_ chunks: [String], maxUnits: Int) -> [String] {
+        guard chunks.count >= 2, chunks[chunks.count - 1].count == 1 else { return chunks }
+        var front = Array(chunks[chunks.count - 2])
+        var back = Array(chunks[chunks.count - 1])
+        var backUnits = back.reduce(0) { $0 + String($1).utf16.count }
+        while front.count - back.count >= 2, let moving = front.last,
+              backUnits + String(moving).utf16.count <= maxUnits {
+            back.insert(front.removeLast(), at: 0)
+            backUnits += String(moving).utf16.count
+        }
+        return Array(chunks.dropLast(2)) + [String(front), String(back)]
     }
 
     // Builds a key event carrying the literal characters. `keyboardSetUnicodeString`
