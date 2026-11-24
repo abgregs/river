@@ -488,20 +488,22 @@ enum Constants {
     // held text stays this long after it shows, then leaves with the panel.
     static let statusRevealDelaySeconds: Double = 0.5
     static let statusHoldSeconds: Double = 4
-    // The row: 8 pt right of the mark's panel, 26 pt tall with the
-    // tile's corner; the ring in a 26 pt tile, inset 6 pt, with a hairline inset 2.25 pt at
-    // radius 3.75; the words 30 pt in, at 12 pt, the detail 6 pt after them, 10 pt to the end.
+    // The row (maintainer, size B, 2026-11-24): the glyph inset 6 pt in a 26 pt tile with a hairline
+    // on its edge, the tile padded 5 pt inside the surface, so the row is 36 pt tall and its corner,
+    // the tile's plus the padding, is 11 pt, the mark's panel's. The words 10 pt after the tile, at
+    // 13 pt, the detail 6 pt after them, 14 pt to the end.
     static let statusRowGap: Double = 8
-    static let statusRowHeight: Double = 26
-    static let statusRowCornerRadius: Double = 6
     static let statusRowGlyphInset: Double = 6
-    static let statusRowHairlineInset: Double = 2.25
-    static let statusRowHairlineRadius: Double = 3.75
+    static let statusRowTile: Double = StatusRing.grid + 2 * statusRowGlyphInset
+    static let statusRowPadding: Double = 5
+    static let statusRowHeight: Double = statusRowTile + 2 * statusRowPadding
+    static let statusRowTileRadius: Double = 6
+    static let statusRowCornerRadius: Double = statusRowTileRadius + statusRowPadding
     static let statusRowHairlineOpacity: Double = 0.1
-    static let statusRowTextInset: Double = 30
-    static let statusRowFontSize: Double = 12
+    static let statusRowTextGap: Double = 10
+    static let statusRowFontSize: Double = 13
     static let statusRowDetailGap: Double = 6
-    static let statusRowTrailingPadding: Double = 10
+    static let statusRowTrailingPadding: Double = 14
     // Room for the widest row River writes (a test measures each); the window keeps this much
     // on each side of the mark, so the row is never cut off.
     static let statusRowMaxWidth: Double = 300

@@ -93,7 +93,7 @@ struct StatusRow: View {
             let entry = StatusRowEntry.at(context.date.timeIntervalSince(shown.appeared), reduceMotion: reduceMotion)
             let frame = isRing ? ring.map { StatusRing.frame(at: $0.time(at: context.date), events: $0.events, reduceMotion: reduceMotion) } : nil
             let words = StatusRowWords.of(shown.status, frame: frame, pasteLast: pasteLast)
-            StatusRowFace(words: words, frame: frame)
+            StatusRowFace(words: words, glyph: frame.map(StatusGlyph.ring) ?? .held)
                 .opacity(entry.opacity * panel.panel)
                 .offset(y: entry.rise + panel.rise)
                 .accessibilityElement(children: .ignore)
@@ -133,46 +133,56 @@ struct StatusRow: View {
     }
 }
 
-/// The row at one moment: the glyph in its 26 pt tile, then the words, on the floating UI's
-/// surface with the window's edge.
+/// What the row's tile shows: the status ring, App switched's held sheet, or a permission
+/// error's lock.
+enum StatusGlyph: Equatable {
+    case ring(StatusRingFrame)
+    case held
+    case locked
+}
+
+/// The row at one moment: the glyph in its 26 pt tile, padded inside the floating UI's surface
+/// with the window's edge, then the words.
 struct StatusRowFace: View {
     let words: StatusRowWords
-    /// The ring's frame, or nil for the held sheet.
-    let frame: StatusRingFrame?
+    let glyph: StatusGlyph
     @Environment(\.colorScheme) private var colorScheme
 
     private typealias C = Constants
 
     var body: some View {
-        let ink = Color(nsColor: Palette.HUD.for(colorScheme).text)
+        let ink = Palette.HUD.for(colorScheme).text
         HStack(spacing: 0) {
             Group {
-                if let frame {
+                switch glyph {
+                case .ring(let frame):
                     StatusRingGlyph(frame: frame)
-                } else {
-                    Canvas { context, size in
-                        HeldSheetRenderer.draw(in: &context, size: size, ink: Palette.HUD.for(colorScheme).text)
-                    }
-                    .frame(width: StatusRing.grid, height: StatusRing.grid)
+                case .held:
+                    Canvas { context, size in HeldSheetRenderer.draw(in: &context, size: size, ink: ink) }
+                case .locked:
+                    Canvas { context, size in LockRenderer.draw(in: &context, size: size, ink: ink) }
                 }
             }
+            .frame(width: StatusRing.grid, height: StatusRing.grid)
             .padding(C.statusRowGlyphInset)
             .overlay {
-                RoundedRectangle(cornerRadius: C.statusRowCornerRadius, style: .continuous)
-                    .inset(by: C.statusRowHairlineInset)
-                    .stroke(ink.opacity(C.statusRowHairlineOpacity), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: C.statusRowTileRadius, style: .continuous)
+                    .inset(by: 0.25)
+                    .stroke(Color(nsColor: ink).opacity(C.statusRowHairlineOpacity), lineWidth: 0.5)
             }
             Text(words.main)
-                .padding(.leading, C.statusRowTextInset - C.statusRowHeight)
+                .padding(.leading, C.statusRowTextGap)
             if let detail = words.detail {
                 detailText(detail)
-                    .foregroundStyle(ink.opacity(C.hudSecondaryTextOpacity))
+                    .foregroundStyle(Color(nsColor: ink).opacity(C.hudSecondaryTextOpacity))
                     .padding(.leading, C.statusRowDetailGap)
             }
         }
         .font(.system(size: C.statusRowFontSize))
-        .foregroundStyle(ink)
+        .foregroundStyle(Color(nsColor: ink))
         .lineLimit(1)
+        .padding(.vertical, C.statusRowPadding)
+        .padding(.leading, C.statusRowPadding)
         .padding(.trailing, C.statusRowTrailingPadding)
         .frame(height: C.statusRowHeight)
         .fixedSize()
@@ -194,6 +204,9 @@ enum HeldSheetRenderer {
     static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
         var c = context
         c.scaleBy(x: size.width / StatusRing.grid, y: size.height / StatusRing.grid)
+        // Up 0.75 pt, so the ink, which ran from 1.75 to 13.75, centres in the tile (maintainer,
+        // 2026-11-24).
+        c.translateBy(x: 0, y: -0.75)
         c.translateBy(x: 7, y: 7.6)
         c.rotate(by: .degrees(-6))
         c.translateBy(x: -7, y: -7.6)
@@ -209,5 +222,31 @@ enum HeldSheetRenderer {
         c.stroke(lines, with: color(0.45), style: StrokeStyle(lineWidth: 1.05, lineCap: .round, lineJoin: .round))
         let weight = RoundedRectangle(cornerRadius: 0.7, style: .continuous).path(in: CGRect(x: 4.7, y: 1.9, width: 4.6, height: 2.3))
         c.fill(weight, with: color(0.9))
+    }
+}
+
+/// A permission error's glyph, on the 14 pt grid, built as the held sheet is: the shackle in
+/// outline, the body solid with its keyhole cut out, so the tile shows through it.
+enum LockRenderer {
+    static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
+        var c = context
+        c.scaleBy(x: size.width / StatusRing.grid, y: size.height / StatusRing.grid)
+        func color(_ alpha: Double) -> GraphicsContext.Shading { .color(Color(nsColor: ink).opacity(alpha)) }
+        var shackle = Path()
+        shackle.move(to: CGPoint(x: 4.75, y: 6.6))
+        shackle.addLine(to: CGPoint(x: 4.75, y: 4.6))
+        shackle.addArc(center: CGPoint(x: 7, y: 4.6), radius: 2.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        shackle.addLine(to: CGPoint(x: 9.25, y: 6.6))
+        c.stroke(shackle, with: color(0.45), style: StrokeStyle(lineWidth: 1.15, lineCap: .round, lineJoin: .round))
+        c.drawLayer { layer in
+            layer.fill(RoundedRectangle(cornerRadius: 1.6, style: .continuous).path(in: CGRect(x: 3.1, y: 6.3, width: 7.8, height: 6)),
+                       with: color(0.9))
+            layer.blendMode = .destinationOut
+            layer.fill(Path(ellipseIn: CGRect(x: 6.05, y: 7.9, width: 1.9, height: 1.9)), with: .color(.black))
+            var stem = Path()
+            stem.move(to: CGPoint(x: 7, y: 8.85))
+            stem.addLine(to: CGPoint(x: 7, y: 10.6))
+            layer.stroke(stem, with: .color(.black), style: StrokeStyle(lineWidth: 0.95, lineCap: .round))
+        }
     }
 }

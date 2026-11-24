@@ -91,8 +91,9 @@ struct StatusRowWordsTests {
         let longest = (display: ShortcutText.display(.combination(keyCode: 51, modifiers: [.control, .option, .shift, .command])),
                        spoken: "")
         let rows = StatusRowWords.all(pasteLast: longest)
+        let leading: Double = C.statusRowPadding + C.statusRowTile + C.statusRowTextGap
         let widest = rows.map { words in
-            C.statusRowTextInset + width(words.main)
+            leading + width(words.main)
                 + (words.detail.map { C.statusRowDetailGap + width($0.hasSuffix("%") ? "100%" : $0) } ?? 0)
                 + C.statusRowTrailingPadding
         }.max() ?? 0
