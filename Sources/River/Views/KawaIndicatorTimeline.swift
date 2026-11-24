@@ -116,8 +116,8 @@ enum KawaIndicatorTimeline {
 
     /// From when nothing on the panel can move until the next event: the muted strokes are in
     /// and the layer is still waiting for audio, as with a dead microphone; or the recording is
-    /// released, Glass has left and the text is not typed yet, as while River waits for the model
-    /// (planning 0004), which can take minutes. Nil while audio drives the layer, and once the
+    /// released, Glass has left and the text is not typed yet, as through a long transcription (a
+    /// dictation that waits for the model lets the panel go, planning 0004). Nil while audio drives the layer, and once the
     /// text is typed, when the exit is to come.
     static func stillFrom(_ ev: KawaIndicatorEvents) -> Double? {
         typealias C = Constants
@@ -132,6 +132,10 @@ enum KawaIndicatorTimeline {
     /// at the same moment (a cancel), without Reduce Motion. The window stays up this long so
     /// the exit is never cut off.
     static let longestExit: Double = end(KawaIndicatorEvents(press: 0, release: 0, typed: 0), reduceMotion: false)
+
+    /// From the release of a dictation that won't type until a status has shown until that status
+    /// enters: the panel's exit, then `statusEntryBeatSeconds` (maintainer, 2026-11-24).
+    static let statusHandOff: Double = longestExit + Constants.statusEntryBeatSeconds
 
     private static func strokesOut(_ ev: KawaIndicatorEvents) -> Double {
         let layerEnd = ev.release + Constants.kawaLayerOutDelaySeconds + Constants.kawaLayerOutSeconds

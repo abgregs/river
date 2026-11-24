@@ -399,17 +399,8 @@ enum Constants {
     // up; if the tap falls silent, after this long anyway, so they can't stay paused for good.
     static let shortcutResumeDeadlineSeconds: Double = 10
 
-    // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
-    static let hudMessageCornerRadius: Double = 16
-    static let hudMessagePadding: Double = 12
-    static let hudMessageWidth: Double = 260
+    // The gap between the stack's surfaces: the transcript above the mark's place.
     static let hudStackSpacing: Double = 8
-    // Space always reserved above the mark for that rectangle, which grows upward from the
-    // mark so the Dock never covers it. The panel is this one
-    // fixed size whatever it shows, so the capsule's position is arithmetic and a message
-    // appearing or leaving can never move it (the shift the maintainer saw on cancel,
-    // 2026-09-17, when a notice grew the content inside an already-sized panel).
-    static let hudMessageReservedHeight: Double = 140
 
     // The streaming transcript panel: its own surface, a fixed size, `hudStackSpacing` above
     // the mark's panel. Bare prototype UI; scrolls when the text outgrows it.
@@ -483,16 +474,16 @@ enum Constants {
     static let statusRingRevealEdge: Double = 1.5
     static let statusRingRevealBlur: Double = 0.45
 
-    // The status row beside the indicator (planning 0004): it
-    // appears this long after a dictation ends with the model not ready, and a failed load or
-    // held text stays this long after it shows, then leaves with the panel.
-    static let statusRevealDelaySeconds: Double = 0.5
+    // The status in the mark's place (planning 0004): it enters this long after the mark's panel
+    // has gone (maintainer, 2026-11-24), so the two never share the place; a failed load, held
+    // text or an error stays this long on screen, and Ready this long once its check is drawn.
+    static let statusEntryBeatSeconds: Double = 0.12
     static let statusHoldSeconds: Double = 4
+    static let statusReadyHoldSeconds: Double = 0.6
     // The row (maintainer, size B, 2026-11-24): the glyph inset 6 pt in a 26 pt tile with a hairline
     // on its edge, the tile padded 5 pt inside the surface, so the row is 36 pt tall and its corner,
     // the tile's plus the padding, is 11 pt, the mark's panel's. The words 10 pt after the tile, at
     // 13 pt, the detail 6 pt after them, 14 pt to the end.
-    static let statusRowGap: Double = 8
     static let statusRowGlyphInset: Double = 6
     static let statusRowTile: Double = StatusRing.grid + 2 * statusRowGlyphInset
     static let statusRowPadding: Double = 5
@@ -504,9 +495,9 @@ enum Constants {
     static let statusRowFontSize: Double = 13
     static let statusRowDetailGap: Double = 6
     static let statusRowTrailingPadding: Double = 14
-    // Room for the widest row River writes (a test measures each); the window keeps this much
-    // on each side of the mark, so the row is never cut off.
-    static let statusRowMaxWidth: Double = 300
+    // Room for the widest row River writes (a test measures each); the window is at least this
+    // wide, so the row, centred where the mark was, is never cut off.
+    static let statusRowMaxWidth: Double = 440
 
     // The voice: one shared level, stepped at a fixed rate so it is the same at any frame rate.
     // It rises fast and falls slowly, with a ±18 % jitter re-drawn on its own clock so it never
@@ -622,11 +613,6 @@ enum Constants {
     // The mark's height as a fraction of the squircle's.
     static let appIconMarkFraction: Double = 0.56
     static let appIconFileName = "River.icns"
-
-    // How long an error toast stays on the HUD before auto-dismissing (planning
-    // 0018 acceptance criterion 1). Long enough to read a headline + hint, short
-    // enough to "get out of the way."
-    static let errorToastDurationSeconds: Double = 4.0
 
     // nspasteboard.org marker types for the user-initiated "Copy Last Transcription"
     // write (planning 0019). Applied so well-behaved clipboard managers skip recording

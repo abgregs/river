@@ -509,14 +509,20 @@ struct KawaIndicatorCycleTests {
 
 @Suite("MarkActivity")
 struct MarkActivityTests {
-    @Test("the mark listens while recording, transcribes while processing, and rests at idle unless a status holds it")
+    @Test("the mark listens while recording, transcribes while processing, and rests at idle")
     func mapping() {
-        #expect(MarkActivity.of(state: .recording, holdsPanel: false) == .listening)
-        #expect(MarkActivity.of(state: .processing, holdsPanel: false) == .transcribing)
-        #expect(MarkActivity.of(state: .idle, holdsPanel: false) == .rest)
-        // planning 0004: a failed load or held text is said after River is idle, so the panel
-        // stays up for it, and nothing at all shows at launch while the model loads.
-        #expect(MarkActivity.of(state: .idle, holdsPanel: true) == .transcribing)
+        #expect(MarkActivity.of(state: .recording, hidesPanel: false) == .listening)
+        #expect(MarkActivity.of(state: .processing, hidesPanel: false) == .transcribing)
+        #expect(MarkActivity.of(state: .idle, hidesPanel: false) == .rest)
+    }
+
+    @Test("a dictation that waits for the model, or has a status to show, lets the panel go while processing")
+    func statusLetsThePanelGo() {
+        // planning 0004 (maintainer, 2026-11-24): the panel leaves on its ordinary exit and the
+        // status shows alone in its place, never beside it.
+        #expect(MarkActivity.of(state: .processing, hidesPanel: true) == .rest)
+        // A recording is never cut short by a status.
+        #expect(MarkActivity.of(state: .recording, hidesPanel: true) == .listening)
     }
 }
 
@@ -531,11 +537,14 @@ struct IndicatorPanelGeometryTests {
         #expect(Constants.indicatorPanelHeight == 48)
     }
 
-    // Concentric radii: the message rectangle's radius is its padding plus a 4 pt inner radius.
-    @Test("the message rectangle keeps the concentric 16 pt radius over 12 pt padding")
-    func messageGeometry() {
-        #expect(Constants.hudMessageCornerRadius == Constants.hudMessagePadding + 4)
-        #expect(Constants.hudStackSpacing == 8)
+    // Concentric radii: the status's corner is its tile's plus the padding round it, and comes
+    // to the mark's panel's corner, so the two shapes that share the place read as one family
+    // (size B, maintainer 2026-11-24).
+    @Test("the status's corner is concentric with its tile and matches the mark's panel")
+    func statusGeometry() {
+        #expect(Constants.statusRowCornerRadius == Constants.statusRowTileRadius + Constants.statusRowPadding)
+        #expect(Constants.statusRowCornerRadius == Constants.indicatorPanelCornerRadius)
+        #expect(Constants.statusRowHeight == 36)
     }
 
     // Every surface is lit from one place, the upper left, where Glass lights its ripples from.

@@ -163,43 +163,61 @@ struct AppStateTests {
         #expect(appState.modelLoadState == .ready)
     }
 
-    // MARK: - Error toast lifecycle (planning 0018)
+    // MARK: - Errors as statuses (planning 0018)
 
     @MainActor
-    @Test("a cycle error sets a transient toast alongside the lingering menu-row message")
-    func errorSetsToast() {
-        // Two renderers of one error (planning 0018): the redacted `errorMessage`
-        // is the lingering menu record; the `toast` is the transient HUD alert.
+    @Test("a cycle error sets its status alongside the lingering menu-row message")
+    func errorSetsStatus() {
+        // Two renderers of one error (planning 0018): the redacted `errorMessage` is the
+        // lingering menu record; the status in the mark's place is the alert.
         let appState = AppState()
         let error = RiverError.textInsertion(underlying: NSError(domain: "x", code: 1))
         appState.apply(error)
-        #expect(appState.toast == ErrorToastPresentation.toast(for: error))
+        #expect(appState.dictationStatus == .error(ErrorStatusPresentation.status(for: error)))
         #expect(appState.errorMessage != nil)
     }
 
     @MainActor
-    @Test("the toast auto-clears when its scheduled timer fires (injectable clock)")
-    func toastAutoClearsOnTimer() {
-        // AC1/AC4: the toast auto-dismisses after a bounded duration. An injected
-        // scheduler fires the dismiss synchronously — no wall-clock wait — and
-        // confirms the duration passed is the configured one.
+    @Test("an error at the end of a dictation stays 4 s once the panel has handed over to it")
+    func errorHoldsAfterTheHandOff() {
+        // It arrives while River is still processing, so it shows only after the panel has left
+        // and the beat has passed; the hold counts that time, so the status is on screen 4 s.
         let scheduler = ManualScheduler()
         let appState = AppState(schedule: scheduler.schedule)
+        appState.apply(modelLoadState: .ready)
+        appState.apply(.recording)
+        appState.apply(.processing)
         appState.apply(RiverError.audioCapture(underlying: NSError(domain: "x", code: 1)))
-        #expect(appState.toast != nil)
-        #expect(scheduler.lastDelay == Constants.errorToastDurationSeconds)
-        scheduler.fire()
-        #expect(appState.toast == nil)
+        #expect(appState.hidesPanel)
+        appState.apply(.idle)
+        let hold = KawaIndicatorTimeline.statusHandOff + Constants.statusHoldSeconds
+        #expect(scheduler.pendingDelays.contains { abs($0 - hold) < 1e-9 })
+        scheduler.fire(after: hold)
+        #expect(appState.dictationStatus == nil)
     }
 
     @MainActor
-    @Test("a fresh recording clears a lingering toast (its timer is moot)")
-    func recordingClearsToast() {
-        let appState = AppState()
+    @Test("a permission refused before any recording shows at once and stays 4 s")
+    func permissionErrorHoldsFourSeconds() {
+        // No panel was up, so there is nothing to wait for.
+        let scheduler = ManualScheduler()
+        let appState = AppState(schedule: scheduler.schedule)
+        appState.apply(RiverError.permission(capability: "Microphone"))
+        #expect(scheduler.pendingDelays == [Constants.statusHoldSeconds])
+        scheduler.fire(after: Constants.statusHoldSeconds)
+        #expect(appState.dictationStatus == nil)
+    }
+
+    @MainActor
+    @Test("a fresh recording clears an error's status (its hold is moot)")
+    func recordingClearsErrorStatus() {
+        let scheduler = ManualScheduler()
+        let appState = AppState(schedule: scheduler.schedule)
         appState.apply(RiverError.transcription(underlying: NSError(domain: "x", code: 1)))
-        #expect(appState.toast != nil)
+        #expect(appState.dictationStatus != nil)
         appState.apply(.recording)
-        #expect(appState.toast == nil)
+        #expect(appState.dictationStatus == nil)
+        #expect(scheduler.pendingDelays.isEmpty)
     }
 
     // MARK: - Input level (planning 0020)
@@ -343,10 +361,11 @@ private final class ManualScheduler {
 @Suite("AppState dictation status")
 @MainActor
 struct AppStateDictationStatusTests {
-    // planning 0004: the row beside the indicator speaks only once
-    // a dictation ends with the model not ready, half a second after; a failed load and held text
-    // stay 4 s, then leave with the panel; the menu bar and Settings keep the state after that.
+    // planning 0004: the status speaks only once a dictation ends with the model not ready, in the
+    // mark's place once its panel has gone; a failed load and held text stay 4 s on screen; the
+    // menu bar and Settings keep the state after that.
     private let checkSeconds = Constants.statusRingCheckDelaySeconds + Constants.statusRingCheckSeconds
+    private let handOff = KawaIndicatorTimeline.statusHandOff
 
     private func make(_ model: ModelLoadState) -> (AppState, ManualScheduler) {
         let timers = ManualScheduler()
@@ -371,58 +390,67 @@ struct AppStateDictationStatusTests {
         state.apply(.recording)
         state.apply(modelLoadState: .loading)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
+        #expect(!state.hidesPanel)
         #expect(timers.pendingDelays.isEmpty)
     }
 
-    @Test("a dictation that ends before the model is ready shows its state half a second after, then follows it to ready")
-    func waitShowsAfterHalfASecond() {
+    @Test("a dictation that waits lets the panel go, and its status follows once the panel has left")
+    func waitHandsOverToTheStatus() {
+        // The panel leaves on its ordinary exit at the wait, and the status enters a beat after
+        // it has gone (maintainer, 2026-11-24): the reveal is the hand-off, 0.90 s after release.
         let (state, timers) = waiting()
+        #expect(state.hidesPanel)
         #expect(state.dictationStatus == nil)
-        #expect(timers.pendingDelays == [Constants.statusRevealDelaySeconds])
-        timers.fire(after: Constants.statusRevealDelaySeconds)
+        #expect(timers.pendingDelays == [handOff])
+        timers.fire(after: handOff)
         #expect(state.dictationStatus == .model(.downloading))
         state.apply(modelLoadState: .loading)
         #expect(state.dictationStatus == .model(.preparing))
         state.apply(modelLoadState: .ready)
         #expect(state.dictationStatus == .model(.ready))
-        // The text types and River is idle, but the panel stays until the check is drawn.
+        // The text types and River is idle; Ready stays until its check is drawn and read.
         state.apply(.idle)
-        #expect(state.holdsPanel)
-        timers.fire(after: checkSeconds)
-        #expect(!state.holdsPanel)
+        #expect(state.dictationStatus == .model(.ready))
+        timers.fire(after: checkSeconds + Constants.statusReadyHoldSeconds)
         #expect(state.dictationStatus == nil)
     }
 
-    @Test("a model ready within the half second shows nothing: the text types as usual")
+    @Test("a model ready before the hand-off shows nothing: the text types as usual")
     func quickLoadShowsNothing() {
         let (state, timers) = waiting(.loading)
         state.apply(modelLoadState: .ready)
         state.apply(.idle)
         #expect(timers.pendingDelays.isEmpty)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
     }
 
-    @Test("a load that fails while the row shows turns it to failed, which stays 4 s after River is idle")
+    @Test("a dictation that doesn't wait keeps the panel transcribing until its text types")
+    func readyModelKeepsThePanel() {
+        let (state, _) = make(.ready)
+        state.apply(.recording)
+        state.apply(.processing)
+        #expect(!state.hidesPanel)
+        #expect(MarkActivity.of(state: state.state, hidesPanel: state.hidesPanel) == .transcribing)
+    }
+
+    @Test("a load that fails while the status shows turns it to failed, which stays 4 s")
     func failureShowsAndHolds() {
         let (state, timers) = waiting()
-        timers.fire(after: Constants.statusRevealDelaySeconds)
+        timers.fire(after: handOff)
         state.apply(modelLoadState: .failed)
         state.apply(dictationEvent: .recordingKept)
         state.apply(.idle)
         #expect(state.dictationStatus == .model(.failed))
-        #expect(state.holdsPanel)
+        // The status was already on screen, so the hold is the plain 4 s.
         #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
         timers.fire(after: Constants.statusHoldSeconds)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
     }
 
     @Test("a failure shown ends early once the model loads after all")
     func failureEndsWhenReady() {
         let (state, timers) = waiting()
-        timers.fire(after: Constants.statusRevealDelaySeconds)
+        timers.fire(after: handOff)
         state.apply(modelLoadState: .failed)
         state.apply(dictationEvent: .recordingKept)
         state.apply(.idle)
@@ -431,49 +459,46 @@ struct AppStateDictationStatusTests {
         #expect(state.dictationStatus == .model(.failed))
         state.apply(modelLoadState: .ready)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
     }
 
-    @Test("a load that failed while you spoke shows already failed half a second after, the panel held until then")
+    @Test("a load that failed while you spoke is set at once and shows after the panel, 4 s on screen")
     func failedBeforeTheRelease() {
         let (state, timers) = make(.failed)
         state.apply(.recording)
         state.apply(.processing)
         state.apply(dictationEvent: .recordingKept)
-        state.apply(.idle)
-        #expect(state.dictationStatus == nil)
-        #expect(state.holdsPanel)
-        timers.fire(after: Constants.statusRevealDelaySeconds)
         #expect(state.dictationStatus == .model(.failed))
-        #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
+        #expect(state.hidesPanel)
+        state.apply(.idle)
+        #expect(timers.pendingDelays.contains { abs($0 - (handOff + Constants.statusHoldSeconds)) < 1e-9 })
+        timers.fire(after: handOff + Constants.statusHoldSeconds)
+        #expect(state.dictationStatus == nil)
     }
 
-    @Test("held text shows at once and stays 4 s")
-    func heldShowsAtOnce() {
+    @Test("held text is set at once and stays 4 s once the panel has handed over")
+    func heldShowsAfterThePanel() {
         let (state, timers) = make(.ready)
         state.apply(.recording)
         state.apply(.processing)
         state.apply(dictationEvent: .textHeld)
         #expect(state.dictationStatus == .held)
+        #expect(state.hidesPanel)
         state.apply(.idle)
-        #expect(state.holdsPanel)
-        #expect(timers.pendingDelays == [Constants.statusHoldSeconds])
-        timers.fire(after: Constants.statusHoldSeconds)
+        #expect(state.dictationStatus == .held)
+        timers.fire(after: handOff + Constants.statusHoldSeconds)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
     }
 
-    @Test("Cancel Dictation takes the row away with the panel")
-    func cancelEndsTheRow() {
+    @Test("Cancel Dictation takes the status away")
+    func cancelEndsTheStatus() {
         let (state, timers) = waiting()
-        timers.fire(after: Constants.statusRevealDelaySeconds)
+        timers.fire(after: handOff)
         state.apply(.idle)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
     }
 
-    @Test("a new recording starts with nothing beside the indicator")
-    func recordingClearsTheRow() {
+    @Test("a new recording starts with nothing in the mark's place")
+    func recordingClearsTheStatus() {
         let (state, timers) = make(.ready)
         state.apply(.recording)
         state.apply(.processing)
@@ -481,7 +506,6 @@ struct AppStateDictationStatusTests {
         state.apply(.idle)
         state.apply(.recording)
         #expect(state.dictationStatus == nil)
-        #expect(!state.holdsPanel)
         #expect(timers.pendingDelays.isEmpty)
     }
 

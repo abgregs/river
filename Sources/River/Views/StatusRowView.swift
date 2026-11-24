@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// What the status row says (planning 0004):
-/// why the text hasn't typed yet, in full, and what VoiceOver hears, which names each
-/// change of status but never a percentage.
+/// What the status says (planning 0004, 0018): why the text hasn't typed yet, or what went
+/// wrong, in full, and what VoiceOver hears, which names each change of status but never a
+/// percentage.
 struct StatusRowWords: Equatable {
     let main: String
     let detail: String?
@@ -35,43 +35,34 @@ struct StatusRowWords: Equatable {
             }
             return StatusRowWords(main: "App switched", detail: "\(pasteLast.display) pastes it",
                                   spoken: "App switched. \(pasteLast.spoken) pastes it.")
+        case .error(let error):
+            return StatusRowWords(main: error.headline, detail: error.detail, spoken: "\(error.headline). \(error.detail).")
         }
     }
 
     /// Every row River can write with this shortcut, for the test that the window is wide enough.
     static func all(pasteLast: (display: String, spoken: String)) -> [StatusRowWords] {
+        struct Failure: Error {}
         let failed = StatusRingFrame(layers: [], akane: 1)
         let full = StatusRingFrame(layers: [.init(opacity: 1, marks: StatusRing.download(1, breath: 0))], akane: 0)
+        let errors: [RiverError] = [
+            .audioCapture(underlying: Failure()),
+            .audioCapture(underlying: AudioCaptureError.captureIncomplete(capturedSeconds: 1, recordingSeconds: 2)),
+            .transcription(underlying: Failure()), .textInsertion(underlying: Failure()),
+        ] + ["Microphone", "Accessibility", "Input Monitoring"].map { .permission(capability: $0) }
         return [of(.model(.downloading), frame: full, pasteLast: pasteLast), of(.model(.preparing), frame: nil, pasteLast: pasteLast),
                 of(.model(.ready), frame: nil, pasteLast: pasteLast), of(.model(.failed), frame: failed, pasteLast: pasteLast),
                 of(.held, frame: nil, pasteLast: pasteLast), of(.held, frame: nil, pasteLast: nil)]
+            + errors.map { of(.error(ErrorStatusPresentation.status(for: $0)), frame: nil, pasteLast: pasteLast) }
     }
 }
 
-/// The row's entry: the HUD's fade, 0.22 s on `easeOut` rising 6 pt, or a plain 0.2 s fade under
-/// Reduce Motion. It leaves with the mark's panel.
-enum StatusRowEntry {
-    static func at(_ t: Double, reduceMotion: Bool) -> (opacity: Double, rise: Double) {
-        if reduceMotion { return (min(1, max(0, t / Constants.kawaReducedFadeSeconds)), 0) }
-        let p = CubicBezier.easeOut(min(1, max(0, t / Constants.hudFadeSeconds)))
-        return (p, Constants.hudFadeRise * (1 - p))
-    }
-}
-
-/// The status shown beside the mark and when it appeared, kept by the stack until the mark's
-/// cycle ends.
-struct ShownStatus: Equatable {
-    var status: DictationStatus
-    let appeared: Date
-}
-
-/// The row beside the mark (planning 0004): the ring or the held
-/// sheet in its tile, then the words, always in full. It enters on the HUD's fade, follows the
-/// model through preparing to ready, and leaves with the mark's panel, on the mark's own clock.
-/// It never takes the mouse: the window ignores it, as it does the panel.
+/// The status in the mark's place (planning 0004, 0018): the ring, the held sheet or the lock
+/// in its tile, then the words, always in full. The stack brings it in once the mark's panel has
+/// gone and takes it out on the HUD's fade; a model's status follows the model through preparing
+/// to ready in place. It never takes the mouse: the window ignores it, as it does the panel.
 struct StatusRow: View {
-    let shown: ShownStatus
-    let markCycle: KawaIndicatorCycle
+    let status: DictationStatus
     let appState: AppState
     @State private var ring: StatusRingCycle?
     @AppStorage(Settings.pasteLastShortcut.name)
@@ -79,35 +70,42 @@ struct StatusRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // `ring` is internal for testability: the snapshot harness hands in a ring already under way.
-    init(shown: ShownStatus, markCycle: KawaIndicatorCycle, appState: AppState, ring: StatusRingCycle? = nil) {
-        self.shown = shown
-        self.markCycle = markCycle
+    init(status: DictationStatus, appState: AppState, ring: StatusRingCycle? = nil) {
+        self.status = status
         self.appState = appState
         _ring = State(initialValue: ring)
     }
 
+    /// An error's mark: Couldn't load the model's ring, already failed, as a ring that appears
+    /// failed shows it, all at once.
+    static let failedRing = StatusRing.frame(at: 0, events: StatusRingEvents(appearing: .failed, fraction: nil), reduceMotion: false)
+
     var body: some View {
-        TimelineView(.animation) { context in
-            let panel = KawaIndicatorTimeline.channels(at: markCycle.time(at: context.date), events: markCycle.events,
-                                                       reduceMotion: reduceMotion)
-            let entry = StatusRowEntry.at(context.date.timeIntervalSince(shown.appeared), reduceMotion: reduceMotion)
+        // Only the model's ring moves; an error or held text is one still frame.
+        TimelineView(.animation(paused: !isRing)) { context in
             let frame = isRing ? ring.map { StatusRing.frame(at: $0.time(at: context.date), events: $0.events, reduceMotion: reduceMotion) } : nil
-            let words = StatusRowWords.of(shown.status, frame: frame, pasteLast: pasteLast)
-            StatusRowFace(words: words, glyph: frame.map(StatusGlyph.ring) ?? .held)
-                .opacity(entry.opacity * panel.panel)
-                .offset(y: entry.rise + panel.rise)
+            let words = StatusRowWords.of(status, frame: frame, pasteLast: pasteLast)
+            StatusRowFace(words: words, glyph: glyph(frame))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(words.spoken)
         }
-        .onChange(of: shown.status, initial: true) {
+        .onChange(of: status, initial: true) {
             updateRing()
             announce()
         }
         .onChange(of: appState.downloadFraction) { updateRing() }
     }
 
+    private func glyph(_ frame: StatusRingFrame?) -> StatusGlyph {
+        switch status {
+        case .model: .ring(frame ?? StatusRingFrame(layers: [], akane: 0))
+        case .held: .held
+        case .error(let error): error.mark == .locked ? .locked : .ring(Self.failedRing)
+        }
+    }
+
     private var isRing: Bool {
-        if case .model = shown.status { true } else { false }
+        if case .model = status { true } else { false }
     }
 
     // The shortcut's text, or nil when it failed to register, so the words send the user to the
@@ -118,7 +116,7 @@ struct StatusRow: View {
     }
 
     private func updateRing() {
-        guard case .model(let phase) = shown.status else { return }
+        guard case .model(let phase) = status else { return }
         ring = StatusRingCycle.next(ring, phase: phase, model: appState.modelSelection.inUse,
                                     fraction: appState.downloadFraction, at: Date())
     }
@@ -127,7 +125,7 @@ struct StatusRow: View {
     // while the user waits in another app.
     private func announce() {
         guard NSWorkspace.shared.isVoiceOverEnabled else { return }
-        let words = StatusRowWords.of(shown.status, frame: nil, pasteLast: pasteLast)
+        let words = StatusRowWords.of(status, frame: nil, pasteLast: pasteLast)
         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
                              userInfo: [.announcement: words.spoken, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
