@@ -52,7 +52,7 @@ On the installed build with the 4 ms gap, a 176 s dictation (1,856 characters) t
 
 ## A one-character last chunk lands early (2026-11-23)
 
-A 421-character Phonon-2 transcript typed into Claude Code in VS Code's terminal arrived with every character, but its final period sat 20 characters early when typed at the release and 100 early with Paste last, each time exactly on a chunk boundary. 421 is 21 chunks of 20 and one of 1: the prompt took the lone character at once, ahead of chunks it was still holding as a possible paste. Since then `TextInsertionManager.chunk` never ends on a one-character chunk: the last two share their characters (21 become 11 and 10), within the unit budget. Still to check on device: dictations of 20n+1 and 20n+2 characters into Claude Code type in order.
+A 421-character Phonon-2 transcript typed into Claude Code in VS Code's terminal arrived with every character, but its final period sat 20 characters early when typed at the release and 100 early with Paste last, each time exactly on a chunk boundary. 421 is 21 chunks of 20 and one of 1: the prompt took the lone character at once, ahead of chunks it was still holding as a possible paste. Since then `TextInsertionManager.chunk` never ends on a one-character chunk: the last two share their characters (21 become 11 and 10), within the unit budget. Checked on device (2026-11-24): transcripts of 21, 41 and 61 characters typed into Claude Code in order, each period at its end.
 
 ## Verify on device
 

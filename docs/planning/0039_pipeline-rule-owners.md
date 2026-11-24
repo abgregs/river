@@ -1,6 +1,6 @@
 # Planning: One Owner per Dictation Pipeline Rule (0039)
 
-**Status: A, B and C built 2026-11-23 on `refactor/pipeline-owners`, one PR; D follows it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
+**Status: A, B and C built 2026-11-23 on `refactor/pipeline-owners`, one PR, smoke-tested on device 2026-11-24; D follows it.** Designed from an architecture review of the dictation pipeline on PR 11's branch (`feat/preparing-treatment`), after PR 11's smoke test; the maintainer made the four decisions below the same day.
 
 ## Why
 
