@@ -1,6 +1,6 @@
 # Planning: Model Loading Indicator (roadmap 0004)
 
-**Status:** built 2026-11-21 in PR 11 (`feat/preparing-treatment`): dictation always starts, the status row and its ring beside the indicator, the ring in Settings and the menu bar, and the real download percentage. The decisions are in "Update (2026-09-25)" below. Smoke-tested on device 2026-11-21 and 2026-11-22: everything passed except a download that fails part-way, which waits until after PR 12's onboarding step (maintainer, 2026-11-22).
+**Status:** built 2026-11-21 in PR 11 (`feat/preparing-treatment`): dictation always starts, the status row and its ring beside the indicator, the ring in Settings and the menu bar, and the real download percentage. The decisions are in "Update (2026-09-25)" below. Since 2026-11-24 (`feat/status-surface`) the status shows alone in the mark's place and carries the cycle errors too: see "Update (2026-11-24)". Smoke-tested on device 2026-11-21 and 2026-11-22: everything passed except a download that fails part-way, which waits until after PR 12's onboarding step (maintainer, 2026-11-22).
 
 A queued follow-up, deferred from the M8 custom-dictionary work. Surfaces the
 model-loading state in the menu bar so a dictation attempted before the model is
@@ -72,6 +72,17 @@ Planning [0029](0029_pixel-identity.md) renamed the `.loading` label to "Prepari
   - A model switch never shows the mark, since the model in use keeps working until the new one is ready ([0026](0026_model-switch-availability.md)). A model in use whose files are gone, removed outside River, downloads again at launch, as today. The first-run download shows in onboarding (PR 12).
 - **A network check on every launch.** *Done 2026-09-28: a cached model now loads from its folder with downloading off, falling back to the download path if the folder won't load; offline check in [../conventions/test-harnesses.md](../conventions/test-harnesses.md).* Before `loadModels`, `WhisperKit(model:downloadBase:load: false)` asks Hugging Face for the model's file list and compares it with the cache, even when the files are present. On the maintainer's warm launch this took 2.1 s of a 2.5 s wait (the CoreML load was 0.38 s). Passing the cached model folder to WhisperKit would skip it, making warm launches sub-second and offline, as `PRODUCT.md` says they are.
 - **Download progress.** *Decided 2026-11-21, built in PR 11:* WhisperKit's `download(variant:…, progressCallback:)` and FluidAudio's `AsrModels.download(to:…, progressHandler:)` both report it, and River passes it on, so the ring and the Model section show the real percentage. **Why:** this replaces filling the pixel r by sixteenths, an idea for a mark River no longer uses.
+
+## Update (2026-11-24): one status surface
+
+Decided by the maintainer over three design rounds (2026-11-24); each replaces a 2026-11-21 decision above.
+
+- **The status shows alone.** The mark's panel leaves on its ordinary exit, and the status enters in its place, centred, bottom edges aligned, 0.12 s after the panel has gone (`statusEntryBeatSeconds`), on the HUD's fade. **Why:** this replaces the row 8 pt to the panel's right, which held the panel up through the wait: one floating shape at a time reads as orchestrated, not crowded.
+- **When.** A dictation that waits for the model lets the panel go at once; its status is revealed `KawaIndicatorTimeline.statusHandOff` after the release (the panel's 0.78 s exit plus the beat, 0.90 s), replacing the 0.5 s reveal, and a load that finishes sooner still shows nothing. A status set while the panel is up (an error, held text, a load that failed while the user spoke) waits for the panel, and its 4 s hold counts that time, so it stays 4 s on screen. Ready stays `statusReadyHoldSeconds` (0.6 s) once its check is drawn, then leaves.
+- **Size B.** 36 pt tall: the 26 pt tile padded 5 pt inside the surface, a hairline on the tile's edge, the words at 13 pt, the outer corner 11 pt, the mark's panel's. **Why:** the 26 pt row put the tile's border against the surface's edge; the maintainer wanted it larger, with the tile sitting inside.
+- **Errors are statuses** ([0018](0018_transient-error-toasts.md)): one line, a headline then a short detail. Every error takes Couldn't load the model's mark, the akane ring round the exclamation mark, except a permission refused, which takes a lock (the held sheet's build: shackle in outline, body solid, keyhole cut out). **Why:** the maintainer judged the per-error glyphs of round 2 unnecessary; one failure mark reads at once.
+- **App switched's held sheet** moves 0.75 pt up, so its ink centres in the tile (`StatusGlyphTests`).
+- **No notices in the floating UI.** The message rectangle is gone; the mid-recording notice stays a menu line, and Settings turns off Start by during a dictation, as it already did the shortcut rows ([../requirements/activation-key-and-mode.md](../requirements/activation-key-and-mode.md), Live apply).
 
 ## Related
 

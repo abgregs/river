@@ -68,7 +68,7 @@ Glass reads one smoothed level (`KawaIndicatorEngine`: rises over about 0.05 s, 
 
 ## Color: monochrome
 
-The panel draws the mark and Glass in the HUD's text color (`ink` on the dark surface, `charcoal` on the light one), at three strengths: muted (20 %), Glass's ink under the frost (45 %) and where it is cleared (90 %). The status row beside it draws in the same color, except a failed load's ring, which turns akane (2026-11-21). No accent appears anywhere in the panel; it stays the controls' tint ([color.md](color.md)).
+The panel draws the mark and Glass in the HUD's text color (`ink` on the dark surface, `charcoal` on the light one), at three strengths: muted (20 %), Glass's ink under the frost (45 %) and where it is cleared (90 %). The status in its place draws in the same color, except the failed ring, which turns akane (2026-11-21; every cycle error since 2026-11-24). No accent appears anywhere in the panel; it stays the controls' tint ([color.md](color.md)).
 
 ## Deferred and open
 

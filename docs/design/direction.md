@@ -14,7 +14,7 @@ The identity brief for the design phase that follows the naming decision ([../pl
 2. **Never steal focus.** The HUD is a non-activating panel that must not become key ([../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md)). No surface may pull the caret away from where the text is about to land. Identity work lives inside that constraint, not around it.
 3. **Fluid, not bouncy.** Continuous easing curves and crossfades over springs and overshoot. The water vocabulary is *current, ripple, flow* — restrained, low amplitude, short. A recording is not a splash.
 4. **Platform first.** SF Symbols and system materials by default; light and dark appearance; Reduce Motion honored (motion degrades to a crossfade, never to nothing); no custom fonts. Custom assets earn their place per surface, below.
-5. **Quiet by default.** No sound unless opted in (the 0016 toggle), no persistent panels, no nagging. The HUD fades out on `.idle`; errors are transient toasts, not pinned warnings (0018). Cutting an animation is always an acceptable outcome of a review.
+5. **Quiet by default.** No sound unless opted in (the 0016 toggle), no persistent panels, no nagging. The HUD fades out on `.idle`; errors are transient statuses, not pinned warnings (0018). Cutting an animation is always an acceptable outcome of a review.
 
 ## Surfaces
 

@@ -1,6 +1,6 @@
 # ADR 0003: One window and one bottom-anchored stack for the floating UI
 
-**Status:** Accepted — 2026-10-12. Amended 2026-11-21: the model's status row beside the mark.
+**Status:** Accepted — 2026-10-12. Amended 2026-11-21: the model's status row beside the mark. Amended 2026-11-24: the status in the mark's place, and no message rectangle.
 
 ## Context
 
@@ -55,6 +55,12 @@ It stays in this window. The row hangs off the mark as an overlay, not as a memb
 The window widens so the widest row fits on either side of the centred mark: `RiverIndicatorView.contentSize` is at least 2 × (24 + 8 + `statusRowMaxWidth`) = 664 pt wide, 856 pt with the shadow margin, and a test measures every row River writes against it. The window still ignores the mouse outside the transcript's lifetime, so the row is never clickable and covers nothing it could take a click from.
 
 The model-loading label above the mark is gone: nothing shows while the model loads at launch.
+
+## Amendment — 2026-11-24: the status in the mark's place
+
+Planning [0004](../planning/0004_model-loading-indicator.md) (Update 2026-11-24) moves the status from beside the mark into its place: the panel leaves, then the status enters centred, bottom edges aligned. The bottom of the stack is a `ZStack` holding the panel or the status, never both on screen, so the surface is back inside the vertical stack and the 2026-11-21 case under **Revisit if** no longer applies. The status waits on the panel's clock in the view (the panel's removal plus `statusEntryBeatSeconds`).
+
+The message rectangle is gone: the error toast became a status, and notices show only in the menu. The window shrinks to `max(transcriptPanelWidth, statusRowMaxWidth)` = 440 pt wide, and the transcript plus the mark tall (with the shadow margin, 632 × 424 pt).
 
 ## Related
 

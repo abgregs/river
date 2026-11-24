@@ -78,6 +78,8 @@ See [../architecture/settings-store.md](../architecture/settings-store.md) for t
 - **Recording in a tap mode** → the change applies **live** and the recording continues. The new shortcut or mode immediately becomes the stop gesture, and the session posts a notice confirming the user can use it to stop the current recording. No audio is lost, because nothing tears down the running tap.
 - **Recording in Hold mode, or processing** → the change is deferred and applied when the cycle returns to `.idle`. Hold defers because the user is physically holding the old shortcut, whose release must still stop the recording.
 
+Settings turns off both controls during a dictation (the Dictate row's Record button since 0036, Start by since 2026-11-24), each with "Available when this dictation ends.", so from Settings a change only ever lands at idle. The live and deferred paths stay for a change from elsewhere, such as `defaults write`; the live path's notice shows only in the menu. **Why:** the floating UI no longer shows notices ([0004](../planning/0004_model-loading-indicator.md), Update 2026-11-24), and Start by was the one control left that could send one.
+
 Paste last's, Copy last's and Toggle live text's shortcuts apply at once, in any state: each change moves only that row's hot key, and none drives a recording.
 
 There is no path that tears down the event tap mid-cycle. See [../architecture/river-session.md](../architecture/river-session.md).
