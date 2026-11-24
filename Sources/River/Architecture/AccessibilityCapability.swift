@@ -217,21 +217,30 @@ final class AccessibilityCapability: Capability {
         // reads on the returned element. A timeout returns
         // kAXErrorCannotComplete.
         AXUIElementSetMessagingTimeout(systemWide, Constants.focusedElementReadTimeoutSeconds)
-        var focused: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(
-            systemWide, kAXFocusedUIElementAttribute as CFString, &focused
-        )
-        guard result == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else {
+        var (result, element) = focusedElement(of: systemWide)
+        // "Nothing focused" now skips the paste, so before believing it, ask the app in front
+        // itself: an app can know its focused element when the system-wide read says none.
+        if result == .noValue, let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier {
+            (result, element) = focusedElement(of: AXUIElementCreateApplication(pid))
+        }
+        guard let element else {
             return (nil, nil, result == .success ? nil : result)
         }
-        // Safe: the CFGetTypeID guard above proves the CF type; `as!` on a CF
-        // ref is a bitcast, so the type-id check is the real validation.
-        let element = focused as! AXUIElement
         return (
             copyStringAttribute(kAXRoleAttribute, of: element),
             copyStringAttribute(kAXSubroleAttribute, of: element),
             nil
         )
+    }
+
+    // `owner`'s focused element, or nil with the read's error.
+    private func focusedElement(of owner: AXUIElement) -> (AXError, AXUIElement?) {
+        var focused: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(owner, kAXFocusedUIElementAttribute as CFString, &focused)
+        guard result == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return (result, nil) }
+        // Safe: the CFGetTypeID guard above proves the CF type; `as!` on a CF
+        // ref is a bitcast, so the type-id check is the real validation.
+        return (result, (focused as! AXUIElement))
     }
 
     private func copyStringAttribute(_ attribute: String, of element: AXUIElement) -> String? {
