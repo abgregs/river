@@ -29,7 +29,7 @@
 | Permissions | Microphone · Input Monitoring · Accessibility | "Granted", or an "Open System Settings…" button | none (the capabilities' status) | | 7 |
 
 - **Cancel recording** is a row after Start by (maintainer, 2026-11-12): the keys that cancel a recording, in the same outlines as the shortcuts, with no Record button, since they are fixed. It shows fn or Esc; PR 9 added Esc. It replaced the cancel line that followed the Start by description (2026-11-09), which had been the Shortcuts footer.
-- **Start by** keeps today's three modes under shorter labels, each with today's one-line description, worded for a shortcut ("Hold the shortcut while speaking; release to finish.").
+- **Start by** keeps today's three modes under shorter labels, each with today's one-line description, worded for a shortcut ("Hold the shortcut while speaking; release to finish."). It is off during a dictation, as the Record buttons are (2026-11-24).
 - **Dictation** shows the microphone switch's description from [0033](0033_warm-microphone-pre-roll.md) ("What the user is told"). The switch is turned around from PR #79's "Only use the microphone while dictating" (maintainer, 2026-11-09): on by default and named for its on state. `micOnlyWhileDictating` never shipped in a release, so the new key replaces it with no migration.
 - **Model** (maintainer, 2026-11-09, settings panel study round 13):
   - The window grows to 820 × 540 for this section and returns to 600 × 380 for the others.

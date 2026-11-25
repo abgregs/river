@@ -175,28 +175,36 @@ struct RiverIndicatorSnapshotTests {
         #expect(exit.max()! - exit.first! < 1, "the strokes brighten, then dim, as the frost lifts: \(exit)")
     }
 
-    // The whole panel content from a real `AppState`, for the stacking and message checks.
-    @Test("write the full indicator with its message rectangle, 2x, on light and dark appearance")
+    // The whole panel content from a real `AppState`, for the stacking and status checks.
+    @Test("write the full indicator, and each status in the mark's place, 2x, on light and dark appearance")
     func writeStackSnapshots() throws {
         let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))
         // The suite's tests run in parallel, so each creates the directory it writes to.
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         struct Failure: Error {}
         let scenarios: [(name: String, configure: (AppState) -> Void)] = [
-            ("recording-notice", { state in
-                state.apply(modelLoadState: .ready)
-                state.apply(.recording)
-                state.apply(notice: "Activation key changed. Tap Right Command to stop this recording.")
-            }),
-            ("processing-toast", { state in
-                state.apply(modelLoadState: .ready)
-                state.apply(.recording)
-                state.apply(RiverError.textInsertion(underlying: Failure()))
-                state.apply(.processing)
-            }),
-            ("idle-toast", { state in
+            // Each status alone, centred where the mark was (planning 0004, 0018).
+            ("status-transcribe", { state in
                 state.apply(modelLoadState: .ready)
                 state.apply(RiverError.transcription(underlying: Failure()))
+            }),
+            ("status-permission", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(RiverError.permission(capability: "Input Monitoring"))
+            }),
+            ("status-held", { state in
+                state.apply(modelLoadState: .ready)
+                state.apply(.recording)
+                state.apply(.processing)
+                state.apply(dictationEvent: .textHeld)
+                state.apply(.idle)
+            }),
+            ("status-failed-load", { state in
+                state.apply(modelLoadState: .failed)
+                state.apply(.recording)
+                state.apply(.processing)
+                state.apply(dictationEvent: .recordingKept)
+                state.apply(.idle)
             }),
             ("recording-transcript", { state in
                 state.apply(modelLoadState: .ready)
@@ -216,28 +224,14 @@ struct RiverIndicatorSnapshotTests {
                 state.apply(.recording)
                 state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
             }),
-            ("recording-transcript-notice", { state in
-                state.apply(modelLoadState: .ready)
-                state.apply(.recording)
-                state.apply(isLiveTextShown: true)
-                state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
-                state.apply(notice: "Activation key changed. Tap Right Command to stop this recording.")
-            }),
-            ("processing-transcript-toast", { state in
-                state.apply(modelLoadState: .ready)
-                state.apply(.recording)
-                state.apply(isLiveTextShown: true)
-                state.apply(liveTranscript: "So the idea is that the transcript streams in here while I keep talking.")
-                state.apply(.processing)
-                state.apply(RiverError.transcription(underlying: Failure()))
-            }),
         ]
         for scenario in scenarios {
             let appState = AppState(schedule: { _, _ in AnyCancellable {} })
             scenario.configure(appState)
             // A single render shows one moment, so the mark's cycle is handed in already under
             // way: pressed two seconds ago, as the view would have built it.
-            let activity = MarkActivity.of(state: appState.state, holdsPanel: appState.holdsPanel)
+            // A status shows alone, the panel already gone.
+            let activity = MarkActivity.of(state: appState.state, hidesPanel: appState.hidesPanel)
             let start = Date().addingTimeInterval(-2)
             var cycle = KawaIndicatorCycle.next(nil, activity: activity == .transcribing ? .listening : activity, isAudioFlowing: true,
                                                 reduceMotion: false, at: start)
@@ -245,8 +239,9 @@ struct RiverIndicatorSnapshotTests {
                 cycle = KawaIndicatorCycle.next(cycle, activity: .transcribing, isAudioFlowing: false,
                                                 reduceMotion: false, at: start.addingTimeInterval(1))
             }
+            if appState.dictationStatus != nil { cycle = nil }
             for scheme in [ColorScheme.light, .dark] {
-                let view = RiverIndicatorView(appState: appState, markCycle: cycle)
+                let view = RiverIndicatorView(appState: appState, markCycle: cycle, shown: appState.dictationStatus)
                     .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
                     .environment(\.colorScheme, scheme)
                 let renderer = ImageRenderer(content: view)
@@ -258,9 +253,9 @@ struct RiverIndicatorSnapshotTests {
         }
     }
 
-    // The status row beside the mark (planning 0004) in each state, for checks by eye and for
-    // PR screenshots.
-    @Test("write the indicator with its status row in each state, 2x, on light and dark appearance")
+    // The model's status in the mark's place (planning 0004) in each state, for checks by eye and
+    // for PR screenshots.
+    @Test("write the indicator with the model's status in each state, 2x, on light and dark appearance")
     func writeStatusSnapshots() throws {
         let directory = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["RIVER_SNAPSHOT_DIR"]))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -279,16 +274,12 @@ struct RiverIndicatorSnapshotTests {
             ("held", .held, nil),
         ]
         for row in rows {
+            // The dictation waits, the panel already gone.
             let appState = AppState(schedule: { _, _ in AnyCancellable {} })
             appState.apply(.recording)
             appState.apply(.processing)
-            let start = now.addingTimeInterval(-4)
-            var cycle = KawaIndicatorCycle.next(nil, activity: .listening, isAudioFlowing: true, reduceMotion: false, at: start)
-            cycle = KawaIndicatorCycle.next(cycle, activity: .transcribing, isAudioFlowing: false, reduceMotion: false,
-                                            at: start.addingTimeInterval(1))
-            let shown = ShownStatus(status: row.status, appeared: now.addingTimeInterval(-1))
             for scheme in [ColorScheme.light, .dark] {
-                let view = RiverIndicatorView(appState: appState, markCycle: cycle, shown: shown, statusRing: row.ring)
+                let view = RiverIndicatorView(appState: appState, shown: row.status, statusRing: row.ring)
                     .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
                     .environment(\.colorScheme, scheme)
                 let renderer = ImageRenderer(content: view)

@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// What the status row says (planning 0004):
-/// why the text hasn't typed yet, in full, and what VoiceOver hears, which names each
-/// change of status but never a percentage.
+/// What the status says (planning 0004, 0018): why the text hasn't typed yet, or what went
+/// wrong, in full, and what VoiceOver hears, which names each change of status but never a
+/// percentage.
 struct StatusRowWords: Equatable {
     let main: String
     let detail: String?
@@ -35,43 +35,34 @@ struct StatusRowWords: Equatable {
             }
             return StatusRowWords(main: "App switched", detail: "\(pasteLast.display) pastes it",
                                   spoken: "App switched. \(pasteLast.spoken) pastes it.")
+        case .error(let error):
+            return StatusRowWords(main: error.headline, detail: error.detail, spoken: "\(error.headline). \(error.detail).")
         }
     }
 
     /// Every row River can write with this shortcut, for the test that the window is wide enough.
     static func all(pasteLast: (display: String, spoken: String)) -> [StatusRowWords] {
+        struct Failure: Error {}
         let failed = StatusRingFrame(layers: [], akane: 1)
         let full = StatusRingFrame(layers: [.init(opacity: 1, marks: StatusRing.download(1, breath: 0))], akane: 0)
+        let errors: [RiverError] = [
+            .audioCapture(underlying: Failure()),
+            .audioCapture(underlying: AudioCaptureError.captureIncomplete(capturedSeconds: 1, recordingSeconds: 2)),
+            .transcription(underlying: Failure()), .textInsertion(underlying: Failure()),
+        ] + ["Microphone", "Accessibility", "Input Monitoring"].map { .permission(capability: $0) }
         return [of(.model(.downloading), frame: full, pasteLast: pasteLast), of(.model(.preparing), frame: nil, pasteLast: pasteLast),
                 of(.model(.ready), frame: nil, pasteLast: pasteLast), of(.model(.failed), frame: failed, pasteLast: pasteLast),
                 of(.held, frame: nil, pasteLast: pasteLast), of(.held, frame: nil, pasteLast: nil)]
+            + errors.map { of(.error(ErrorStatusPresentation.status(for: $0)), frame: nil, pasteLast: pasteLast) }
     }
 }
 
-/// The row's entry: the HUD's fade, 0.22 s on `easeOut` rising 6 pt, or a plain 0.2 s fade under
-/// Reduce Motion. It leaves with the mark's panel.
-enum StatusRowEntry {
-    static func at(_ t: Double, reduceMotion: Bool) -> (opacity: Double, rise: Double) {
-        if reduceMotion { return (min(1, max(0, t / Constants.kawaReducedFadeSeconds)), 0) }
-        let p = CubicBezier.easeOut(min(1, max(0, t / Constants.hudFadeSeconds)))
-        return (p, Constants.hudFadeRise * (1 - p))
-    }
-}
-
-/// The status shown beside the mark and when it appeared, kept by the stack until the mark's
-/// cycle ends.
-struct ShownStatus: Equatable {
-    var status: DictationStatus
-    let appeared: Date
-}
-
-/// The row beside the mark (planning 0004): the ring or the held
-/// sheet in its tile, then the words, always in full. It enters on the HUD's fade, follows the
-/// model through preparing to ready, and leaves with the mark's panel, on the mark's own clock.
-/// It never takes the mouse: the window ignores it, as it does the panel.
+/// The status in the mark's place (planning 0004, 0018): the ring, the held sheet or the lock
+/// in its tile, then the words, always in full. The stack brings it in once the mark's panel has
+/// gone and takes it out on the HUD's fade; a model's status follows the model through preparing
+/// to ready in place. It never takes the mouse: the window ignores it, as it does the panel.
 struct StatusRow: View {
-    let shown: ShownStatus
-    let markCycle: KawaIndicatorCycle
+    let status: DictationStatus
     let appState: AppState
     @State private var ring: StatusRingCycle?
     @AppStorage(Settings.pasteLastShortcut.name)
@@ -79,35 +70,42 @@ struct StatusRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // `ring` is internal for testability: the snapshot harness hands in a ring already under way.
-    init(shown: ShownStatus, markCycle: KawaIndicatorCycle, appState: AppState, ring: StatusRingCycle? = nil) {
-        self.shown = shown
-        self.markCycle = markCycle
+    init(status: DictationStatus, appState: AppState, ring: StatusRingCycle? = nil) {
+        self.status = status
         self.appState = appState
         _ring = State(initialValue: ring)
     }
 
+    /// An error's mark: Couldn't load the model's ring, already failed, as a ring that appears
+    /// failed shows it, all at once.
+    static let failedRing = StatusRing.frame(at: 0, events: StatusRingEvents(appearing: .failed, fraction: nil), reduceMotion: false)
+
     var body: some View {
-        TimelineView(.animation) { context in
-            let panel = KawaIndicatorTimeline.channels(at: markCycle.time(at: context.date), events: markCycle.events,
-                                                       reduceMotion: reduceMotion)
-            let entry = StatusRowEntry.at(context.date.timeIntervalSince(shown.appeared), reduceMotion: reduceMotion)
+        // Only the model's ring moves; an error or held text is one still frame.
+        TimelineView(.animation(paused: !isRing)) { context in
             let frame = isRing ? ring.map { StatusRing.frame(at: $0.time(at: context.date), events: $0.events, reduceMotion: reduceMotion) } : nil
-            let words = StatusRowWords.of(shown.status, frame: frame, pasteLast: pasteLast)
-            StatusRowFace(words: words, frame: frame)
-                .opacity(entry.opacity * panel.panel)
-                .offset(y: entry.rise + panel.rise)
+            let words = StatusRowWords.of(status, frame: frame, pasteLast: pasteLast)
+            StatusRowFace(words: words, glyph: glyph(frame))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(words.spoken)
         }
-        .onChange(of: shown.status, initial: true) {
+        .onChange(of: status, initial: true) {
             updateRing()
             announce()
         }
         .onChange(of: appState.downloadFraction) { updateRing() }
     }
 
+    private func glyph(_ frame: StatusRingFrame?) -> StatusGlyph {
+        switch status {
+        case .model: .ring(frame ?? StatusRingFrame(layers: [], akane: 0))
+        case .held: .held
+        case .error(let error): error.mark == .locked ? .locked : .ring(Self.failedRing)
+        }
+    }
+
     private var isRing: Bool {
-        if case .model = shown.status { true } else { false }
+        if case .model = status { true } else { false }
     }
 
     // The shortcut's text, or nil when it failed to register, so the words send the user to the
@@ -118,7 +116,7 @@ struct StatusRow: View {
     }
 
     private func updateRing() {
-        guard case .model(let phase) = shown.status else { return }
+        guard case .model(let phase) = status else { return }
         ring = StatusRingCycle.next(ring, phase: phase, model: appState.modelSelection.inUse,
                                     fraction: appState.downloadFraction, at: Date())
     }
@@ -127,52 +125,62 @@ struct StatusRow: View {
     // while the user waits in another app.
     private func announce() {
         guard NSWorkspace.shared.isVoiceOverEnabled else { return }
-        let words = StatusRowWords.of(shown.status, frame: nil, pasteLast: pasteLast)
+        let words = StatusRowWords.of(status, frame: nil, pasteLast: pasteLast)
         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
                              userInfo: [.announcement: words.spoken, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 }
 
-/// The row at one moment: the glyph in its 26 pt tile, then the words, on the floating UI's
-/// surface with the window's edge.
+/// What the row's tile shows: the status ring, App switched's held sheet, or a permission
+/// error's lock.
+enum StatusGlyph: Equatable {
+    case ring(StatusRingFrame)
+    case held
+    case locked
+}
+
+/// The row at one moment: the glyph in its 26 pt tile, padded inside the floating UI's surface
+/// with the window's edge, then the words.
 struct StatusRowFace: View {
     let words: StatusRowWords
-    /// The ring's frame, or nil for the held sheet.
-    let frame: StatusRingFrame?
+    let glyph: StatusGlyph
     @Environment(\.colorScheme) private var colorScheme
 
     private typealias C = Constants
 
     var body: some View {
-        let ink = Color(nsColor: Palette.HUD.for(colorScheme).text)
+        let ink = Palette.HUD.for(colorScheme).text
         HStack(spacing: 0) {
             Group {
-                if let frame {
+                switch glyph {
+                case .ring(let frame):
                     StatusRingGlyph(frame: frame)
-                } else {
-                    Canvas { context, size in
-                        HeldSheetRenderer.draw(in: &context, size: size, ink: Palette.HUD.for(colorScheme).text)
-                    }
-                    .frame(width: StatusRing.grid, height: StatusRing.grid)
+                case .held:
+                    Canvas { context, size in HeldSheetRenderer.draw(in: &context, size: size, ink: ink) }
+                case .locked:
+                    Canvas { context, size in LockRenderer.draw(in: &context, size: size, ink: ink) }
                 }
             }
+            .frame(width: StatusRing.grid, height: StatusRing.grid)
             .padding(C.statusRowGlyphInset)
             .overlay {
-                RoundedRectangle(cornerRadius: C.statusRowCornerRadius, style: .continuous)
-                    .inset(by: C.statusRowHairlineInset)
-                    .stroke(ink.opacity(C.statusRowHairlineOpacity), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: C.statusRowTileRadius, style: .continuous)
+                    .inset(by: 0.25)
+                    .stroke(Color(nsColor: ink).opacity(C.statusRowHairlineOpacity), lineWidth: 0.5)
             }
             Text(words.main)
-                .padding(.leading, C.statusRowTextInset - C.statusRowHeight)
+                .padding(.leading, C.statusRowTextGap)
             if let detail = words.detail {
                 detailText(detail)
-                    .foregroundStyle(ink.opacity(C.hudSecondaryTextOpacity))
+                    .foregroundStyle(Color(nsColor: ink).opacity(C.hudSecondaryTextOpacity))
                     .padding(.leading, C.statusRowDetailGap)
             }
         }
         .font(.system(size: C.statusRowFontSize))
-        .foregroundStyle(ink)
+        .foregroundStyle(Color(nsColor: ink))
         .lineLimit(1)
+        .padding(.vertical, C.statusRowPadding)
+        .padding(.leading, C.statusRowPadding)
         .padding(.trailing, C.statusRowTrailingPadding)
         .frame(height: C.statusRowHeight)
         .fixedSize()
@@ -194,6 +202,9 @@ enum HeldSheetRenderer {
     static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
         var c = context
         c.scaleBy(x: size.width / StatusRing.grid, y: size.height / StatusRing.grid)
+        // Up 0.75 pt, so the ink, which ran from 1.75 to 13.75, centres in the tile (maintainer,
+        // 2026-11-24).
+        c.translateBy(x: 0, y: -0.75)
         c.translateBy(x: 7, y: 7.6)
         c.rotate(by: .degrees(-6))
         c.translateBy(x: -7, y: -7.6)
@@ -209,5 +220,31 @@ enum HeldSheetRenderer {
         c.stroke(lines, with: color(0.45), style: StrokeStyle(lineWidth: 1.05, lineCap: .round, lineJoin: .round))
         let weight = RoundedRectangle(cornerRadius: 0.7, style: .continuous).path(in: CGRect(x: 4.7, y: 1.9, width: 4.6, height: 2.3))
         c.fill(weight, with: color(0.9))
+    }
+}
+
+/// A permission error's glyph, on the 14 pt grid, built as the held sheet is: the shackle in
+/// outline, the body solid with its keyhole cut out, so the tile shows through it.
+enum LockRenderer {
+    static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
+        var c = context
+        c.scaleBy(x: size.width / StatusRing.grid, y: size.height / StatusRing.grid)
+        func color(_ alpha: Double) -> GraphicsContext.Shading { .color(Color(nsColor: ink).opacity(alpha)) }
+        var shackle = Path()
+        shackle.move(to: CGPoint(x: 4.75, y: 6.6))
+        shackle.addLine(to: CGPoint(x: 4.75, y: 4.6))
+        shackle.addArc(center: CGPoint(x: 7, y: 4.6), radius: 2.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        shackle.addLine(to: CGPoint(x: 9.25, y: 6.6))
+        c.stroke(shackle, with: color(0.45), style: StrokeStyle(lineWidth: 1.15, lineCap: .round, lineJoin: .round))
+        c.drawLayer { layer in
+            layer.fill(RoundedRectangle(cornerRadius: 1.6, style: .continuous).path(in: CGRect(x: 3.1, y: 6.3, width: 7.8, height: 6)),
+                       with: color(0.9))
+            layer.blendMode = .destinationOut
+            layer.fill(Path(ellipseIn: CGRect(x: 6.05, y: 7.9, width: 1.9, height: 1.9)), with: .color(.black))
+            var stem = Path()
+            stem.move(to: CGPoint(x: 7, y: 8.85))
+            stem.addLine(to: CGPoint(x: 7, y: 10.6))
+            layer.stroke(stem, with: .color(.black), style: StrokeStyle(lineWidth: 0.95, lineCap: .round))
+        }
     }
 }

@@ -210,13 +210,19 @@ private struct ShortcutsPane: View {
     private var activationMode: ActivationMode = Settings.activationMode.defaultValue
     @Environment(\.colorScheme) private var colorScheme
 
+    private var isBusy: Bool { appState.state != .idle }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ShortcutRow(recorder: recorders[.dictate]!, saved: dictationShortcut, appState: appState, divider: false)
-            SettingsRow(label: "Start by", description: Text(activationMode.description)) {
+            // Off during a dictation, as the shortcut rows are: a mode changed mid-recording would
+            // need a notice, and the floating UI no longer shows one (maintainer, 2026-11-24).
+            SettingsRow(label: "Start by", description: Text(isBusy ? RecorderLine.busy.text : activationMode.description)) {
                 RiverSegmentedChoice(title: "Start by",
                                      options: ActivationMode.allCases.map { ($0, $0.label) },
                                      selection: $activationMode)
+                    .disabled(isBusy)
+                    .help(isBusy ? RecorderLine.busy.text : "")
             }
             cancelRow
             ShortcutRow(recorder: recorders[.pasteLast]!, saved: pasteLastShortcut, appState: appState)

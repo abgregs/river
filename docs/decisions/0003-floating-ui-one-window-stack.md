@@ -1,6 +1,6 @@
 # ADR 0003: One window and one bottom-anchored stack for the floating UI
 
-**Status:** Accepted — 2026-10-12. Amended 2026-11-21: the model's status row beside the mark.
+**Status:** Accepted — 2026-10-12. Amended 2026-11-21: the model's status row beside the mark. Amended 2026-11-24: the status in the mark's place, and no message rectangle.
 
 ## Context
 
@@ -56,10 +56,16 @@ The window widens so the widest row fits on either side of the centred mark: `Ri
 
 The model-loading label above the mark is gone: nothing shows while the model loads at launch.
 
+## Amendment — 2026-11-24: the status in the mark's place
+
+Planning [0004](../planning/0004_model-loading-indicator.md) (Update 2026-11-24) moves the status from beside the mark into its place: the panel leaves, then the status enters centred, bottom edges aligned. The bottom of the stack is a `ZStack` holding the panel or the status, never both on screen, so the surface is back inside the vertical stack and the 2026-11-21 case under **Revisit if** no longer applies. The status waits on the panel's clock in the view (the panel's removal plus `statusEntryBeatSeconds`).
+
+The message rectangle is gone: the error toast became a status, and notices show only in the menu. The window shrinks to `max(transcriptPanelWidth, statusRowMaxWidth)` = 440 pt wide, and the transcript plus the mark tall (with the shadow margin, 632 × 424 pt).
+
 ## Related
 
 - [../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md) — the indicator's original window: non-activating, fixed position, never key.
-- [../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md) — the status row the amendment places beside the mark.
+- [../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md) — the status the amendments place beside the mark (2026-11-21), then in its place (2026-11-24).
 - [../planning/0030_floating-ui-visibility.md](../planning/0030_floating-ui-visibility.md) — the panel-replacement fix this keeps, now in one coordinator.
 - [../architecture/app-state-and-menu-bar.md](../architecture/app-state-and-menu-bar.md) — `AppState`, the one seam the stack observes.
 - [../design/color.md](../design/color.md) — the shared `HUDSurface` every surface in the stack uses.

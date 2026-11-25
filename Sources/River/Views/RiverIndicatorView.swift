@@ -3,62 +3,67 @@ import SwiftUI
 
 /// Everything River floats above the Dock, as one bottom-anchored stack (planning 0028; the
 /// mark is 川, docs/design/kawa-identity.md): the mark's panel, which carries only the
-/// recording state, with the model's status row beside it once a dictation ends before the
-/// model is ready (0004); above it one rounded rectangle for the error toast (0018) and the
-/// live-reconfiguration notice; and above that the streaming transcript (0025). It observes
-/// `AppState` only; every number that shapes the mark's motion lives in the pure
-/// `KawaIndicatorTimeline` and `KawaIndicatorEngine`, and the ring's in `StatusRing`; panel and
-/// focus behavior live in the coordinator.
+/// recording state, or in its place, once the panel has gone, the status: the model's while a
+/// dictation waits for it (0004), held text, or a cycle error (0018); and above them the
+/// streaming transcript (0025). It observes `AppState` only; every number that shapes the mark's
+/// motion lives in the pure `KawaIndicatorTimeline` and `KawaIndicatorEngine`, and the ring's in
+/// `StatusRing`; panel and focus behavior live in the coordinator.
 struct RiverIndicatorView: View {
     let appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
     // The mark's current pass through the panel. It outlives the activity: the mark stays in the
     // stack until its exit has finished.
     @State private var markCycle: KawaIndicatorCycle?
-    // The status beside the mark (planning 0004), kept until the mark's cycle ends, so the row
-    // leaves with the panel and never before it.
-    @State private var shown: ShownStatus?
+    // The status drawn in the mark's place, and when the last panel finished leaving: a status
+    // waits for the panel, then a beat, so the two never share the place (planning 0004).
+    @State private var shown: DictationStatus?
+    @State private var panelGone: Date?
     private let statusRing: StatusRingCycle?
 
     // `markCycle`, `shown` and `statusRing` are internal for testability: the snapshot harness
-    // renders a single moment, so it hands in a cycle and a status already under way.
-    init(appState: AppState, markCycle: KawaIndicatorCycle? = nil, shown: ShownStatus? = nil, statusRing: StatusRingCycle? = nil) {
+    // renders a single moment, so it hands in a cycle or a status already under way.
+    init(appState: AppState, markCycle: KawaIndicatorCycle? = nil, shown: DictationStatus? = nil, statusRing: StatusRingCycle? = nil) {
         self.appState = appState
         self.statusRing = statusRing
         _markCycle = State(initialValue: markCycle)
         _shown = State(initialValue: shown)
     }
 
-    /// The stack at its tallest: transcript, message, and mark, and wide enough for the widest
-    /// status row on each side of the centred mark. The window is this plus the shadow margin and
-    /// never resizes, so nothing on screen moves under a transition.
+    /// The stack at its tallest: the transcript above the mark, and wide enough for the widest
+    /// status. The window is this plus the shadow margin and never resizes, so nothing on screen
+    /// moves under a transition.
     static let contentSize = CGSize(
-        width: max(Constants.transcriptPanelWidth, Constants.hudMessageWidth,
-                   2 * (Constants.indicatorPanelWidth / 2 + Constants.statusRowGap + Constants.statusRowMaxWidth)),
-        height: Constants.transcriptPanelHeight + Constants.hudStackSpacing
-            + Constants.hudMessageReservedHeight + Constants.hudStackSpacing + Constants.indicatorPanelHeight
+        width: max(Constants.transcriptPanelWidth, Constants.statusRowMaxWidth),
+        height: Constants.transcriptPanelHeight + Constants.hudStackSpacing + max(Constants.indicatorPanelHeight, Constants.statusRowHeight)
     )
 
     var body: some View {
-        // Each surface takes space only while it shows, so the ones above close the gap: a
-        // toast left after the cycle drops to where the mark was, and a message never lands on
-        // the transcript. The bottom of the stack sits just above the Dock.
+        // Each surface takes space only while it shows. The bottom of the stack sits just above
+        // the Dock: the mark's panel, or the status centred where it was, bottom edges aligned.
         VStack(spacing: Constants.hudStackSpacing) {
-            if isTranscriptShown {
-                TranscriptPanelView(text: appState.liveTranscript)
-                    .transition(fade)
+            // The transcript comes and goes with the cycle, as the other surfaces do; its shortcut
+            // shows it quicker and hides it quicker still (planning 0034). Its animations stay on
+            // it, so a state change never retimes the status's own fades below.
+            VStack(spacing: 0) {
+                if isTranscriptShown {
+                    TranscriptPanelView(text: appState.liveTranscript)
+                        .transition(fade)
+                }
             }
-            if hasMessage {
-                messages
-                    .transition(fade)
-            }
-            if let markCycle {
-                // The mark runs its own entry and exit on the cycle's clock, so no SwiftUI
-                // transition or animation may also move it, nor the status row beside it.
-                MarkPanel(cycle: markCycle, activity: activity, appState: appState, shown: shown, statusRing: statusRing)
-                    .transition(.identity)
-                    .transaction { $0.animation = nil }
+            .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
+            .animation(liveTextToggle, value: appState.isLiveTextShown)
+            ZStack(alignment: .bottom) {
+                if let markCycle {
+                    // The mark runs its own entry and exit on the cycle's clock, so no SwiftUI
+                    // transition or animation may also move it.
+                    MarkPanel(cycle: markCycle, activity: activity, appState: appState)
+                        .transition(.identity)
+                        .transaction { $0.animation = nil }
+                }
+                if let shown {
+                    StatusRow(status: shown, appState: appState, ring: statusRing)
+                        .transition(fade)
+                }
             }
         }
         .frame(width: Self.contentSize.width, height: Self.contentSize.height, alignment: .bottom)
@@ -67,14 +72,9 @@ struct RiverIndicatorView: View {
         .onChange(of: appState.isAudioFlowing) { updateMarkCycle() }
         .onChange(of: appState.dictationStatus) { _, status in updateShown(status) }
         .task(id: markCycle) { await removeMarkCycleWhenGone() }
-        // A message left after the cycle drops into the mark's place once the mark has gone.
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: markCycle == nil)
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.toast)
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.notice)
-        // The transcript comes and goes with the cycle, as the other surfaces do; its shortcut
-        // shows it quicker and hides it quicker still (planning 0034).
-        .animation(liveTextToggle, value: appState.isLiveTextShown)
+        .task(id: StatusEntry(isWaiting: appState.dictationStatus != nil && shown == nil, panel: markCycle?.id)) {
+            await showStatusWhenPanelGone()
+        }
     }
 
     private var liveTextToggle: Animation {
@@ -87,89 +87,90 @@ struct RiverIndicatorView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .offset(y: Constants.hudFadeRise))
     }
 
+    // The status's entry and exit: the HUD's fade on the strong ease-out things arrive on.
+    private var statusFade: Animation {
+        .timingCurve(0.23, 1, 0.32, 1, duration: Constants.hudFadeSeconds)
+    }
+
+    // A status a new recording interrupts: a gentle ease-in-out, slow enough to read as a fade
+    // while the panel comes in over it. The strong ease-out of an entry drops most of the
+    // opacity in its first frames, which read as a cut at 0.1 s (maintainer, on device).
+    private var interruptedFade: Animation {
+        .timingCurve(0.37, 0, 0.63, 1, duration: Constants.statusInterruptedFadeSeconds)
+    }
+
     private var isTranscriptShown: Bool {
         TranscriptPanelView.isVisible(state: appState.state, isShown: appState.isLiveTextShown)
     }
 
-    // A status that holds the panel keeps the mark transcribing once River is idle.
     private var activity: MarkActivity {
-        MarkActivity.of(state: appState.state, holdsPanel: appState.holdsPanel)
-    }
-
-    // A notice belongs to the recording it describes: showing one at `.idle` would put
-    // last cycle's message under a capsule that is on its way out (planning 0017's
-    // canceled-notice bleed). The menu row stays its lingering home.
-    private var notice: String? {
-        appState.state == .recording ? appState.notice : nil
+        MarkActivity.of(state: appState.state, hidesPanel: appState.hidesPanel)
     }
 
     private func updateMarkCycle() {
         let next = KawaIndicatorCycle.next(markCycle, activity: activity, isAudioFlowing: appState.isAudioFlowing,
                                            reduceMotion: reduceMotion, at: Date())
-        // A new recording starts with nothing beside the mark.
-        if next?.id != markCycle?.id { shown = nil }
+        // A new recording takes the place almost at once: a status still showing leaves on a
+        // quick fade while the panel comes in.
+        if let next, next.id != markCycle?.id, shown != nil {
+            withAnimation(interruptedFade) { shown = nil }
+        }
         markCycle = next
     }
 
-    // A status replaces the one shown; one that clears stays until the mark's cycle ends.
+    // A status shown changes in place; one that clears leaves on the fade. A new one waits for
+    // `showStatusWhenPanelGone`.
     private func updateShown(_ status: DictationStatus?) {
-        guard let status, markCycle != nil else { return }
-        shown = ShownStatus(status: status, appeared: shown?.appeared ?? Date())
+        guard let status else {
+            withAnimation(appState.state == .recording ? interruptedFade : statusFade) { shown = nil }
+            return
+        }
+        if shown != nil { shown = status }
     }
 
-    // A cycle whose text is typed leaves the stack when its exit has finished. A new cycle
-    // replaces it first, which cancels the wait.
+    private struct StatusEntry: Equatable {
+        let isWaiting: Bool
+        let panel: UUID?
+    }
+
+    // A status enters once the mark's panel has gone and the beat has passed, or at once when
+    // no panel has been up, as for a permission refused before a recording starts.
+    private func showStatusWhenPanelGone() async {
+        guard appState.dictationStatus != nil, shown == nil, markCycle == nil else { return }
+        if let panelGone {
+            let wait = panelGone.addingTimeInterval(Constants.statusEntryBeatSeconds).timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        }
+        guard !Task.isCancelled, markCycle == nil, shown == nil, let status = appState.dictationStatus else { return }
+        withAnimation(statusFade) { shown = status }
+    }
+
+    // A cycle whose text is typed, or whose dictation lets it go, leaves the stack when its exit
+    // has finished. A new cycle replaces it first, which cancels the wait.
     private func removeMarkCycleWhenGone() async {
         guard let cycle = markCycle, let end = cycle.end(reduceMotion: reduceMotion) else { return }
         try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow)))
         if !Task.isCancelled, markCycle == cycle {
             markCycle = nil
-            shown = nil
+            panelGone = Date()
         }
-    }
-
-    private var hasMessage: Bool {
-        appState.toast != nil || notice != nil
-    }
-
-    private var messages: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let toast = appState.toast {
-                ToastRow(toast: toast)
-            }
-            if let notice {
-                Text(notice)
-                    .font(.caption)
-                    .foregroundStyle(.foreground.opacity(Constants.hudSecondaryTextOpacity))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(Constants.hudMessagePadding)
-        .frame(width: Constants.hudMessageWidth, alignment: .leading)
-        .foregroundStyle(Color(nsColor: Palette.HUD.for(colorScheme).text))
-        .modifier(HUDSurface(cornerRadius: Constants.hudMessageCornerRadius, edge: .window))
-        .accessibilityElement(children: .combine)
     }
 }
 
 /// The panel around the mark, and the mark's accessible name: the strokes are decorative, so
 /// the panel speaks the state and, while listening, the elapsed time. Its opacity and rise come
-/// from the cycle's timeline. The status row hangs off its right side, 8 pt away, with a
-/// timeline of its own, so it keeps moving while the panel holds still through a wait.
+/// from the cycle's timeline.
 private struct MarkPanel: View {
     let cycle: KawaIndicatorCycle
     let activity: MarkActivity
     // Read here, not by the stack above, so a level reading (about 14 a second) redraws only
-    // the mark's panel, not the transcript and messages beside it.
+    // the mark's panel, not the transcript above it.
     let appState: AppState
-    let shown: ShownStatus?
-    let statusRing: StatusRingCycle?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var voice = KawaIndicatorVoice()
     @State private var recordingStart = Date()
-    // True while nothing on the panel can move (a dead microphone, a dictation waiting for the
-    // model), so the timeline stops redrawing a still frame at display rate; a model download
-    // can take minutes.
+    // True while nothing on the panel can move (a dead microphone, a long transcription), so the
+    // timeline stops redrawing a still frame at display rate.
     @State private var isStill = false
 
     var body: some View {
@@ -183,12 +184,6 @@ private struct MarkPanel: View {
                 .accessibilityLabel(activity == .transcribing ? "Transcribing" : "Listening")
                 .accessibilityValue(activity == .listening ? elapsed(at: context.date) : "")
                 .accessibilityHidden(activity == .rest)
-        }
-        .overlay(alignment: .leading) {
-            if let shown {
-                StatusRow(shown: shown, markCycle: cycle, appState: appState, ring: statusRing)
-                    .offset(x: Constants.indicatorPanelWidth + Constants.statusRowGap)
-            }
         }
         .onChange(of: activity, initial: true) { _, newActivity in
             if newActivity == .listening { recordingStart = Date() }
@@ -265,11 +260,11 @@ struct KawaMarkFrame: View {
     }
 }
 
-/// The surface every floating shape shares (the mark's panel, the message rectangle, the
+/// The surface every floating shape shares (the mark's panel, the status, the
 /// transcript panel): an opaque tint (charcoal in Dark mode, mist in Light), with one of two edges.
 /// Opaque, so the panel looks the same over any desktop (maintainer, 2026-11-04).
 ///
-/// - `.window`, the message and the live text: the Settings window's edge (docs/design/color.md,
+/// - `.window`, the status and the live text: the Settings window's edge (docs/design/color.md,
 ///   one edge with the Settings window), with no sheen, rim or inner shade. A dark surface adds a
 ///   light inner line; an outer line and the window's two shadows hold the edge.
 /// - `.lit`, the mark's panel: a solid sheet of glass lit from the upper left, where Glass lights
@@ -401,22 +396,6 @@ struct HUDSurface: ViewModifier {
                 .padding(-reach)
                 .overlay { shape.blendMode(.destinationOut) }
                 .compositingGroup()
-        }
-    }
-}
-
-/// The transient error toast: headline and recovery hint (planning 0018), as plain prose.
-/// Warning graphics are deliberately left for a later pass (maintainer, 2026-09-17).
-private struct ToastRow: View {
-    let toast: ErrorToast
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(toast.headline).font(.callout.weight(.semibold))
-            Text(toast.hint)
-                .font(.caption)
-                .foregroundStyle(.foreground.opacity(Constants.hudSecondaryTextOpacity))
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

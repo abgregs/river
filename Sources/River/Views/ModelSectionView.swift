@@ -417,7 +417,7 @@ private struct ModelPhaseStatus: View {
 }
 
 /// A model's load in Settings (planning 0004): the status ring at 12 pt, animated as it is
-/// beside the indicator and in its label's colour (akane for a failure), and its words; the
+/// in the indicator's place and in its label's colour (akane for a failure), and its words; the
 /// percentage counts with the arc. A load that starts again starts the ring again.
 private struct ModelStatusLabel: View {
     let model: String

@@ -357,7 +357,7 @@ enum Constants {
     static let hudContactShadowOpacity: Double = 0.22
     static let hudContactShadowRadius: Double = 1
     static let hudContactShadowOffset: Double = 1
-    // Secondary text on the HUD (a toast's hint, the notice): the text color at this opacity.
+    // Secondary text on the HUD (a status's detail): the text color at this opacity.
     // The system `.secondary` renders it at 0.5, about 3.0:1 on the light surface; 0.8 holds
     // 4.5:1 on both tints (PaletteTests).
     static let hudSecondaryTextOpacity: Double = 0.8
@@ -399,17 +399,8 @@ enum Constants {
     // up; if the tap falls silent, after this long anyway, so they can't stay paused for good.
     static let shortcutResumeDeadlineSeconds: Double = 10
 
-    // The rounded rectangle holding the toast, loading label, and notice, stacked with the capsule.
-    static let hudMessageCornerRadius: Double = 16
-    static let hudMessagePadding: Double = 12
-    static let hudMessageWidth: Double = 260
+    // The gap between the stack's surfaces: the transcript above the mark's place.
     static let hudStackSpacing: Double = 8
-    // Space always reserved above the mark for that rectangle, which grows upward from the
-    // mark so the Dock never covers it. The panel is this one
-    // fixed size whatever it shows, so the capsule's position is arithmetic and a message
-    // appearing or leaving can never move it (the shift the maintainer saw on cancel,
-    // 2026-09-17, when a notice grew the content inside an already-sized panel).
-    static let hudMessageReservedHeight: Double = 140
 
     // The streaming transcript panel: its own surface, a fixed size, `hudStackSpacing` above
     // the mark's panel. Bare prototype UI; scrolls when the text outgrows it.
@@ -483,28 +474,35 @@ enum Constants {
     static let statusRingRevealEdge: Double = 1.5
     static let statusRingRevealBlur: Double = 0.45
 
-    // The status row beside the indicator (planning 0004): it
-    // appears this long after a dictation ends with the model not ready, and a failed load or
-    // held text stays this long after it shows, then leaves with the panel.
-    static let statusRevealDelaySeconds: Double = 0.5
+    // The status in the mark's place (planning 0004): it enters this long after the mark's panel
+    // has gone (maintainer, 2026-11-24), so the two never share the place; a failed load, held
+    // text or an error stays at least this long on screen, and Ready this long once its check is
+    // drawn, or until the text has typed if that is later.
+    static let statusEntryBeatSeconds: Double = 0.12
     static let statusHoldSeconds: Double = 4
-    // The row: 8 pt right of the mark's panel, 26 pt tall with the
-    // tile's corner; the ring in a 26 pt tile, inset 6 pt, with a hairline inset 2.25 pt at
-    // radius 3.75; the words 30 pt in, at 12 pt, the detail 6 pt after them, 10 pt to the end.
-    static let statusRowGap: Double = 8
-    static let statusRowHeight: Double = 26
-    static let statusRowCornerRadius: Double = 6
+    static let statusReadyHoldSeconds: Double = 0.6
+    // A status still showing when a new recording starts fades out over this long while the panel
+    // comes in; the two overlap. 0.1 s read as jarring on device (maintainer, 2026-11-25: "closer
+    // to a half second").
+    static let statusInterruptedFadeSeconds: Double = 0.5
+    // The row (maintainer, size B, 2026-11-24): the glyph inset 6 pt in a 26 pt tile with a hairline
+    // on its edge, the tile padded 5 pt inside the surface, so the row is 36 pt tall and its corner,
+    // the tile's plus the padding, is 11 pt, the mark's panel's. The words 10 pt after the tile, at
+    // 13 pt, the detail 6 pt after them, 14 pt to the end.
     static let statusRowGlyphInset: Double = 6
-    static let statusRowHairlineInset: Double = 2.25
-    static let statusRowHairlineRadius: Double = 3.75
+    static let statusRowTile: Double = StatusRing.grid + 2 * statusRowGlyphInset
+    static let statusRowPadding: Double = 5
+    static let statusRowHeight: Double = statusRowTile + 2 * statusRowPadding
+    static let statusRowTileRadius: Double = 6
+    static let statusRowCornerRadius: Double = statusRowTileRadius + statusRowPadding
     static let statusRowHairlineOpacity: Double = 0.1
-    static let statusRowTextInset: Double = 30
-    static let statusRowFontSize: Double = 12
+    static let statusRowTextGap: Double = 10
+    static let statusRowFontSize: Double = 13
     static let statusRowDetailGap: Double = 6
-    static let statusRowTrailingPadding: Double = 10
-    // Room for the widest row River writes (a test measures each); the window keeps this much
-    // on each side of the mark, so the row is never cut off.
-    static let statusRowMaxWidth: Double = 300
+    static let statusRowTrailingPadding: Double = 14
+    // Room for the widest row River writes (a test measures each); the window is at least this
+    // wide, so the row, centred where the mark was, is never cut off.
+    static let statusRowMaxWidth: Double = 440
 
     // The voice: one shared level, stepped at a fixed rate so it is the same at any frame rate.
     // It rises fast and falls slowly, with a ±18 % jitter re-drawn on its own clock so it never
@@ -620,11 +618,6 @@ enum Constants {
     // The mark's height as a fraction of the squircle's.
     static let appIconMarkFraction: Double = 0.56
     static let appIconFileName = "River.icns"
-
-    // How long an error toast stays on the HUD before auto-dismissing (planning
-    // 0018 acceptance criterion 1). Long enough to read a headline + hint, short
-    // enough to "get out of the way."
-    static let errorToastDurationSeconds: Double = 4.0
 
     // nspasteboard.org marker types for the user-initiated "Copy Last Transcription"
     // write (planning 0019). Applied so well-behaved clipboard managers skip recording

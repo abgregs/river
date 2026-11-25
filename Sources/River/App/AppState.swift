@@ -2,20 +2,21 @@ import Combine
 import Foundation
 import Observation
 
-/// Schedules AppState's timers: the error toast's auto-dismiss, and the status row's reveal and
-/// hold (planning 0004). Injected so tests fire them synchronously instead of waiting on
+/// Schedules AppState's timers: the status's reveal and hold (planning 0004). Injected so tests fire them synchronously instead of waiting on
 /// wall-clock time (planning 0018 AC4; the injectable-clock pattern of `TapStateMachine`).
 /// Returns a token whose cancellation stops a pending action — reassigning it (a newer error)
 /// cancels the previous timer.
 typealias TimerScheduler = @MainActor (_ after: TimeInterval, _ action: @escaping @MainActor () -> Void) -> AnyCancellable
 
-/// What the row beside the indicator says (planning 0004).
+/// What the status in the mark's place says (planning 0004).
 enum DictationStatus: Equatable {
     /// The model's state while a dictation waits for it, then ready, or failed with the
     /// recording kept.
     case model(StatusRing.Phase)
     /// The app dictated into left the front: River stopped typing and holds the text.
     case held
+    /// A cycle error (planning 0018).
+    case error(ErrorStatus)
 }
 
 /// Observable bridge from the `AppDelegate`-owned `RiverSession` (Combine
@@ -32,10 +33,6 @@ final class AppState {
     private(set) var modelLoadState: ModelLoadState = .loading
     // The model in use and a model loading beside it, for the Settings Model section.
     private(set) var modelSelection = ModelSelection(inUse: Constants.defaultModel, inUseState: .loading, next: nil)
-    /// Transient HUD toast (planning 0018). Distinct from `errorMessage` (the
-    /// lingering menu row): it auto-dismisses after `errorToastDurationSeconds` and
-    /// clears on a fresh recording. The menu row is the record; the toast is the alert.
-    private(set) var toast: ErrorToast?
     /// Live input level (0...1) during recording (planning 0020). Zero at rest and
     /// whenever not recording, so the HUD meter sits still outside a capture.
     private(set) var inputLevel: Float = 0
@@ -65,14 +62,12 @@ final class AppState {
     /// What macOS said to each combination River holds: a refusal is the Settings window's
     /// "Not working" line on that row and its sidebar badge. A lone modifier has none.
     private(set) var shortcutRegistrations: [RiverShortcut: HotKeyRegistration] = [:]
-    /// The status beside the indicator (planning 0004): the model's state when a dictation ends
-    /// before the model is ready, or text River held. Nil while nothing shows.
+    /// The status in the mark's place (planning 0004): the model's state when a dictation ends
+    /// before the model is ready, text River held, or a cycle error. Nil while nothing shows. The
+    /// indicator draws it once the mark's panel has gone.
     private(set) var dictationStatus: DictationStatus?
-    /// Whether the status keeps the panel up once River is idle: a failed load or held text for
-    /// 4 s after it shows, and a ready check until it has been revealed.
-    private(set) var holdsPanel = false
     /// How far each downloading model has got, 0 to 1, by name, and where a failed download
-    /// stopped (planning 0004): the status ring beside the indicator and in Settings.
+    /// stopped (planning 0004): the status ring in the indicator's place and in Settings.
     private(set) var downloadProgress: [String: Double] = [:]
     /// How many recordings a failed load kept, for Settings' "1 recording kept".
     private(set) var keptRecordingCount = 0
@@ -84,13 +79,14 @@ final class AppState {
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private let schedule: TimerScheduler
-    @ObservationIgnored private var toastDismissal: AnyCancellable?
-    // The status row's timers and what it has heard since the release: the dictation waits
-    // for the model, or its recording was kept, and whether the half second has passed.
+    // The status's timers, and whether the hand-off has passed since the release: the panel
+    // has gone, so a status set now shows at once.
     @ObservationIgnored private var statusReveal: AnyCancellable?
     @ObservationIgnored private var statusHold: AnyCancellable?
     @ObservationIgnored private var isRevealDue = false
-    @ObservationIgnored private var recordingKept = false
+    // Runs for the longest panel exit after River returns to idle: a status set meanwhile, such
+    // as Paste last failing just after a dictation, waits for that panel.
+    @ObservationIgnored private var panelLeaving: AnyCancellable?
 
     // `nil` default (resolved to `liveScheduler` in this isolated init body)
     // rather than a default-argument reference to the main-actor static, which
@@ -162,6 +158,7 @@ final class AppState {
     // the live recording, so it clears the moment that recording ends.
     func apply(_ newState: RiverState) {
         let wasRecording = state == .recording
+        let wasIdle = state == .idle
         if state == .recording && newState != .recording {
             lastRecordingWasDiscarded = isDiscardPending
             lastRecordingWasCanceled = newState == .idle && !isDiscardPending
@@ -169,9 +166,16 @@ final class AppState {
         }
         state = newState
         switch newState {
-        case .recording: clearStatus()
-        case .processing: if wasRecording { scheduleReveal() }
-        case .idle: settleStatus()
+        case .recording:
+            clearStatus()
+            panelLeaving = nil
+        case .processing:
+            if wasRecording { scheduleReveal() }
+        case .idle:
+            settleStatus()
+            if !wasIdle {
+                panelLeaving = schedule(KawaIndicatorTimeline.longestExit) { [weak self] in self?.panelLeaving = nil }
+            }
         }
         if newState == .recording {
             errorMessage = nil
@@ -179,10 +183,6 @@ final class AppState {
             // sends `.idle` and *then* its notice, so the clear below cannot catch it and
             // the message otherwise rode into the next recording (planning 0017).
             notice = nil
-            // A fresh recording clears a stale toast too (its lingering-record twin
-            // stays on the menu row); its own auto-dismiss timer is now moot.
-            toast = nil
-            toastDismissal = nil
         }
         if newState != .recording {
             notice = nil
@@ -211,15 +211,10 @@ final class AppState {
     // screen (ADR 0002).
     func apply(_ error: RiverError) {
         errorMessage = LogRedaction.redactUserPaths(error.localizedDescription)
-        // Graduate the same error into a transient HUD toast (planning 0018). The
-        // toast is fixed copy per error *kind* — no user content — so it needs no
-        // redaction; the redacted framework message stays on `errorMessage` only.
-        // Reassigning `toastDismissal` cancels any previous pending dismiss, so the
-        // newest error owns the timer.
-        toast = ErrorToastPresentation.toast(for: error)
-        toastDismissal = schedule(Constants.errorToastDurationSeconds) { [weak self] in
-            self?.dismissToast()
-        }
+        // The same error as the status in the mark's place (planning 0018). It is fixed copy
+        // per error *kind*, no user content, so it needs no redaction; the redacted framework
+        // message stays on `errorMessage` only. The newest status owns the hold.
+        show(.error(ErrorStatusPresentation.status(for: error)))
     }
 
     // internal for testability — the model load state entry point (also used by
@@ -253,10 +248,7 @@ final class AppState {
             showWaitIfDue()
         case .recordingKept:
             isDictationWaiting = false
-            recordingKept = true
-            // The panel stays up for the failure, even when River is idle before it shows.
-            holdsPanel = true
-            if dictationStatus != nil { show(.model(.failed)) } else { showWaitIfDue() }
+            show(.model(.failed))
         case .textHeld:
             show(.held)
         }
@@ -268,7 +260,7 @@ final class AppState {
         downloadProgress = progress
     }
 
-    /// How far the model in use has downloaded, for the row beside the indicator: while it
+    /// How far the model in use has downloaded, for the status in the indicator's place: while it
     /// downloads, and where a failed download stopped. Nil otherwise.
     var downloadFraction: Double? { downloadProgress[modelSelection.inUse] }
 
@@ -277,22 +269,27 @@ final class AppState {
         keptRecordingCount = count
     }
 
-    // A fresh dictation starts with nothing beside the indicator.
+    /// Whether the mark's panel leaves before River is idle: the dictation waits for the model,
+    /// or a status is set, which shows only once the panel has gone (planning 0004).
+    var hidesPanel: Bool {
+        state == .processing && (isDictationWaiting || dictationStatus != nil)
+    }
+
+    // A fresh dictation starts with nothing in the mark's place.
     private func clearStatus() {
         dictationStatus = nil
-        holdsPanel = false
         statusReveal = nil
         statusHold = nil
         isRevealDue = false
         isDictationWaiting = false
-        recordingKept = false
     }
 
-    // The row appears half a second after the release, and only if the dictation still waits
-    // for the model then: a load that finishes sooner shows nothing.
+    // A wait's status is revealed once the panel has left after the release and a beat has
+    // passed, and only if the dictation still waits for the model then: a load that finishes
+    // sooner shows nothing.
     private func scheduleReveal() {
         clearStatus()
-        statusReveal = schedule(Constants.statusRevealDelaySeconds) { [weak self] in
+        statusReveal = schedule(KawaIndicatorTimeline.statusHandOff) { [weak self] in
             guard let self else { return }
             self.statusReveal = nil
             self.isRevealDue = true
@@ -301,13 +298,8 @@ final class AppState {
     }
 
     private func showWaitIfDue() {
-        guard isRevealDue, dictationStatus == nil else { return }
-        if recordingKept {
-            // The model loaded after all before the row showed: there is nothing to say.
-            if modelLoadState == .ready { endHold() } else { show(.model(.failed)) }
-        } else if isDictationWaiting, state == .processing, let phase = waitingPhase {
-            show(.model(phase))
-        }
+        guard isRevealDue, dictationStatus == nil, isDictationWaiting, state == .processing, let phase = waitingPhase else { return }
+        show(.model(phase))
     }
 
     // The model's phase while a dictation waits for it: nil once it is ready or has failed.
@@ -319,46 +311,50 @@ final class AppState {
         }
     }
 
+    // A status set while a panel may still be up (River is busy, or idle with the panel still
+    // leaving) shows once that panel has gone, at most the hand-off later, so its hold adds the
+    // hand-off: it stays at least `statusHoldSeconds` on screen. One that replaces a wait's status
+    // takes its place at once, since a wait's status shows only once the panel has gone.
     private func show(_ status: DictationStatus) {
+        let replacesWait: Bool = switch dictationStatus {
+        case .model(.downloading), .model(.preparing), .model(.ready): true
+        default: false
+        }
         dictationStatus = status
-        // Once something shows, the reveal still to come has nothing to add.
-        statusReveal = nil
+        let panelMayBeUp = state != .idle || panelLeaving != nil
+        let handOff = panelMayBeUp && !replacesWait ? KawaIndicatorTimeline.statusHandOff : 0
         switch status {
-        case .model(.failed), .held:
-            holdsPanel = true
-            statusHold = schedule(Constants.statusHoldSeconds) { [weak self] in self?.endHold() }
+        case .model(.failed), .held, .error:
+            statusHold = schedule(handOff + Constants.statusHoldSeconds) { [weak self] in self?.endHold() }
         case .model(.ready):
-            // Until the check has been revealed, so the panel never leaves with it half drawn.
-            holdsPanel = true
-            statusHold = schedule(Constants.statusRingCheckDelaySeconds + Constants.statusRingCheckSeconds) { [weak self] in
-                self?.endHold()
-            }
+            // Until the check has been revealed and read.
+            let check = Constants.statusRingCheckDelaySeconds + Constants.statusRingCheckSeconds
+            statusHold = schedule(handOff + check + Constants.statusReadyHoldSeconds) { [weak self] in self?.endHold() }
         case .model(.downloading), .model(.preparing):
             break
         }
     }
 
+    // A hold that runs out while River still decodes or types keeps its status until River is
+    // idle: Ready then stays until the text has typed, so something shows through the decode.
     private func endHold() {
         statusHold = nil
-        holdsPanel = false
-        recordingKept = false
         if state == .idle { dictationStatus = nil }
     }
 
     // Back at idle: a wait that ended without the model (Cancel Dictation) goes with the cycle,
-    // and so does a reveal still to come, unless a kept recording waits on it. A hold runs on.
+    // and so does a reveal still to come; a status whose hold has run out goes too. A hold
+    // still running carries on.
     private func settleStatus() {
         switch dictationStatus {
         case .model(.downloading), .model(.preparing):
             dictationStatus = nil
-            statusReveal = nil
-        case .model(.ready):
+        case .model(.ready), .model(.failed), .held, .error:
             if statusHold == nil { dictationStatus = nil }
-        case .model(.failed), .held:
-            break
         case nil:
-            if !recordingKept { statusReveal = nil }
+            break
         }
+        statusReveal = nil
         isDictationWaiting = false
     }
 
@@ -406,15 +402,8 @@ final class AppState {
         modelSelection = selection
     }
 
-    // internal for testability — clears the toast when its timer fires. Separate so
-    // the scheduled closure has a named target and the fired-clear is observable.
-    func dismissToast() {
-        toast = nil
-        toastDismissal = nil
-    }
-
-    // Production scheduler: a cancelable main-queue delay. Cancelling the returned token (via
-    // reassignment or `dismissToast`) stops a pending fire.
+    // Production scheduler: a cancelable main-queue delay. Cancelling the returned token (by
+    // reassignment) stops a pending fire.
     static let liveScheduler: TimerScheduler = { seconds, action in
         let work = DispatchWorkItem { MainActor.assumeIsolated { action() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)

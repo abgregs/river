@@ -835,7 +835,7 @@ struct RiverSessionTests {
         #expect(events.events == [.waitingForModel, .recordingKept])
         #expect(events.states == [.processing, .processing])
         #expect(env.session.currentKeptRecordingCount == 1)
-        // The status ring says it: a toast and a menu error line would say it twice.
+        // The status ring says it: an error status and a menu error line would say it twice.
         #expect(errors.isEmpty)
 
         // With the load already failed there is nothing to wait for: kept at once.

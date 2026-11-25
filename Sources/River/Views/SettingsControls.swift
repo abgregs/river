@@ -159,6 +159,7 @@ struct RiverSegmentedChoice<Value: Hashable>: View {
     let options: [(value: Value, label: String)]
     @Binding var selection: Value
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         let ink = SettingsInk(colorScheme)
@@ -188,6 +189,8 @@ struct RiverSegmentedChoice<Value: Hashable>: View {
         .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(ink.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(ink.opacity(0.1), lineWidth: 0.5))
         .fixedSize()
+        // Dimmed when off, as River's bezel buttons are.
+        .opacity(isEnabled ? 1 : 0.4)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }

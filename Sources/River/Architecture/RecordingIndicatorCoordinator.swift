@@ -40,14 +40,12 @@ final class RecordingIndicatorCoordinator {
 
     // The HUD's single source of truth is `AppState`. Re-arm the observation on each
     // change (Observation's `onChange` is one-shot) and recompute visibility, so a
-    // state transition *or* the toast's own auto-dismiss both flow through the same
+    // state transition *or* the status's own hold running out both flow through the same
     // decision — no timer racing between the two.
     private func observeAppState() {
         withObservationTracking {
             _ = appState.state
-            _ = appState.toast
-            _ = appState.holdsPanel
-            _ = appState.notice
+            _ = appState.dictationStatus
             _ = appState.isLiveTextShown
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -61,8 +59,7 @@ final class RecordingIndicatorCoordinator {
     private func updateVisibility() {
         let shouldShow = RecordingIndicatorPresentation.isOnScreen(
             state: appState.state,
-            hasToast: appState.toast != nil,
-            hasStatus: appState.holdsPanel
+            hasStatus: appState.dictationStatus != nil
         )
         if shouldShow {
             orderOutWork?.cancel()

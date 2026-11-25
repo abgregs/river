@@ -4,26 +4,18 @@ import Testing
 
 @Suite("RecordingIndicatorPresentation")
 struct RecordingIndicatorPresentationTests {
-    @Test("recording and processing are on screen; idle without a toast or a status is not")
+    @Test("recording and processing are on screen; idle without a status is not")
     func visibilityPerState() {
-        #expect(RecordingIndicatorPresentation.isOnScreen(state: .recording, hasToast: false, hasStatus: false))
-        #expect(RecordingIndicatorPresentation.isOnScreen(state: .processing, hasToast: false, hasStatus: false))
-        #expect(!RecordingIndicatorPresentation.isOnScreen(state: .idle, hasToast: false, hasStatus: false))
+        #expect(RecordingIndicatorPresentation.isOnScreen(state: .recording, hasStatus: false))
+        #expect(RecordingIndicatorPresentation.isOnScreen(state: .processing, hasStatus: false))
+        #expect(!RecordingIndicatorPresentation.isOnScreen(state: .idle, hasStatus: false))
     }
 
-    @Test("a pending toast keeps the panel on screen at idle")
-    func toastKeepsPanelVisibleAtIdle() {
-        // Errors surface at end-of-cycle, when the state has already returned to
-        // .idle. If the panel dropped the moment state hit .idle, the toast would
-        // never be seen. The toast must outlive the recording that triggered it.
-        #expect(RecordingIndicatorPresentation.isOnScreen(state: .idle, hasToast: true, hasStatus: false))
-    }
-
-    @Test("a status that holds the panel keeps it on screen at idle")
+    @Test("a status keeps the window on screen at idle")
     func statusKeepsPanelVisibleAtIdle() {
-        // planning 0004: a failed load and held text are said once the dictation has ended,
-        // when River is already idle, and stay 4 s. The panel must outlast the dictation for them.
-        #expect(RecordingIndicatorPresentation.isOnScreen(state: .idle, hasToast: false, hasStatus: true))
+        // planning 0004 and 0018: an error, held text and a failed load arrive at the end of the
+        // cycle and stay 4 s after River is idle. The window must outlast the dictation for them.
+        #expect(RecordingIndicatorPresentation.isOnScreen(state: .idle, hasStatus: true))
     }
 }
 
@@ -72,6 +64,15 @@ struct StatusRowWordsTests {
         #expect(StatusRowWords.of(.held, frame: nil, pasteLast: nil).detail == "Copy it from the menu")
     }
 
+    @Test("an error reads as its headline then its detail, and VoiceOver hears both")
+    func errorWords() {
+        let error = ErrorStatus(headline: "Couldn’t paste", detail: "Click into a text field", mark: .failed)
+        let words = StatusRowWords.of(.error(error), frame: nil, pasteLast: Self.pasteLast)
+        #expect(words.main == "Couldn’t paste")
+        #expect(words.detail == "Click into a text field")
+        #expect(words.spoken == "Couldn’t paste. Click into a text field.")
+    }
+
     @Test("VoiceOver hears each change of status, never a percentage")
     func spokenWordsHaveNoPercentage() {
         let spoken = StatusRowWords.of(.model(.downloading), frame: Self.downloadingAt(0.62), pasteLast: Self.pasteLast).spoken
@@ -79,11 +80,10 @@ struct StatusRowWordsTests {
         #expect(StatusRowWords.of(.model(.downloading), frame: Self.downloadingAt(0.7), pasteLast: Self.pasteLast).spoken == spoken)
     }
 
-    @Test("the window is wide enough for the widest row on each side of the mark")
+    @Test("the window is wide enough for the widest status, centred where the mark was")
     @MainActor
     func widestRowFits() {
-        // A row wider than the room the window keeps beside the mark would be cut off at its
-        // edge. Measured as the row lays out: tile and words, the detail, then the end.
+        // A row wider than the window would be cut off at its edge. Measured as the row lays out: tile and words, the detail, then the end.
         typealias C = Constants
         let font = NSFont.systemFont(ofSize: C.statusRowFontSize)
         func width(_ text: String) -> Double { NSAttributedString(string: text, attributes: [.font: font]).size().width }
@@ -91,12 +91,13 @@ struct StatusRowWordsTests {
         let longest = (display: ShortcutText.display(.combination(keyCode: 51, modifiers: [.control, .option, .shift, .command])),
                        spoken: "")
         let rows = StatusRowWords.all(pasteLast: longest)
+        let leading: Double = C.statusRowPadding + C.statusRowTile + C.statusRowTextGap
         let widest = rows.map { words in
-            C.statusRowTextInset + width(words.main)
+            leading + width(words.main)
                 + (words.detail.map { C.statusRowDetailGap + width($0.hasSuffix("%") ? "100%" : $0) } ?? 0)
                 + C.statusRowTrailingPadding
         }.max() ?? 0
         #expect(widest <= C.statusRowMaxWidth)
-        #expect(RiverIndicatorView.contentSize.width / 2 >= C.indicatorPanelWidth / 2 + C.statusRowGap + C.statusRowMaxWidth)
+        #expect(RiverIndicatorView.contentSize.width >= C.statusRowMaxWidth)
     }
 }
