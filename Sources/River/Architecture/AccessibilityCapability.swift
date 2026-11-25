@@ -137,20 +137,15 @@ final class AccessibilityCapability: Capability {
         // live focus would leak into the classification.
         if skipPostForTesting { return .unknown }
         let (role, subrole, error) = focusedElementReadForTesting?() ?? readFocusedElementRole()
-        // "Nothing focused" (kAXErrorNoValue, -25212) fails open with every other failed read:
-        // VS Code's terminal answers it while it has focus (on device, 2026-11-24), so it can't
-        // mean "no text field".
         let classification = Self.classifyFocusedTarget(role: role, subrole: subrole)
-        // The app in front, so a log shows which apps the guard skips or lets through unread.
-        let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil"
         switch classification {
         case .unknown:
             // `error` is the AX error that stopped the read, if any:
             // kAXErrorCannotComplete (-25204) is a timeout from an app that
             // did not answer in time.
-            insertLogger.info("Paste guard: focused-element role unknown (role=\(role ?? "nil", privacy: .public), subrole=\(subrole ?? "nil", privacy: .public), axError=\(error.map { String($0.rawValue) } ?? "none", privacy: .public), app=\(app, privacy: .public)) — failing open.")
+            insertLogger.info("Paste guard: focused-element role unknown (role=\(role ?? "nil", privacy: .public), subrole=\(subrole ?? "nil", privacy: .public), axError=\(error.map { String($0.rawValue) } ?? "none", privacy: .public)) — failing open.")
         case .nonEditable:
-            insertLogger.info("Paste guard: focused element is not editable (role=\(role ?? "nil", privacy: .public), axError=\(error.map { String($0.rawValue) } ?? "none", privacy: .public), app=\(app, privacy: .public)) — skipping paste.")
+            insertLogger.info("Paste guard: focused element is not editable (role=\(role ?? "nil", privacy: .public)) — skipping paste.")
         case .editable:
             break
         }
@@ -185,8 +180,6 @@ final class AccessibilityCapability: Capability {
     // Deliberately conservative: only roles that can never accept a paste.
     // AXGroup and anything app-custom stay off this list (fail open instead).
     private static let nonEditableRoles: Set<String> = [
-        // The window itself has focus, not a control in it (maintainer, 2026-11-24).
-        "AXWindow",
         "AXButton",
         "AXCheckBox",
         "AXRadioButton",

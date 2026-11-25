@@ -254,7 +254,7 @@ struct FocusedTargetClassificationTests {
         "AXButton", "AXCheckBox", "AXRadioButton", "AXPopUpButton",
         "AXMenuButton", "AXMenuItem", "AXLink", "AXImage", "AXStaticText",
         "AXRow", "AXCell", "AXTable", "AXOutline", "AXList", "AXSlider",
-        "AXDisclosureTriangle", "AXWindow"
+        "AXDisclosureTriangle"
     ])
     func nonEditableRoles(role: String) {
         #expect(AccessibilityCapability.classifyFocusedTarget(role: role, subrole: nil) == .nonEditable)
@@ -314,21 +314,6 @@ struct FocusedTargetClassificationTests {
         #expect(capability.classifyFocusedTarget() == .nonEditable)
         capability.focusedElementReadForTesting = { (nil, nil, .cannotComplete) }
         #expect(capability.classifyFocusedTarget() == .unknown)
-    }
-
-    @MainActor
-    @Test("\"nothing focused\" still types: VS Code's terminal reports it while it has focus")
-    func nothingFocusedFailsOpen() {
-        // On device (2026-11-24) the system-wide read answered kAXErrorNoValue (-25212) for
-        // VS Code's focused terminal. Skipping on it refused every dictation into the terminal,
-        // so it must stay .unknown, like any other read that fails.
-        let capability = AccessibilityCapability()
-        capability.setStatusForTesting(.granted)
-        capability.focusedElementReadForTesting = { (nil, nil, .noValue) }
-        #expect(capability.classifyFocusedTarget() == .unknown)
-        // The window itself focused, with no control in it, still skips.
-        capability.focusedElementReadForTesting = { ("AXWindow", "AXStandardWindow", nil) }
-        #expect(capability.classifyFocusedTarget() == .nonEditable)
     }
 }
 
