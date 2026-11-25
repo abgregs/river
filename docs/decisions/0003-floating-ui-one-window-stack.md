@@ -65,7 +65,7 @@ The message rectangle is gone: the error toast became a status, and notices show
 ## Related
 
 - [../planning/0002_recording-indicator-hud.md](../planning/0002_recording-indicator-hud.md) — the indicator's original window: non-activating, fixed position, never key.
-- [../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md) — the status row the amendment places beside the mark.
+- [../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md) — the status the amendments place beside the mark (2026-11-21), then in its place (2026-11-24).
 - [../planning/0030_floating-ui-visibility.md](../planning/0030_floating-ui-visibility.md) — the panel-replacement fix this keeps, now in one coordinator.
 - [../architecture/app-state-and-menu-bar.md](../architecture/app-state-and-menu-bar.md) — `AppState`, the one seam the stack observes.
 - [../design/color.md](../design/color.md) — the shared `HUDSurface` every surface in the stack uses.

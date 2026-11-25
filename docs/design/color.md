@@ -112,7 +112,7 @@ Only when two things must be told apart at a glance and shape, text, or position
 | Streaming text in the panel | The HUD's text color (`ink` or `charcoal`). A candidate under the earlier rule, open since the panel went monochrome (2026-11-02): words still being recognized in the accent (your voice, live), turning the text color once committed |
 | History | Neutral; platform selection |
 | Download progress | Built 2026-11-21 ([0004](../planning/0004_model-loading-indicator.md)): the status ring's arc in the HUD's text color, in Settings' label color, and in one tone in the menu bar |
-| Toasts and warnings | Prose in the HUD's text color; a status glyph, if added, takes system red or orange |
+| Errors and warnings | Since 2026-11-24 the status's akane ring round an exclamation mark for a dictation that didn't go through, and a lock in the HUD's text color for a refused permission; the menu bar's cycle error keeps its template symbol. **Why:** the error toasts became statuses with Couldn't load the model's mark ([0018](../planning/0018_transient-error-toasts.md)) |
 
 ## Related
 

@@ -65,7 +65,7 @@ Several backlog items compose (surfaced by the 2026-07-06 UX review):
 These are tracked here until they're picked up into an active milestone or moved to `requirements/`:
 
 - **Settings UI for Fn key warning**: the only planned mode warning (the Caps Lock + Hold one went with Caps Lock in v0.3.0).
-- **Prominent live-reconfiguration notice**: M9 surfaces the "new key now stops the recording" message in the menu dropdown; an always-visible version rides the recording HUD ([0002_recording-indicator-hud.md](0002_recording-indicator-hud.md)).
+- **Prominent live-reconfiguration notice**: M9 surfaces the "new key now stops the recording" message in the menu dropdown; an always-visible version rides the recording HUD ([0002_recording-indicator-hud.md](0002_recording-indicator-hud.md)). *2026-11-24: dropped. The floating UI shows no notices, and Settings turns off the dictation shortcut and Start by during a dictation, so Settings never sends one ([0004](0004_model-loading-indicator.md), Update 2026-11-24).*
 - **Model picker in Settings**: promoted to [0021_model-picker.md](0021_model-picker.md) (2026-07-06).
 - **From the 2026-09-28 performance and size review** (the five fixes it produced are in [current-focus.md](current-focus.md)):
   - *A rare crash path.* swift-transformers' `Hub` resource bundle is not in River.app, and its `Bundle.module` accessor calls `fatalError` when the bundle is missing. It runs only when a model has `config.json` but no usable tokenizer config. Copying the bundle into `Contents/Resources` won't help: the accessor looks only at the `.app` root, where code signing forbids loose files.

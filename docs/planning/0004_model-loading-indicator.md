@@ -75,7 +75,7 @@ Planning [0029](0029_pixel-identity.md) renamed the `.loading` label to "Prepari
 
 ## Update (2026-11-24): one status surface
 
-Decided by the maintainer over three design rounds (2026-11-24); each replaces a 2026-11-21 decision above.
+Decided by the maintainer over three design rounds (2026-11-24); where they differ from the 2026-11-21 decisions above, these replace them.
 
 - **The status shows alone.** The mark's panel leaves on its ordinary exit, and the status enters in its place, centred, bottom edges aligned, 0.12 s after the panel has gone (`statusEntryBeatSeconds`), on the HUD's fade. **Why:** this replaces the row 8 pt to the panel's right, which held the panel up through the wait: one floating shape at a time reads as orchestrated, not crowded.
 - **When.** A dictation that waits for the model lets the panel go at once; its status is revealed `KawaIndicatorTimeline.statusHandOff` after the release (the panel's 0.78 s exit plus the beat, 0.90 s), replacing the 0.5 s reveal, and a load that finishes sooner still shows nothing. A status set while a panel may still be up (an error, held text, a load that failed while the user spoke, or Paste last failing just after a dictation) waits for the panel, and its 4 s hold adds the hand-off, so it stays at least 4 s on screen (at most 4.9 s). Ready stays `statusReadyHoldSeconds` (0.6 s) once its check is drawn, or until the text has typed if that is later, so something shows through the decode. A new recording while a status shows fades it out in 0.1 s (`statusInterruptedFadeSeconds`) as the panel comes in, never a cut (maintainer, 2026-11-24).
