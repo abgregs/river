@@ -41,10 +41,17 @@ struct RiverIndicatorView: View {
         // Each surface takes space only while it shows. The bottom of the stack sits just above
         // the Dock: the mark's panel, or the status centred where it was, bottom edges aligned.
         VStack(spacing: Constants.hudStackSpacing) {
-            if isTranscriptShown {
-                TranscriptPanelView(text: appState.liveTranscript)
-                    .transition(fade)
+            // The transcript comes and goes with the cycle, as the other surfaces do; its shortcut
+            // shows it quicker and hides it quicker still (planning 0034). Its animations stay on
+            // it, so a state change never retimes the status's own fades below.
+            VStack(spacing: 0) {
+                if isTranscriptShown {
+                    TranscriptPanelView(text: appState.liveTranscript)
+                        .transition(fade)
+                }
             }
+            .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
+            .animation(liveTextToggle, value: appState.isLiveTextShown)
             ZStack(alignment: .bottom) {
                 if let markCycle {
                     // The mark runs its own entry and exit on the cycle's clock, so no SwiftUI
@@ -68,10 +75,6 @@ struct RiverIndicatorView: View {
         .task(id: StatusEntry(isWaiting: appState.dictationStatus != nil && shown == nil, panel: markCycle?.id)) {
             await showStatusWhenPanelGone()
         }
-        .animation(.easeOut(duration: Constants.hudFadeSeconds), value: appState.state)
-        // The transcript comes and goes with the cycle, as the other surfaces do; its shortcut
-        // shows it quicker and hides it quicker still (planning 0034).
-        .animation(liveTextToggle, value: appState.isLiveTextShown)
     }
 
     private var liveTextToggle: Animation {
@@ -89,9 +92,11 @@ struct RiverIndicatorView: View {
         .timingCurve(0.23, 1, 0.32, 1, duration: Constants.hudFadeSeconds)
     }
 
-    // A status a new recording interrupts: the same fade, quick enough that the two barely meet.
+    // A status a new recording interrupts: a gentle ease-in-out, slow enough to read as a fade
+    // while the panel comes in over it. The strong ease-out of an entry drops most of the
+    // opacity in its first frames, which read as a cut at 0.1 s (maintainer, on device).
     private var interruptedFade: Animation {
-        .timingCurve(0.23, 1, 0.32, 1, duration: Constants.statusInterruptedFadeSeconds)
+        .timingCurve(0.37, 0, 0.63, 1, duration: Constants.statusInterruptedFadeSeconds)
     }
 
     private var isTranscriptShown: Bool {
