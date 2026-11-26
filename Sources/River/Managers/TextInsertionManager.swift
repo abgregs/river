@@ -33,9 +33,8 @@ final class TextInsertionManager {
     private let pause: Pause
     private let frontmostApp: FrontmostApp
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "insert")
-    // One delivery types at a time; the rest wait here, in order.
-    private var isTyping = false
-    private var waiting: [CheckedContinuation<Void, Never>] = []
+    // One delivery types at a time; the rest wait their turn, in order.
+    private let turn = Turn()
 
     init(accessibility: AccessibilityCapability, pause: Pause? = nil, frontmostApp: FrontmostApp? = nil) {
         self.accessibility = accessibility
@@ -58,8 +57,8 @@ final class TextInsertionManager {
     /// `TextInsertionError.noEditableTarget` when the focused element is clearly non-editable —
     /// the insertion guard (planning 0001).
     func deliver(_ text: String, to app: pid_t?) async throws -> Delivery {
-        await waitForTurn()
-        defer { endTurn() }
+        await turn.take()
+        defer { turn.pass() }
         // Before the guard, so a switch to an app with no text field holds the text rather
         // than reporting no field.
         if hasLeft(app) { return held(text) }
@@ -102,20 +101,6 @@ final class TextInsertionManager {
     private func held(_ text: String) -> Delivery {
         logger.info("deliver: the app in front changed; holding \(text.count, privacy: .public) chars")
         return .held
-    }
-
-    // Not cancellable: a delivery that stopped waiting would type out of turn.
-    private func waitForTurn() async {
-        guard isTyping else {
-            isTyping = true
-            return
-        }
-        await withCheckedContinuation { waiting.append($0) }
-    }
-
-    // The turn passes straight to the next delivery in line, so none can cut in.
-    private func endTurn() {
-        if waiting.isEmpty { isTyping = false } else { waiting.removeFirst().resume() }
     }
 
     // internal for testability — splits `text` into chunks of at most `maxUnits`
