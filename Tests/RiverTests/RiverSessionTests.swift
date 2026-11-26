@@ -1223,6 +1223,29 @@ struct RiverSessionTests {
         let system: SystemAvailabilityMonitor
         let appInFront: AppInFront
         let clock: CaptureClock
+        let insertionPause: InsertionPause
+    }
+
+    // The pause between keystroke chunks: River's own, unless a test holds the next one open.
+    @MainActor
+    private final class InsertionPause {
+        var holdsNext = false
+        private var held: CheckedContinuation<Void, Never>?
+        var isHolding: Bool { held != nil }
+
+        func pause(_ seconds: Double) async {
+            guard holdsNext else {
+                try? await Task.sleep(for: .seconds(seconds))
+                return
+            }
+            holdsNext = false
+            await withCheckedContinuation { held = $0 }
+        }
+
+        func release() {
+            held?.resume()
+            held = nil
+        }
     }
 
     // The app in front, which a test moves to switch apps.
@@ -1276,13 +1299,16 @@ struct RiverSessionTests {
         let clock = CaptureClock()
         let audio = AudioCaptureManager(microphone: microphone, now: { clock.now })
         let appInFront = AppInFront()
+        let insertionPause = InsertionPause()
         let session = RiverSession(
             accessibility: accessibility,
             microphone: microphone,
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
             audio: audio,
-            textInsertion: TextInsertionManager(accessibility: accessibility, frontmostApp: { appInFront.pid }),
+            textInsertion: TextInsertionManager(
+                accessibility: accessibility, pause: { await insertionPause.pause($0) }, frontmostApp: { appInFront.pid }
+            ),
             transcription: transcription,
             settings: store,
             system: system
@@ -1300,7 +1326,8 @@ struct RiverSessionTests {
             audio: audio,
             system: system,
             appInFront: appInFront,
-            clock: clock
+            clock: clock,
+            insertionPause: insertionPause
         )
     }
 
@@ -1536,6 +1563,36 @@ struct RiverSessionTests {
         await first.value
         await second.value
         #expect(env.accessibility.postedKeyDownTextForTesting.joined() == once + once + once)
+    }
+
+    @MainActor
+    @Test("a Paste last stops once a dictation starts, whether typing or waiting its turn", .timeLimit(.minutes(1)))
+    func pasteLastStopsForADictation() async throws {
+        // Its keys would land under the held dictation key, where they can become shortcuts in
+        // the app in front (spec 0036).
+        let env = makeSession()
+        try await loadModel(env, transcribing: "long enough to type in more than one chunk")
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        let once = env.accessibility.postedKeyDownTextForTesting.joined()
+
+        // The first paste types its first chunk and is held there; the second waits its turn.
+        env.insertionPause.holdsNext = true
+        let session = env.session
+        let first = Task { @MainActor in await session.pasteLastTranscript() }
+        await waitUntil { env.insertionPause.isHolding }
+        let second = Task { @MainActor in await session.pasteLastTranscript() }
+        for _ in 0..<20 { await Task.yield() }
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+        env.insertionPause.release()
+        await first.value
+        await second.value
+
+        let firstChunk = TextInsertionManager.chunk(once, maxUnits: Constants.keystrokeChunkUnits)[0]
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == once + firstChunk)
     }
 
     @MainActor

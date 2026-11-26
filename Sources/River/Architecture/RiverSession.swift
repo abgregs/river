@@ -620,9 +620,10 @@ final class RiverSession {
     /// Paste last transcription's shortcut (spec 0036): types the last transcription again at
     /// the cursor through the same insertion path, so the clipboard is never touched, after any
     /// insert still typing (planning 0039). Does nothing with no transcription yet, or while a
-    /// dictation is recording or processing. A change of app while it types stops it and shows
-    /// nothing: the panel draws a status only during a dictation, and the text stays the last
-    /// transcript.
+    /// dictation is recording or processing, and a dictation that starts while it waits or
+    /// types stops it: its keys would land under the held dictation key (spec 0036). A change
+    /// of app while it types stops it too. Neither shows anything: the panel draws a status
+    /// only during a dictation, and the text stays the last transcript.
     func pasteLastTranscript() async {
         guard currentState == .idle, let text = lastTranscript else {
             logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
@@ -630,7 +631,7 @@ final class RiverSession {
         }
         logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
         do {
-            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront())
+            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront(), while: { self.currentState == .idle })
         } catch {
             logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             errorSubject.send(.textInsertion(underlying: error))

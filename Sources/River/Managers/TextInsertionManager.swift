@@ -15,7 +15,7 @@ enum TextInsertionError: Error, LocalizedError {
 }
 
 /// What a delivery did with its text: typed it all, or stopped and held it because the app it
-/// was meant for left the front (planning 0004, 0039).
+/// was meant for left the front or its caller stopped it (planning 0004, 0039).
 enum Delivery {
     case typed
     case held
@@ -53,15 +53,16 @@ final class TextInsertionManager {
     /// the one `CGEvent.post` site, so the `.granted` gate still applies. A newline is typed as
     /// a space: Return sends a message in most chat apps (planning 0039).
     ///
-    /// Returns `.held` when `app` is not in front before a chunk, and stops there. Throws
-    /// `TextInsertionError.noEditableTarget` when the focused element is clearly non-editable —
-    /// the insertion guard (planning 0001).
-    func deliver(_ text: String, to app: pid_t?) async throws -> Delivery {
+    /// Returns `.held` when `app` is not in front before a chunk, or `canType` is false then,
+    /// and stops there. Throws `TextInsertionError.noEditableTarget` when the focused element is
+    /// clearly non-editable — the insertion guard (planning 0001).
+    func deliver(_ text: String, to app: pid_t?, while canType: @MainActor () -> Bool = { true }) async throws -> Delivery {
         await turn.take()
         defer { turn.pass() }
         // Before the guard, so a switch to an app with no text field holds the text rather
         // than reporting no field.
         if hasLeft(app) { return held(text) }
+        if !canType() { return stopped(text) }
         // Insertion guard (planning 0001): typing into a non-editable target is
         // indistinguishable from success after the fact, so check the focused
         // element's role first. `.unknown` fails open — only a clearly
@@ -79,6 +80,7 @@ final class TextInsertionManager {
                     // the whole transcript at once (planning 0031).
                     await pause(Constants.keystrokeChunkGapSeconds)
                     if hasLeft(app) { return held(text) }
+                    if !canType() { return stopped(text) }
                 }
                 try accessibility.postKeyEvent(Self.makeUnicodeKeyEvent(chunk, keyDown: true))
                 try accessibility.postKeyEvent(Self.makeUnicodeKeyEvent(chunk, keyDown: false))
@@ -100,6 +102,11 @@ final class TextInsertionManager {
 
     private func held(_ text: String) -> Delivery {
         logger.info("deliver: the app in front changed; holding \(text.count, privacy: .public) chars")
+        return .held
+    }
+
+    private func stopped(_ text: String) -> Delivery {
+        logger.info("deliver: its caller stopped it; holding \(text.count, privacy: .public) chars")
         return .held
     }
 

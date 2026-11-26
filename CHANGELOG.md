@@ -47,6 +47,7 @@ show as raw text. -->
 - A recording whose audio stops arriving part-way now ends on its own within a couple of seconds, types the words heard before the loss, and says so, instead of running on and typing the fragment as if it were the whole dictation.
 - The last character of a dictation typed into Claude Code no longer lands earlier in the text.
 - Pressing Paste last twice quickly types the text twice, one after the other, instead of mixing the two.
+- Paste last stops when you start a dictation, whether it is typing or waiting to type, so its text never arrives while you hold the dictation key.
 - Switching apps while River types a dictation stops the typing there, instead of sending the rest into the other app. River holds the whole dictation for Paste last, the part already typed included.
 
 ## [0.2.1] - 2026-10-08
