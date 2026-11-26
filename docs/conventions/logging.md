@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.river.app", category: "app")
 
 Categories in use:
 
-- `app` — `AppDelegate` lifecycle, `RiverSession` state transitions, and each dictation's release-to-text time with the model that transcribed it, so models compare from the log alone
+- `app` — `AppDelegate` lifecycle, `RiverSession` state transitions, each dictation's release-to-text time with the model that transcribed it, so models compare from the log alone, and, at `.notice`, why a dictation typed nothing
 - `permissions` — `Capability` status checks and the onboarding grant flow
 - `hotkey` — `HotkeyManager` events, restart, tap status
 - `audio` — `MicrophoneCapability` capture-unit start/stop, device selection and input format; `AudioCaptureManager` capture lifecycle, sample count, and conversion failures
@@ -22,6 +22,7 @@ Pick the category that matches where the code lives. Adding new categories is fi
 ## Levels
 
 - `.info` — normal lifecycle and state transitions. The bread and butter of the log.
+- `.notice` — an outcome a field report needs later, such as why a dictation typed nothing. **Why:** macOS keeps notice lines on disk but info lines only briefly in memory, so an empty dictation logged at info was gone before anyone read the log (the PR #100 review, [../planning/_index.md](../planning/_index.md)).
 - `.warning` — recoverable but unexpected (e.g., "tap was disabled by system, re-enabling").
 - `.error` — something failed. Always include the failure reason.
 - `.debug` — verbose internal detail; off by default in user-visible filtering.

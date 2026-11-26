@@ -315,6 +315,10 @@ final class RiverSession {
             if let error = outcome.error {
                 errorSubject.send(.transcription(underlying: error))
             }
+            if let reason = outcome.emptyReason {
+                // Notice, which macOS keeps: an info line is gone before anyone reads the log.
+                logger.notice("Nothing typed: \(String(describing: reason), privacy: .public), with \(self.transcription.currentModelName, privacy: .public)")
+            }
             if !outcome.text.isEmpty {
                 await deliver(outcome.text, into: app)
             }
@@ -384,8 +388,8 @@ final class RiverSession {
                 if let error = outcome.error {
                     self.logger.error("Kept recording failed to transcribe: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
                     self.errorSubject.send(.transcription(underlying: error))
-                } else if outcome.text.isEmpty {
-                    self.logger.info("A kept recording held no speech")
+                } else if let reason = outcome.emptyReason {
+                    self.logger.notice("A kept recording had nothing to type: \(String(describing: reason), privacy: .public), with \(self.transcription.currentModelName, privacy: .public)")
                 } else {
                     texts.append(outcome.text)
                 }
