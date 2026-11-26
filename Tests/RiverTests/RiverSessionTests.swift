@@ -910,6 +910,50 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("a decode a cancel leaves running finishes before the kept recordings' decode starts",
+          .timeLimit(.minutes(1)), arguments: [false, true])
+    func keptDecodeWaitsForACanceledOne(discards: Bool) async throws {
+        // Cancel and Discard start the kept recordings' decode at once; it used to run beside the
+        // canceled dictation's segment decode, the one exception to one decode at a time.
+        let env = makeSession()
+        try await env.session.start()
+        env.loader.failing = [Constants.defaultModel]
+        let load = await holdModelLoad(env)
+        let kept = try await dictate(env)
+        await waitUntil { env.session.currentState == .processing }
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await kept.value
+        await load.value
+        #expect(env.session.currentKeptRecordingCount == 1)
+
+        // The retry finishes while a dictation records, and its first segment's decode is held.
+        env.loader.failing = []
+        env.loader.holdsTranscriptions = true
+        env.session.selectModel(Constants.defaultModel)
+        await env.loader.loadStarted(Constants.defaultModel)
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await waitUntil { env.transcription.currentModelLoadState == .ready }
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 2 s of sound
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }            // 1.2 s pause: a cut
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        #expect(env.loader.heldTranscriptionCount == 1)
+
+        // The kept recordings' decode waits for the canceled segment's to finish.
+        if discards { env.session.handleDiscard() } else { env.session.handleCancel() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(env.loader.heldTranscriptionCount == 1)
+        env.loader.finishTranscriptions()
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        env.loader.finishTranscriptions()
+        await waitUntil { env.session.currentKeptRecordingCount == 0 }
+        let mostAtOnce = env.loader.mostTranscriptionsAtOnce
+        #expect(mostAtOnce == 1)
+        #expect(env.session.hasLastTranscript)
+    }
+
+    @MainActor
     @Test("a switch of app after the release holds the text and types none")
     func switchAfterReleaseHoldsTheText() async throws {
         // The text would land in an app the user never dictated into.

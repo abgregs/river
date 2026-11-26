@@ -61,8 +61,7 @@ final class RiverSession {
     private let keptCountSubject = CurrentValueSubject<Int, Never>(0)
     // The wait of a dictation that ended before the model was ready; Cancel Dictation ends it.
     private var modelWait: Task<Void, Error>?
-    // The kept recordings' decode, which runs at `.idle`. A dictation's own decodes wait for it,
-    // so the engine runs one decode at a time.
+    // The kept recordings' decode, which runs at `.idle`; while it runs, no second one starts.
     private var keptDecode: Task<Void, Never>?
 
     // The recording's audio and its transcription, made at every press (planning 0039); nil
@@ -255,12 +254,12 @@ final class RiverSession {
         }
     }
 
-    // Each decode takes its turn after any kept recordings' decode. Only a streaming dictation
-    // shows text while it is spoken; with streaming off the live text stays empty.
+    // Only a streaming dictation shows text while it is spoken; with streaming off the live
+    // text stays empty.
     private func makeStream(streaming: Bool) -> DictationStream {
         let stream = DictationStream(decode: { [weak self] samples in
             guard let self else { throw CancellationError() }
-            return try await self.transcribeInTurn(samples)
+            return try await self.transcription.transcribe(audioSamples: samples)
         }, streaming: streaming)
         if streaming {
             stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
@@ -365,12 +364,6 @@ final class RiverSession {
         }
     }
 
-    // A decode for the current dictation, after any kept recordings' decode still running.
-    private func transcribeInTurn(_ samples: [Float]) async throws -> String? {
-        await keptDecode?.value
-        return try await transcription.transcribe(audioSamples: samples)
-    }
-
     // Transcribes the recordings a failed load kept, once the model is ready and River is idle
     // (planning 0004): one at a time, stopping when a dictation starts, each in one piece through
     // `DictationStream`, as its dictation would have been (planning 0039). The text is joined
@@ -385,7 +378,6 @@ final class RiverSession {
             var texts: [String] = []
             while let recording = self.keptRecordings.first, self.currentState == .idle,
                   self.transcription.currentModelLoadState == .ready {
-                // Straight to the engine: this decode is the turn a dictation's decodes wait for.
                 let outcome = await DictationStream.transcribe(recording) { samples in
                     try await transcription.transcribe(audioSamples: samples)
                 }

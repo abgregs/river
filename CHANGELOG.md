@@ -48,6 +48,7 @@ show as raw text. -->
 - The last character of a dictation typed into Claude Code no longer lands earlier in the text.
 - Pressing Paste last twice quickly types the text twice, one after the other, instead of mixing the two.
 - Paste last stops when you start a dictation, whether it is typing or waiting to type, so its text never arrives while you hold the dictation key.
+- After you cancel a dictation, River finishes the transcription it was running before it transcribes the recordings it kept, instead of running both at once.
 - Switching apps while River types a dictation stops the typing there, instead of sending the rest into the other app. River holds the whole dictation for Paste last, the part already typed included.
 
 ## [0.2.1] - 2026-10-08
