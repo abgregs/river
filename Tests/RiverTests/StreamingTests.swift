@@ -475,6 +475,7 @@ struct DictationStreamTests {
         #expect(outcome.error == nil)
         #expect(waits == 0)
         #expect(decoder.clipSeconds.isEmpty)
+        #expect(outcome.emptyReason == .trimmedToNothing)
     }
 
     @MainActor
@@ -494,6 +495,7 @@ struct DictationStreamTests {
         #expect(waited == [2.7])
         #expect(decoder.clipSeconds == waited)
         #expect(outcome.text == "Hello there.")
+        #expect(outcome.emptyReason == nil)
     }
 
     @MainActor
@@ -507,6 +509,7 @@ struct DictationStreamTests {
         let outcome = await stream.finish { _ in false }
         #expect(outcome.text.isEmpty)
         #expect(outcome.error == nil)
+        #expect(outcome.emptyReason == .ended)
         #expect(decoder.clipSeconds.isEmpty)
     }
 
@@ -563,7 +566,36 @@ struct DictationStreamTests {
 
         let silent = await DictationStream.transcribe(silence(1), decode: decoder.decode)
         #expect(silent.text.isEmpty)
+        #expect(silent.emptyReason == .trimmedToNothing)
         #expect(decoder.clipSeconds == [2.7])
+    }
+
+    @MainActor
+    @Test("an empty outcome says why: no speech heard or only punctuation, and a failure none")
+    func emptyOutcomeSaysWhy() async {
+        // A model update that stopped hearing speech would pass for silence in the log, and the
+        // replay harness reports why each silent clip came back empty (planning 0039).
+        let heardNothing = FakeDecoder([.success(nil)])
+        let first = DictationStream(decode: heardNothing.decode, provisionalIntervalSeconds: nil)
+        first.append(speech(2))
+        let nothing = await first.finish()
+        #expect(nothing.text.isEmpty)
+        #expect(nothing.emptyReason == .noSpeechHeard)
+
+        let punctuation = FakeDecoder([.success("(")])
+        let second = DictationStream(decode: punctuation.decode, provisionalIntervalSeconds: nil)
+        second.append(speech(2))
+        let onlyPunctuation = await second.finish()
+        #expect(onlyPunctuation.text.isEmpty)
+        #expect(onlyPunctuation.emptyReason == .noWords)
+
+        let failing = FakeDecoder([.failure(DecodeFailed())])
+        let third = DictationStream(decode: failing.decode, provisionalIntervalSeconds: nil)
+        third.append(speech(2))
+        let failed = await third.finish()
+        #expect(failed.text.isEmpty)
+        #expect(failed.error != nil)
+        #expect(failed.emptyReason == nil)
     }
 }
 

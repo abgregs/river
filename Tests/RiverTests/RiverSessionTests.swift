@@ -910,6 +910,50 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("a decode a cancel leaves running finishes before the kept recordings' decode starts",
+          .timeLimit(.minutes(1)), arguments: [false, true])
+    func keptDecodeWaitsForACanceledOne(discards: Bool) async throws {
+        // Cancel and Discard start the kept recordings' decode at once; it used to run beside the
+        // canceled dictation's segment decode, the one exception to one decode at a time.
+        let env = makeSession()
+        try await env.session.start()
+        env.loader.failing = [Constants.defaultModel]
+        let load = await holdModelLoad(env)
+        let kept = try await dictate(env)
+        await waitUntil { env.session.currentState == .processing }
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await kept.value
+        await load.value
+        #expect(env.session.currentKeptRecordingCount == 1)
+
+        // The retry finishes while a dictation records, and its first segment's decode is held.
+        env.loader.failing = []
+        env.loader.holdsTranscriptions = true
+        env.session.selectModel(Constants.defaultModel)
+        await env.loader.loadStarted(Constants.defaultModel)
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.loader.finishLoad(of: Constants.defaultModel)
+        await waitUntil { env.transcription.currentModelLoadState == .ready }
+        for _ in 0..<20 { env.microphone.publishForTest(makeNonSilentBuffer()) }   // 2 s of sound
+        for _ in 0..<12 { env.microphone.publishForTest(makeBuffer()) }            // 1.2 s pause: a cut
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        #expect(env.loader.heldTranscriptionCount == 1)
+
+        // The kept recordings' decode waits for the canceled segment's to finish.
+        if discards { env.session.handleDiscard() } else { env.session.handleCancel() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(env.loader.heldTranscriptionCount == 1)
+        env.loader.finishTranscriptions()
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        env.loader.finishTranscriptions()
+        await waitUntil { env.session.currentKeptRecordingCount == 0 }
+        let mostAtOnce = env.loader.mostTranscriptionsAtOnce
+        #expect(mostAtOnce == 1)
+        #expect(env.session.hasLastTranscript)
+    }
+
+    @MainActor
     @Test("a switch of app after the release holds the text and types none")
     func switchAfterReleaseHoldsTheText() async throws {
         // The text would land in an app the user never dictated into.
@@ -1223,6 +1267,29 @@ struct RiverSessionTests {
         let system: SystemAvailabilityMonitor
         let appInFront: AppInFront
         let clock: CaptureClock
+        let insertionPause: InsertionPause
+    }
+
+    // The pause between keystroke chunks: River's own, unless a test holds the next one open.
+    @MainActor
+    private final class InsertionPause {
+        var holdsNext = false
+        private var held: CheckedContinuation<Void, Never>?
+        var isHolding: Bool { held != nil }
+
+        func pause(_ seconds: Double) async {
+            guard holdsNext else {
+                try? await Task.sleep(for: .seconds(seconds))
+                return
+            }
+            holdsNext = false
+            await withCheckedContinuation { held = $0 }
+        }
+
+        func release() {
+            held?.resume()
+            held = nil
+        }
     }
 
     // The app in front, which a test moves to switch apps.
@@ -1276,13 +1343,16 @@ struct RiverSessionTests {
         let clock = CaptureClock()
         let audio = AudioCaptureManager(microphone: microphone, now: { clock.now })
         let appInFront = AppInFront()
+        let insertionPause = InsertionPause()
         let session = RiverSession(
             accessibility: accessibility,
             microphone: microphone,
             inputMonitoring: inputMonitoring,
             hotkey: hotkey,
             audio: audio,
-            textInsertion: TextInsertionManager(accessibility: accessibility, frontmostApp: { appInFront.pid }),
+            textInsertion: TextInsertionManager(
+                accessibility: accessibility, pause: { await insertionPause.pause($0) }, frontmostApp: { appInFront.pid }
+            ),
             transcription: transcription,
             settings: store,
             system: system
@@ -1300,7 +1370,8 @@ struct RiverSessionTests {
             audio: audio,
             system: system,
             appInFront: appInFront,
-            clock: clock
+            clock: clock,
+            insertionPause: insertionPause
         )
     }
 
@@ -1539,6 +1610,116 @@ struct RiverSessionTests {
     }
 
     @MainActor
+    @Test("a Paste last stops once a Hold dictation starts, whether typing or waiting its turn", .timeLimit(.minutes(1)))
+    func pasteLastStopsForADictation() async throws {
+        // Its keys would land under the held dictation key, where they can become shortcuts in
+        // the app in front (spec 0036).
+        let env = makeSession()
+        try await loadModel(env, transcribing: "long enough to type in more than one chunk")
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        let once = env.accessibility.postedKeyDownTextForTesting.joined()
+
+        // The first paste types its first chunk and is held there; the second waits its turn.
+        env.insertionPause.holdsNext = true
+        let session = env.session
+        let first = Task { @MainActor in await session.pasteLastTranscript() }
+        await waitUntil { env.insertionPause.isHolding }
+        let second = Task { @MainActor in await session.pasteLastTranscript() }
+        for _ in 0..<20 { await Task.yield() }
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+        env.insertionPause.release()
+        await first.value
+        await second.value
+
+        let firstChunk = TextInsertionManager.chunk(once, maxUnits: Constants.keystrokeChunkUnits)[0]
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == once + firstChunk)
+    }
+
+    @MainActor
+    @Test("in a tap mode, a dictation that starts leaves a Paste last typing", .timeLimit(.minutes(1)))
+    func pasteLastGoesOnThroughATapModeStart() async throws {
+        // Only a held dictation key makes typing unsafe, and a tap mode holds none.
+        let env = makeSession()
+        try await env.session.start()
+        env.store.setValue(ActivationMode.singleTap, for: Settings.activationMode)
+        try await loadModel(env, transcribing: "long enough to type in more than one chunk")
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        let once = env.accessibility.postedKeyDownTextForTesting.joined()
+
+        env.insertionPause.holdsNext = true
+        let session = env.session
+        let paste = Task { @MainActor in await session.pasteLastTranscript() }
+        await waitUntil { env.insertionPause.isHolding }
+        env.session.handleActivate()
+        #expect(env.session.currentState == .recording)
+        env.insertionPause.release()
+        await paste.value
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == once + once)
+        env.session.handleCancel()
+    }
+
+    @MainActor
+    @Test("in a tap mode, Paste last types the last transcription mid-dictation, and the dictation's text follows",
+          arguments: [ActivationMode.singleTap, .doubleTap])
+    func pasteLastMidDictationInATapMode(mode: ActivationMode) async throws {
+        // The last transcription is the one before until the new one's text is delivered, and no
+        // key is held while a tap-mode dictation records (maintainer, 2026-11-27).
+        let env = makeSession()
+        try await env.session.start()
+        env.store.setValue(mode, for: Settings.activationMode)
+        try await loadModel(env, transcribing: "first")
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "first")
+
+        env.loader.texts[env.transcription.currentModelName] = "second"
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.pasteLastTranscript()
+        #expect(env.session.currentState == .recording)
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "firstfirst")
+
+        await env.session.handleDeactivate()
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "firstfirstsecond")
+    }
+
+    @MainActor
+    @Test("Paste last types while a dictation is being transcribed, and the dictation's text follows",
+          .timeLimit(.minutes(1)))
+    func pasteLastWhileTranscribing() async throws {
+        // Released, no key is held in any mode, and the new text takes its turn after the paste.
+        let env = makeSession()
+        try await loadModel(env, transcribing: "first")
+        env.session.handleActivate()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        env.microphone.publishForTest(makeNonSilentBuffer())
+        await env.session.handleDeactivate()
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "first")
+
+        env.loader.texts[env.transcription.currentModelName] = "second"
+        env.loader.holdsTranscriptions = true
+        let release = try await dictate(env)
+        await waitUntil { env.loader.heldTranscriptionCount == 1 }
+        #expect(env.session.currentState == .processing)
+        await env.session.pasteLastTranscript()
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "firstfirst")
+
+        env.loader.finishTranscriptions()
+        await release.value
+        #expect(env.accessibility.postedKeyDownTextForTesting.joined() == "firstfirstsecond")
+    }
+
+    @MainActor
     @Test("the live text starts hidden, and its shortcut flips and keeps the choice")
     func liveTextToggle() async throws {
         // Hidden on a fresh install, first run included; the shortcut is the only way to show
@@ -1572,9 +1753,10 @@ struct RiverSessionTests {
     }
 
     @MainActor
-    @Test("Paste last does nothing while a dictation records")
+    @Test("Paste last does nothing while a Hold dictation records")
     func pasteLastWaitsOutRecording() async throws {
-        // Typing into the app in front mid-dictation would mix two transcriptions.
+        // The dictation key is held, and keys typed under it can become commands in the app in
+        // front (spec 0036). Hold is the mode a session starts in.
         let env = makeSession()
         try await loadModel(env, transcribing: "hello again")
         env.session.handleActivate()

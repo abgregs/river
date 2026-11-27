@@ -1,6 +1,6 @@
 # Planning: Transient, Actionable Error Toasts (roadmap 0018)
 
-**Update (2026-11-24, maintainer):** the toast became a status in the mark's place, the shape [0004](0004_model-loading-indicator.md) built for the model: one line, a headline and a short detail, with the failed status ring (a lock for a permission refused), shown once the panel has left and held at least 4 s on screen. `ErrorToastPresentation` is now `ErrorStatusPresentation`; the menu row is unchanged. See 0004, "Update (2026-11-24)".
+**Update (2026-11-24, maintainer):** the toast became a status in the mark's place, the shape [0004](0004_model-loading-indicator.md) built for the model: one line, a headline and a short detail, with the failed status ring (a lock for a permission refused), shown once the panel has left and held at least 4 s on screen. `ErrorToastPresentation` is now `ErrorStatusPresentation`; the menu row is unchanged. See 0004, "Update (2026-11-24)". *2026-11-27:* a paste that failed has no error status of its own any more; it shows as held text, "Couldn't paste" then the Paste last shortcut (0004, "One status for text River couldn't type").
 
 A queued backlog item from the 2026-07-06 UX review. Graduate cycle errors from a static menu-dropdown row into a transient, in-focus toast on the recording HUD — the "richer error surface" that [0002_recording-indicator-hud.md](0002_recording-indicator-hud.md) already reserves space for. **Depends on 0002** (the panel is the delivery surface); the two can land as one PR (see the feedback-layer grouping in [_index.md](_index.md)).
 

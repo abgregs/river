@@ -241,6 +241,48 @@ struct TextInsertionManagerTests {
     }
 
     @MainActor
+    @Test("a delivery its caller stops while it waits its turn types nothing", .timeLimit(.minutes(1)))
+    func stoppedWhileWaiting() async throws {
+        // A Paste last queued behind another must not type once a dictation has started: its keys
+        // would land under the held dictation key (spec 0036).
+        let accessibility = AccessibilityCapability()
+        accessibility.skipPostForTesting = true
+        accessibility.setStatusForTesting(.granted)
+        accessibility.focusedTargetForTesting = .editable
+        var paused: CheckedContinuation<Void, Never>?
+        let manager = TextInsertionManager(accessibility: accessibility, pause: { _ in
+            if paused == nil { await withCheckedContinuation { paused = $0 } }
+        })
+        var canType = true
+        let a = String(repeating: "a", count: 50)
+
+        let first = Task { @MainActor in try await manager.deliver(a, to: nil) }
+        for _ in 0..<200 where paused == nil { await Task.yield() }
+        let second = Task { @MainActor in try await manager.deliver("b", to: nil, while: { canType }) }
+        await Task.yield()
+        canType = false
+        paused?.resume()
+        #expect(try await first.value == .typed)
+        #expect(try await second.value == .held)
+        #expect(accessibility.postedKeyDownTextForTesting.joined() == a)
+    }
+
+    @MainActor
+    @Test("a delivery its caller stops part-way types no further chunk")
+    func stoppedPartWay() async throws {
+        // A Paste last already typing stops when a dictation starts, as it does for a switch of app.
+        let accessibility = AccessibilityCapability()
+        accessibility.skipPostForTesting = true
+        accessibility.setStatusForTesting(.granted)
+        accessibility.focusedTargetForTesting = .editable
+        var canType = true
+        let manager = TextInsertionManager(accessibility: accessibility, pause: { _ in canType = false })
+
+        #expect(try await manager.deliver(String(repeating: "a", count: 50), to: nil, while: { canType }) == .held)
+        #expect(accessibility.postedKeyDownTextForTesting == [String(repeating: "a", count: 20)])
+    }
+
+    @MainActor
     @Test("a newline is typed as a space, so it never sends a message")
     func newlineIsTypedAsSpace() async throws {
         let accessibility = AccessibilityCapability()

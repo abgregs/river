@@ -218,6 +218,33 @@ struct TranscriptionManagerGateTests {
     }
 }
 
+@Suite("TranscriptionManager decodes")
+struct TranscriptionManagerDecodeTests {
+    @MainActor
+    @Test("decodes reach the engine one at a time, in the order asked", .timeLimit(.minutes(1)))
+    func oneDecodeAtATime() async throws {
+        // The engines take one decode at a time; a cancel used to let a kept recording's decode
+        // start beside one still running (planning 0039, PR #100 review).
+        let loader = FakeModelLoader()
+        let manager = TranscriptionManager.withFake(loader)
+        try await manager.loadModel()
+        loader.holdsTranscriptions = true
+
+        let first = Task { @MainActor in try await manager.transcribe(audioSamples: [Float](repeating: 0.1, count: 16_000)) }
+        for _ in 0..<200 where loader.heldTranscriptionCount == 0 { await Task.yield() }
+        let second = Task { @MainActor in try await manager.transcribe(audioSamples: [Float](repeating: 0.1, count: 32_000)) }
+        for _ in 0..<20 { await Task.yield() }
+        #expect(loader.heldTranscriptionCount == 1)
+
+        loader.finishTranscriptions()
+        for _ in 0..<200 where loader.heldTranscriptionCount == 0 { await Task.yield() }
+        loader.finishTranscriptions()
+        _ = try await (first.value, second.value)
+        #expect(loader.mostTranscriptionsAtOnce == 1)
+        #expect(loader.clipSeconds == [1, 2])
+    }
+}
+
 @Suite("TranscriptionManager model cache location")
 struct TranscriptionCacheLocationTests {
     // The model must download under Application Support, never ~/Documents —

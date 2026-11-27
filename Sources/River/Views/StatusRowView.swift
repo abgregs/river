@@ -30,11 +30,12 @@ struct StatusRowWords: Equatable {
             return StatusRowWords(main: "Couldn’t load the model", detail: "Recording kept",
                                   spoken: "Couldn’t load the model. Recording kept.")
         case .held:
+            // One title for every dictation River couldn't type, then how to get its text.
             guard let pasteLast else {
-                return StatusRowWords(main: "App switched", detail: "Copy it from the menu", spoken: "App switched. Copy it from the menu.")
+                return StatusRowWords(main: "Couldn’t paste", detail: "Copy it from the menu", spoken: "Couldn’t paste. Copy it from the menu.")
             }
-            return StatusRowWords(main: "App switched", detail: "\(pasteLast.display) pastes it",
-                                  spoken: "App switched. \(pasteLast.spoken) pastes it.")
+            return StatusRowWords(main: "Couldn’t paste", detail: "\(pasteLast.display) pastes it",
+                                  spoken: "Couldn’t paste. \(pasteLast.spoken) pastes it.")
         case .error(let error):
             return StatusRowWords(main: error.headline, detail: error.detail, spoken: "\(error.headline). \(error.detail).")
         }
@@ -53,12 +54,12 @@ struct StatusRowWords: Equatable {
         return [of(.model(.downloading), frame: full, pasteLast: pasteLast), of(.model(.preparing), frame: nil, pasteLast: pasteLast),
                 of(.model(.ready), frame: nil, pasteLast: pasteLast), of(.model(.failed), frame: failed, pasteLast: pasteLast),
                 of(.held, frame: nil, pasteLast: pasteLast), of(.held, frame: nil, pasteLast: nil)]
-            + errors.map { of(.error(ErrorStatusPresentation.status(for: $0)), frame: nil, pasteLast: pasteLast) }
+            + errors.map { of(ErrorStatusPresentation.status(for: $0), frame: nil, pasteLast: pasteLast) }
     }
 }
 
-/// The status in the mark's place (planning 0004, 0018): the ring, the held sheet or the lock
-/// in its tile, then the words, always in full. The stack brings it in once the mark's panel has
+/// The status in the mark's place (planning 0004, 0018): the ring or the lock in its tile,
+/// then the words, always in full. The stack brings it in once the mark's panel has
 /// gone and takes it out on the HUD's fade; a model's status follows the model through preparing
 /// to ready in place. It never takes the mouse: the window ignores it, as it does the panel.
 struct StatusRow: View {
@@ -76,8 +77,8 @@ struct StatusRow: View {
         _ring = State(initialValue: ring)
     }
 
-    /// An error's mark: Couldn't load the model's ring, already failed, as a ring that appears
-    /// failed shows it, all at once.
+    /// An error's mark, and held text's: Couldn't load the model's ring, already failed, as a
+    /// ring that appears failed shows it, all at once.
     static let failedRing = StatusRing.frame(at: 0, events: StatusRingEvents(appearing: .failed, fraction: nil), reduceMotion: false)
 
     var body: some View {
@@ -85,7 +86,7 @@ struct StatusRow: View {
         TimelineView(.animation(paused: !isRing)) { context in
             let frame = isRing ? ring.map { StatusRing.frame(at: $0.time(at: context.date), events: $0.events, reduceMotion: reduceMotion) } : nil
             let words = StatusRowWords.of(status, frame: frame, pasteLast: pasteLast)
-            StatusRowFace(words: words, glyph: glyph(frame))
+            StatusRowFace(words: words, glyph: Self.glyph(for: status, frame: frame))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(words.spoken)
         }
@@ -96,11 +97,13 @@ struct StatusRow: View {
         .onChange(of: appState.downloadFraction) { updateRing() }
     }
 
-    private func glyph(_ frame: StatusRingFrame?) -> StatusGlyph {
+    // internal for testability — the tile's glyph for a status. Text River couldn't type takes
+    // the failure's mark: something went wrong, and the user has to act (maintainer, 2026-11-27).
+    static func glyph(for status: DictationStatus, frame: StatusRingFrame?) -> StatusGlyph {
         switch status {
         case .model: .ring(frame ?? StatusRingFrame(layers: [], akane: 0))
-        case .held: .held
-        case .error(let error): error.mark == .locked ? .locked : .ring(Self.failedRing)
+        case .held: .ring(failedRing)
+        case .error(let error): error.mark == .locked ? .locked : .ring(failedRing)
         }
     }
 
@@ -131,11 +134,9 @@ struct StatusRow: View {
     }
 }
 
-/// What the row's tile shows: the status ring, App switched's held sheet, or a permission
-/// error's lock.
+/// What the row's tile shows: the status ring, or a permission error's lock.
 enum StatusGlyph: Equatable {
     case ring(StatusRingFrame)
-    case held
     case locked
 }
 
@@ -155,8 +156,6 @@ struct StatusRowFace: View {
                 switch glyph {
                 case .ring(let frame):
                     StatusRingGlyph(frame: frame)
-                case .held:
-                    Canvas { context, size in HeldSheetRenderer.draw(in: &context, size: size, ink: ink) }
                 case .locked:
                     Canvas { context, size in LockRenderer.draw(in: &context, size: size, ink: ink) }
                 }
@@ -197,34 +196,8 @@ struct StatusRowFace: View {
     }
 }
 
-/// App changed's glyph: a finished sheet under a paperweight, on the 14 pt grid.
-enum HeldSheetRenderer {
-    static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
-        var c = context
-        c.scaleBy(x: size.width / StatusRing.grid, y: size.height / StatusRing.grid)
-        // Up 0.75 pt, so the ink, which ran from 1.75 to 13.75, centres in the tile (maintainer,
-        // 2026-11-24).
-        c.translateBy(x: 0, y: -0.75)
-        c.translateBy(x: 7, y: 7.6)
-        c.rotate(by: .degrees(-6))
-        c.translateBy(x: -7, y: -7.6)
-        func color(_ alpha: Double) -> GraphicsContext.Shading { .color(Color(nsColor: ink).opacity(alpha)) }
-        let sheet = RoundedRectangle(cornerRadius: 1, style: .continuous).path(in: CGRect(x: 3.1, y: 3, width: 7.8, height: 10))
-        c.fill(sheet, with: color(0.12))
-        c.stroke(sheet, with: color(0.45), style: StrokeStyle(lineWidth: 0.9, lineCap: .round, lineJoin: .round))
-        var lines = Path()
-        for (y, end) in [(6.6, 9.2), (8.6, 9.2), (10.6, 7.6)] {
-            lines.move(to: CGPoint(x: 4.9, y: y))
-            lines.addLine(to: CGPoint(x: end, y: y))
-        }
-        c.stroke(lines, with: color(0.45), style: StrokeStyle(lineWidth: 1.05, lineCap: .round, lineJoin: .round))
-        let weight = RoundedRectangle(cornerRadius: 0.7, style: .continuous).path(in: CGRect(x: 4.7, y: 1.9, width: 4.6, height: 2.3))
-        c.fill(weight, with: color(0.9))
-    }
-}
-
-/// A permission error's glyph, on the 14 pt grid, built as the held sheet is: the shackle in
-/// outline, the body solid with its keyhole cut out, so the tile shows through it.
+/// A permission error's glyph, on the 14 pt grid: the shackle in outline, the body solid with
+/// its keyhole cut out, so the tile shows through it.
 enum LockRenderer {
     static func draw(in context: inout GraphicsContext, size: CGSize, ink: NSColor) {
         var c = context

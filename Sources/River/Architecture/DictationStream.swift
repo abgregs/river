@@ -31,6 +31,22 @@ final class DictationStream {
         let text: String
         /// The failure of the decode at release, if any. Text before it is still in `text`.
         let error: Error?
+        /// Why `text` is empty, when it is and nothing failed, so a model that stops hearing
+        /// speech shows in the log rather than passing as silence (planning 0039).
+        let emptyReason: EmptyReason?
+    }
+
+    /// Why a dictation has nothing to type.
+    enum EmptyReason {
+        /// No clip reached the engine: the trim left nothing.
+        case trimmedToNothing
+        /// The engine got audio and heard no speech.
+        case noSpeechHeard
+        /// The engine wrote only punctuation, which the joiner drops.
+        case noWords
+        /// It ended before its decode: a failed load kept it, Cancel Dictation threw it away, or
+        /// the stream was canceled.
+        case ended
     }
 
     private let logger = Logger(subsystem: Constants.loggingSubsystem, category: "stream")
@@ -53,6 +69,10 @@ final class DictationStream {
     private var failedFrom: Int?
     private var isCanceled = false
     private var isFinishing = false
+    // Whether a decode for the transcript reached the engine, and whether one heard words:
+    // why an empty transcript is empty. Previews don't count.
+    private var hasReachedEngine = false
+    private var hasHeardWords = false
     // The decode of the phrase still being spoken, shown after the transcript; never inserted.
     private var provisional = ""
     // Sample count when the last provisional decode started.
@@ -130,7 +150,7 @@ final class DictationStream {
     func finish(whenReady: @MainActor (_ clip: [Float]) async -> Bool = { _ in true }) async -> Outcome {
         isFinishing = true
         await settle()
-        guard !isCanceled else { return Outcome(text: "", error: nil) }
+        guard !isCanceled else { return Outcome(text: "", error: nil, emptyReason: .ended) }
         let rest = (failedFrom ?? segmenter.segmentStart)..<samples.count
         var failure: Error?
         do {
@@ -139,7 +159,7 @@ final class DictationStream {
             } else {
                 guard try await decodeInOnePiece(rest, whenReady: whenReady) else {
                     cancel()
-                    return Outcome(text: "", error: nil)
+                    return Outcome(text: "", error: nil, emptyReason: .ended)
                 }
             }
         } catch {
@@ -150,7 +170,14 @@ final class DictationStream {
             provisional = ""
             onTextChange?(shownText)
         }
-        return Outcome(text: joiner.text, error: failure)
+        let text = joiner.text
+        return Outcome(text: text, error: failure, emptyReason: text.isEmpty && failure == nil ? emptyReason : nil)
+    }
+
+    // Why nothing joined the transcript, from what its decodes did.
+    private var emptyReason: EmptyReason {
+        if hasHeardWords { return .noWords }
+        return hasReachedEngine ? .noSpeechHeard : .trimmedToNothing
     }
 
     /// Drops everything not yet decoded and ignores any decode still running.
@@ -232,7 +259,7 @@ final class DictationStream {
     // started makes the result stale (the committed segment will replace it), and a hide
     // since it started drops it.
     private func decodeProvisional(_ range: Range<Int>) async {
-        guard let decoded = try? await decodeClip(range), showsPreview,
+        guard let decoded = try? await decodeClip(range, forTranscript: false), showsPreview,
               !isCanceled, failedFrom == nil, segmenter.segmentStart == range.lowerBound else { return }
         provisionalCount += 1
         provisional = decoded.trimmingCharacters(in: .whitespaces)
@@ -280,7 +307,7 @@ final class DictationStream {
         }
         guard await whenReady(clip) else { return false }
         let start = ContinuousClock.now
-        join(try await decode(clip), decodedAlone: range)
+        join(try await decodeForTranscript(clip), decodedAlone: range)
         logger.info("One piece: \(self.seconds(clip.count), privacy: .public) s of audio decoded in \(self.elapsed(since: start), privacy: .public) s")
         return true
     }
@@ -323,10 +350,19 @@ final class DictationStream {
     }
 
     // The clip with silence trimmed, decoded; nil when it holds no speech.
-    private func decodeClip(_ range: Range<Int>) async throws -> String? {
+    private func decodeClip(_ range: Range<Int>, forTranscript: Bool = true) async throws -> String? {
         let clip = Self.trimSilence(Array(samples[range]))
         guard !clip.isEmpty else { return nil }
+        if forTranscript { return try await decodeForTranscript(clip) }
         return try await decode(clip)
+    }
+
+    // A decode whose text can join the transcript, noted for an empty outcome's reason.
+    private func decodeForTranscript(_ clip: [Float]) async throws -> String? {
+        hasReachedEngine = true
+        let decoded = try await decode(clip)
+        if decoded != nil { hasHeardWords = true }
+        return decoded
     }
 
     private func seconds(_ count: Int) -> String { String(format: "%.2f", Double(count) / sampleRate) }

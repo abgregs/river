@@ -105,6 +105,8 @@ final class TranscriptionManager {
     let store: ModelStore
 
     private var model: (any LoadedModel)?
+    // One decode reaches the engine at a time; the rest wait their turn, in order.
+    private let decodeTurn = Turn()
     private var loadTask: Task<any LoadedModel, Error>?
     // Bumped by every `prepareModelSwitch`; a `loadModel` run only commits its result
     // when its captured generation is still current, so a switch that supersedes an
@@ -503,11 +505,14 @@ final class TranscriptionManager {
         return try await whisper.evaluateDictionaryPrompt(wavPath: wavPath, dictionaryTerms: customDictionaryTerms)
     }
 
-    /// The transcribed text, or nil when the engine heard no speech (planning 0039). Throws
-    /// `.modelNotLoaded` if `loadModel` hasn't completed: the session waits for the model first
-    /// (`waitUntilReady`), so only a live-text segment decoded mid-recording meets it,
-    /// and the stream then decodes from there in one piece at release.
+    /// The transcribed text, or nil when the engine heard no speech (planning 0039). Decodes run
+    /// one at a time, in the order asked, so a decode a cancel left running finishes before the
+    /// next starts. Throws `.modelNotLoaded` if `loadModel` hasn't completed: the session waits
+    /// for the model first (`waitUntilReady`), so only a live-text segment decoded mid-recording
+    /// meets it, and the stream then decodes from there in one piece at release.
     func transcribe(audioSamples: [Float]) async throws -> String? {
+        await decodeTurn.take()
+        defer { decodeTurn.pass() }
         guard let model else { throw TranscriptionError.modelNotLoaded }
         logger.info("Transcribing \(audioSamples.count, privacy: .public) samples with \(self.modelName, privacy: .public)")
         guard let text = try await model.transcribe(audioSamples, dictionaryTerms: customDictionaryTerms) else {

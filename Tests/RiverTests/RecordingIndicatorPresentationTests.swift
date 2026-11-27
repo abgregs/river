@@ -55,22 +55,36 @@ struct StatusRowWordsTests {
         #expect(StatusRowWords.of(.model(.failed), frame: turned, pasteLast: Self.pasteLast).main == "Couldn’t load the model")
     }
 
-    @Test("held text names the Paste last shortcut, or the menu when the shortcut doesn't work")
+    @Test("held text says Couldn't paste, then the Paste last shortcut, or the menu when the shortcut doesn't work")
     func heldWords() {
+        // The user gets no text, so the row says so and names the way to get it, whatever kept
+        // River from typing (maintainer, 2026-11-27).
         let held = StatusRowWords.of(.held, frame: nil, pasteLast: Self.pasteLast)
-        #expect(held.main == "App switched")
+        #expect(held.main == "Couldn’t paste")
         #expect(held.detail == "⌃⌥V pastes it")
-        #expect(held.spoken == "App switched. Control-Option-V pastes it.")
-        #expect(StatusRowWords.of(.held, frame: nil, pasteLast: nil).detail == "Copy it from the menu")
+        #expect(held.spoken == "Couldn’t paste. Control-Option-V pastes it.")
+        let unregistered = StatusRowWords.of(.held, frame: nil, pasteLast: nil)
+        #expect(unregistered.main == "Couldn’t paste")
+        #expect(unregistered.detail == "Copy it from the menu")
+    }
+
+    @Test("held text leads with the failure's mark, like an error, and a permission keeps its lock")
+    func heldGlyph() {
+        // Something went wrong and the user has to act, so it reads as an error, not a notice.
+        #expect(StatusRow.glyph(for: .held, frame: nil) == .ring(StatusRow.failedRing))
+        let failure = ErrorStatus(headline: "Couldn’t transcribe", detail: "Try speaking louder", mark: .failed)
+        #expect(StatusRow.glyph(for: .error(failure), frame: nil) == .ring(StatusRow.failedRing))
+        let refused = ErrorStatus(headline: "Microphone access needed", detail: "Grant it in Settings", mark: .locked)
+        #expect(StatusRow.glyph(for: .error(refused), frame: nil) == .locked)
     }
 
     @Test("an error reads as its headline then its detail, and VoiceOver hears both")
     func errorWords() {
-        let error = ErrorStatus(headline: "Couldn’t paste", detail: "Click into a text field", mark: .failed)
+        let error = ErrorStatus(headline: "Couldn’t transcribe", detail: "Try speaking louder", mark: .failed)
         let words = StatusRowWords.of(.error(error), frame: nil, pasteLast: Self.pasteLast)
-        #expect(words.main == "Couldn’t paste")
-        #expect(words.detail == "Click into a text field")
-        #expect(words.spoken == "Couldn’t paste. Click into a text field.")
+        #expect(words.main == "Couldn’t transcribe")
+        #expect(words.detail == "Try speaking louder")
+        #expect(words.spoken == "Couldn’t transcribe. Try speaking louder.")
     }
 
     @Test("VoiceOver hears each change of status, never a percentage")

@@ -4,7 +4,7 @@ The roles River's colors play, what the one accent means, and how a new surface 
 
 ## The system in one sentence
 
-Charcoal and ink carry everything, the mark included; one turquoise accent means **on**: a control you have switched on or are acting on. The one other hue is akane: River recording, and a dictation River couldn't finish because the model couldn't load (below).
+Charcoal and ink carry everything, the mark included; one turquoise accent means **on**: a control you have switched on or are acting on. The one other hue is akane: River recording, and a dictation that didn't go through (below).
 
 ## Tokens
 
@@ -19,7 +19,7 @@ Charcoal and ink carry everything, the mark included; one turquoise accent means
 | `accentLight` | `#148284` | 55.2% 0.090 197 | The accent on light surfaces |
 | `accent` | dynamic | — | Resolves to the light or dark value per appearance; the tint of the Settings and onboarding windows |
 | `onAccent` | dynamic | — | Text on an accent fill: white on the light value, charcoal on the dark |
-| `akane` / `akaneOnDark` | `#B13546` / `#DD6871` | 51.8% 0.159 17 / 66% 0.147 17 | River recording: the menu bar's dot on a light and on a dark bar, and the Settings recorder's outline and dot (`recording` resolves between them); and the status ring of a model that couldn't load; see Status colors |
+| `akane` / `akaneOnDark` | `#B13546` / `#DD6871` | 51.8% 0.159 17 / 66% 0.147 17 | River recording: the menu bar's dot on a light and on a dark bar, and the Settings recorder's outline and dot (`recording` resolves between them); and the status ring of a dictation that didn't go through (a model that couldn't load, a cycle error, text River couldn't type); see Status colors |
 
 ## What the accent means: on
 
@@ -96,6 +96,9 @@ Since 2026-11-12 akane also marks the Settings recorder while it records a short
 
 Since 2026-11-21 akane also marks a dictation River couldn't finish: when the model couldn't load, the status ring turns akane round an exclamation mark, in the indicator's place, in Settings' Model section and beside the menu's status line ([../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md)). The menu bar's own icon stays in one tone. The exclamation mark, at 90 %, measures 4.69:1 (`#B13546` on `mist`) and 4.75:1 (`#DD6871` on `deepCharcoal`); a whole ring after a finished download, at 62 %, measures 2.80:1 and 2.85:1, just under the 3:1 a graphic needs. The exclamation mark's shape and the words, "Couldn’t load the model", carry the state, so color is never the only cue.
 **Why:** revised 2026-11-21 (maintainer). A failed load leaves the user's words untyped until the model loads; red says their dictation didn't go through, and River's own red, not the system's, keeps one hue for "your dictation" in both cases.
+
+Since 2026-11-27 text River couldn't type shows that akane ring too, whether a paste failed or the app dictated into left the front: the row reads "Couldn't paste" and names the Paste last shortcut ([../planning/0004_model-loading-indicator.md](../planning/0004_model-loading-indicator.md)).
+**Why:** revised 2026-11-27 (maintainer). This replaces App switched's sheet in the text color: something went wrong and the user has to act, so it reads as an error, not a notice.
 
 Since 2026-11-24 every cycle error but a refused permission shows that same akane ring in its status: the dictation didn't go through ([../planning/0018_transient-error-toasts.md](../planning/0018_transient-error-toasts.md)); a refused permission shows a lock in the text color, since nothing failed. Otherwise the menu bar warning for a cycle error is a template symbol. When a feature genuinely needs one, use the macOS system colors, which adapt to appearance and Increase Contrast: red for errors and destructive actions, orange for warnings. Success gets no color; the typed text is the confirmation. Never system teal or cyan: teal sits at hue 217, 21° from the accent's 196, close enough to read as River's own color.
 

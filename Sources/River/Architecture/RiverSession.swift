@@ -61,8 +61,7 @@ final class RiverSession {
     private let keptCountSubject = CurrentValueSubject<Int, Never>(0)
     // The wait of a dictation that ended before the model was ready; Cancel Dictation ends it.
     private var modelWait: Task<Void, Error>?
-    // The kept recordings' decode, which runs at `.idle`. A dictation's own decodes wait for it,
-    // so the engine runs one decode at a time.
+    // The kept recordings' decode, which runs at `.idle`; while it runs, no second one starts.
     private var keptDecode: Task<Void, Never>?
 
     // The recording's audio and its transcription, made at every press (planning 0039); nil
@@ -255,12 +254,12 @@ final class RiverSession {
         }
     }
 
-    // Each decode takes its turn after any kept recordings' decode. Only a streaming dictation
-    // shows text while it is spoken; with streaming off the live text stays empty.
+    // Only a streaming dictation shows text while it is spoken; with streaming off the live
+    // text stays empty.
     private func makeStream(streaming: Bool) -> DictationStream {
         let stream = DictationStream(decode: { [weak self] samples in
             guard let self else { throw CancellationError() }
-            return try await self.transcribeInTurn(samples)
+            return try await self.transcription.transcribe(audioSamples: samples)
         }, streaming: streaming)
         if streaming {
             stream.onTextChange = { [weak self] text in self?.liveTranscriptSubject.send(text) }
@@ -316,6 +315,10 @@ final class RiverSession {
             if let error = outcome.error {
                 errorSubject.send(.transcription(underlying: error))
             }
+            if let reason = outcome.emptyReason {
+                // Notice, which macOS keeps: an info line is gone before anyone reads the log.
+                logger.notice("Nothing typed: \(String(describing: reason), privacy: .public), with \(self.transcription.currentModelName, privacy: .public)")
+            }
             if !outcome.text.isEmpty {
                 await deliver(outcome.text, into: app)
             }
@@ -365,12 +368,6 @@ final class RiverSession {
         }
     }
 
-    // A decode for the current dictation, after any kept recordings' decode still running.
-    private func transcribeInTurn(_ samples: [Float]) async throws -> String? {
-        await keptDecode?.value
-        return try await transcription.transcribe(audioSamples: samples)
-    }
-
     // Transcribes the recordings a failed load kept, once the model is ready and River is idle
     // (planning 0004): one at a time, stopping when a dictation starts, each in one piece through
     // `DictationStream`, as its dictation would have been (planning 0039). The text is joined
@@ -385,15 +382,14 @@ final class RiverSession {
             var texts: [String] = []
             while let recording = self.keptRecordings.first, self.currentState == .idle,
                   self.transcription.currentModelLoadState == .ready {
-                // Straight to the engine: this decode is the turn a dictation's decodes wait for.
                 let outcome = await DictationStream.transcribe(recording) { samples in
                     try await transcription.transcribe(audioSamples: samples)
                 }
                 if let error = outcome.error {
                     self.logger.error("Kept recording failed to transcribe: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
                     self.errorSubject.send(.transcription(underlying: error))
-                } else if outcome.text.isEmpty {
-                    self.logger.info("A kept recording held no speech")
+                } else if let reason = outcome.emptyReason {
+                    self.logger.notice("A kept recording had nothing to type: \(String(describing: reason), privacy: .public), with \(self.transcription.currentModelName, privacy: .public)")
                 } else {
                     texts.append(outcome.text)
                 }
@@ -619,22 +615,35 @@ final class RiverSession {
 
     /// Paste last transcription's shortcut (spec 0036): types the last transcription again at
     /// the cursor through the same insertion path, so the clipboard is never touched, after any
-    /// insert still typing (planning 0039). Does nothing with no transcription yet, or while a
-    /// dictation is recording or processing. A change of app while it types stops it and shows
-    /// nothing: the panel draws a status only during a dictation, and the text stays the last
-    /// transcript.
+    /// insert still typing (planning 0039). It types at once in any state but one, a dictation
+    /// in a tap mode or one being transcribed included: the last transcription is the one
+    /// before until the new one's text is delivered, and that text takes its turn after it.
+    /// While a Hold dictation records it does nothing, and one that starts while it waits or
+    /// types stops it: its keys would land under the held dictation key (spec 0036). Nothing
+    /// happens with no transcription yet. A change of app while it types stops it too. A stop
+    /// shows nothing, and the text stays the last transcript.
     func pasteLastTranscript() async {
-        guard currentState == .idle, let text = lastTranscript else {
-            logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
+        guard let text = lastTranscript else {
+            logger.info("Paste last ignored: no transcription yet")
+            return
+        }
+        guard canPasteLast else {
+            logger.info("Paste last ignored: a Hold dictation is recording")
             return
         }
         logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
         do {
-            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront())
+            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront(), while: { self.canPasteLast })
         } catch {
             logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             errorSubject.send(.textInsertion(underlying: error))
         }
+    }
+
+    // A Hold recording holds the dictation key down, and keys typed under it can become
+    // commands in the app in front; a tap mode holds no key.
+    private var canPasteLast: Bool {
+        !(currentState == .recording && activeMode == .hold)
     }
 
     /// The Model section's Select and Try Again (planning 0036): makes `name` the model River

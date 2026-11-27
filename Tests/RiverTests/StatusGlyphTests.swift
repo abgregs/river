@@ -3,9 +3,8 @@ import SwiftUI
 import Testing
 @testable import River
 
-/// The status row's own glyphs sit centred in their tile. App switched's sheet once ran from 1.75
-/// to 13.75 on the 14 pt grid, 0.75 pt low, which read as a mistake beside the centred ring
-/// (maintainer, 2026-11-24).
+/// The status row's own glyph sits centred in its tile. A glyph 0.75 pt low read as a mistake
+/// beside the centred ring (maintainer, 2026-11-24).
 @Suite("Status glyphs")
 @MainActor
 struct StatusGlyphTests {
@@ -25,16 +24,12 @@ struct StatusGlyphTests {
         return CGRect(x: box.minX / scale, y: box.minY / scale, width: box.width / scale, height: box.height / scale)
     }
 
-    @Test("the held sheet and the lock centre their ink in the tile", arguments: ["held", "lock"])
-    func glyphIsCentred(name: String) throws {
+    @Test("the lock centres its ink in the tile")
+    func lockIsCentred() throws {
         let bounds = try Self.inkBounds { context, size in
-            if name == "held" {
-                HeldSheetRenderer.draw(in: &context, size: size, ink: .black)
-            } else {
-                LockRenderer.draw(in: &context, size: size, ink: .black)
-            }
+            LockRenderer.draw(in: &context, size: size, ink: .black)
         }
-        #expect(abs(bounds.midX - StatusRing.grid / 2) < 0.1, "\(name) is off centre across: \(bounds)")
-        #expect(abs(bounds.midY - StatusRing.grid / 2) < 0.1, "\(name) is off centre down: \(bounds)")
+        #expect(abs(bounds.midX - StatusRing.grid / 2) < 0.1, "the lock is off centre across: \(bounds)")
+        #expect(abs(bounds.midY - StatusRing.grid / 2) < 0.1, "the lock is off centre down: \(bounds)")
     }
 }
