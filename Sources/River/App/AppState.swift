@@ -13,7 +13,8 @@ enum DictationStatus: Equatable {
     /// The model's state while a dictation waits for it, then ready, or failed with the
     /// recording kept.
     case model(StatusRing.Phase)
-    /// The app dictated into left the front: River stopped typing and holds the text.
+    /// River couldn't type the text and holds it for Paste last: the app dictated into left the
+    /// front, or no text field took it. Shown as Couldn't paste.
     case held
     /// A cycle error (planning 0018).
     case error(ErrorStatus)
@@ -211,10 +212,11 @@ final class AppState {
     // screen (ADR 0002).
     func apply(_ error: RiverError) {
         errorMessage = LogRedaction.redactUserPaths(error.localizedDescription)
-        // The same error as the status in the mark's place (planning 0018). It is fixed copy
-        // per error *kind*, no user content, so it needs no redaction; the redacted framework
-        // message stays on `errorMessage` only. The newest status owns the hold.
-        show(.error(ErrorStatusPresentation.status(for: error)))
+        // The same error as the status in the mark's place (planning 0018), a paste that failed
+        // as held text. It is fixed copy per error *kind*, no user content, so it needs no
+        // redaction; the redacted framework message stays on `errorMessage` only. The newest
+        // status owns the hold.
+        show(ErrorStatusPresentation.status(for: error))
     }
 
     // internal for testability — the model load state entry point (also used by

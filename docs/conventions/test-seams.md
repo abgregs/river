@@ -58,7 +58,7 @@ Some methods and initialisers are `internal` (not `private`) specifically so tes
 - `SystemShortcuts.entries(from:)` — the pure read of `CopySymbolicHotKeys`' dictionaries
 - `AppState.apply(shortcutRegistrations:)` — drives a failing shortcut's badge and line without another app holding it
 - `AppState(schedule:)` — the `TimerScheduler` behind the status's reveal and holds, which tests capture and fire by hand (`ManualScheduler`), so the 0.90 s hand-off, the 4 s hold and Ready's hold are tested without waiting
-- `StatusRing.frame(at:events:reduceMotion:)`, `StatusRingEvents.record(fraction:at:)`, `StatusRingCycle.next(...)` and `StatusRowWords.of(...)` — the status ring and its words as pure values, so each moment of the ring's spec is a test (planning 0004)
+- `StatusRing.frame(at:events:reduceMotion:)`, `StatusRingEvents.record(fraction:at:)`, `StatusRingCycle.next(...)`, `StatusRowWords.of(...)` and `StatusRow.glyph(for:frame:)` — the status ring, its words and the tile's glyph as pure values, so each moment of the ring's spec is a test, and so is the mark each status leads with (planning 0004)
 - `TextInsertionManager`'s injected `frontmostApp` — the app in front, as a process ID a test moves, read before each chunk, so held text, a switch mid-insert included, is tested without switching apps; `RiverSession.currentKeptRecordingCount` counts the recordings a failed load kept
 - `RiverIndicatorView(appState:markCycle:shown:statusRing:)` and `StatusRow(…ring:)` — a status and a ring already under way, handed in so the snapshot harness draws the status in the mark's place at one moment
 - `HotkeyManager(pasteTimeout:)` — how long Paste last waits for the tap's key-up, shortened so a test sees a silent tap paste anyway

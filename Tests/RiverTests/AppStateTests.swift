@@ -171,10 +171,26 @@ struct AppStateTests {
         // Two renderers of one error (planning 0018): the redacted `errorMessage` is the
         // lingering menu record; the status in the mark's place is the alert.
         let appState = AppState()
-        let error = RiverError.textInsertion(underlying: NSError(domain: "x", code: 1))
+        let error = RiverError.transcription(underlying: NSError(domain: "x", code: 1))
         appState.apply(error)
-        #expect(appState.dictationStatus == .error(ErrorStatusPresentation.status(for: error)))
+        #expect(appState.dictationStatus == ErrorStatusPresentation.status(for: error))
+        #expect(appState.dictationStatus != .held)
         #expect(appState.errorMessage != nil)
+    }
+
+    @MainActor
+    @Test("a paste that failed and an app switch show the one status: River holds the text")
+    func failedPasteAndAppSwitchShowOneStatus() {
+        // River can't yet tell why it couldn't type, and either way the text waits for Paste
+        // last, so the user sees one message with one way out (maintainer, 2026-11-27).
+        let failed = AppState()
+        failed.apply(RiverError.textInsertion(underlying: TextInsertionError.noEditableTarget))
+        let switched = AppState()
+        switched.apply(dictationEvent: .textHeld)
+        #expect(failed.dictationStatus == .held)
+        #expect(switched.dictationStatus == .held)
+        // The menu keeps the failure's own message.
+        #expect(failed.errorMessage != nil)
     }
 
     @MainActor
