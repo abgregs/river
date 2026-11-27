@@ -91,7 +91,7 @@ The Settings window's Shortcuts section ([0036](../planning/0036_settings-and-sh
 1. **Dictate** — the dictation shortcut in its outline and a Record button. Recording takes a lone modifier or a combination, refuses what cannot work or what River already uses, and writes `dictationShortcut` ([0036](../planning/0036_settings-and-shortcuts.md), The recorder).
 2. **Start by** — a segmented choice of Hold / Tap / Double-tap, with the chosen mode's one-line description under it.
 3. **Cancel recording** — the keys that cancel a recording, fn or Esc, shown, not editable. Esc is River's only while a recording runs.
-4. **Paste last transcription** — types the last transcription again at the cursor, once every modifier is up, through the typing path, so the clipboard is never touched; default ⌃⌥V, writes `pasteLastShortcut`.
+4. **Paste last transcription** — types the last transcription again at the cursor, once every modifier is up, through the typing path, so the clipboard is never touched; default ⌃⌥V, writes `pasteLastShortcut`. During a Tap or Double-tap dictation it types the previous transcription at once, and that dictation's text follows; while a Hold dictation records it does nothing ([0036](../planning/0036_settings-and-shortcuts.md)).
 5. **Copy last transcription** — copies it, as the menu item does; default ⌃⌥C, writes `copyLastShortcut`.
 6. **Toggle live text** — shows or hides the text above the indicator, during a recording or between recordings, and keeps the choice; default ⌃⌥L, writes `liveTextShortcut` ([0034](../planning/0034_live-text-and-microphone-settings.md)).
 

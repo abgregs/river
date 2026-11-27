@@ -32,6 +32,7 @@ show as raw text. -->
 - The recording indicator draws 川 and is monochrome. When you press, the panel appears, then 川's strokes, faint, then the frosted glass once the microphone hears you; on release the glass leaves, the strokes stay while River transcribes, then the panel leaves. Nothing shows while River loads its model at launch.
 - The model's download and preparation show as a ring, with the real download percentage, beside the recording indicator, in Settings and in the menu bar, in place of Settings' sliding bar and the menu bar's arrow and ellipsis. A model that couldn't load shows the ring in red with an exclamation mark.
 - The floating panels (the indicator, messages and the live transcript) are now solid, lit from the upper left with a bright edge, so they look the same over any desktop.
+- Paste last works while you dictate in Tap or Double-tap mode, and while River transcribes: it types the previous transcription at once, and the new dictation's text follows. It used to do nothing until River was idle. In Hold mode it still does nothing while you hold the dictation key.
 - A dictation in which the model hears no words now ends quietly with every model: nothing is typed and no error shows, and the live text keeps going. A Whisper model used to show "Couldn't transcribe".
 - The recording indicator reads your voice on a scale measured from real speech on the built-in microphone: a quiet room keeps it still, and soft, normal and raised speech look different. Before, normal speech already filled it.
 
@@ -47,7 +48,7 @@ show as raw text. -->
 - A recording whose audio stops arriving part-way now ends on its own within a couple of seconds, types the words heard before the loss, and says so, instead of running on and typing the fragment as if it were the whole dictation.
 - The last character of a dictation typed into Claude Code no longer lands earlier in the text.
 - Pressing Paste last twice quickly types the text twice, one after the other, instead of mixing the two.
-- Paste last stops when you start a dictation, whether it is typing or waiting to type, so its text never arrives while you hold the dictation key.
+- Paste last stops when you press and hold the dictation key, whether it is typing or waiting to type, so its text never arrives while you hold the key.
 - After you cancel a dictation, River finishes the transcription it was running before it transcribes the recordings it kept, instead of running both at once.
 - Switching apps while River types a dictation stops the typing there, instead of sending the rest into the other app. River holds the whole dictation for Paste last, the part already typed included.
 

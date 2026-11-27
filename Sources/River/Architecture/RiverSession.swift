@@ -615,23 +615,31 @@ final class RiverSession {
 
     /// Paste last transcription's shortcut (spec 0036): types the last transcription again at
     /// the cursor through the same insertion path, so the clipboard is never touched, after any
-    /// insert still typing (planning 0039). Does nothing with no transcription yet, or while a
-    /// dictation is recording or processing, and a dictation that starts while it waits or
-    /// types stops it: its keys would land under the held dictation key (spec 0036). A change
-    /// of app while it types stops it too. Neither shows anything: the panel draws a status
-    /// only during a dictation, and the text stays the last transcript.
+    /// insert still typing (planning 0039). It types at once in any state but one, a dictation
+    /// in a tap mode or one being transcribed included: the last transcription is the one
+    /// before until the new one's text is delivered, and that text takes its turn after it.
+    /// While a Hold dictation records it does nothing, and one that starts while it waits or
+    /// types stops it: its keys would land under the held dictation key (spec 0036). Nothing
+    /// happens with no transcription yet. A change of app while it types stops it too. A stop
+    /// shows nothing, and the text stays the last transcript.
     func pasteLastTranscript() async {
-        guard currentState == .idle, let text = lastTranscript else {
+        guard canPasteLast, let text = lastTranscript else {
             logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
             return
         }
         logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
         do {
-            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront(), while: { self.currentState == .idle })
+            _ = try await textInsertion.deliver(text, to: textInsertion.appInFront(), while: { self.canPasteLast })
         } catch {
             logger.error("Text insertion failed: \(LogRedaction.redactUserPaths(error.localizedDescription), privacy: .public)")
             errorSubject.send(.textInsertion(underlying: error))
         }
+    }
+
+    // A Hold recording holds the dictation key down, and keys typed under it can become
+    // commands in the app in front; a tap mode holds no key.
+    private var canPasteLast: Bool {
+        !(currentState == .recording && activeMode == .hold)
     }
 
     /// The Model section's Select and Try Again (planning 0036): makes `name` the model River
