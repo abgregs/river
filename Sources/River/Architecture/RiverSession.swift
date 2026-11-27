@@ -623,8 +623,12 @@ final class RiverSession {
     /// happens with no transcription yet. A change of app while it types stops it too. A stop
     /// shows nothing, and the text stays the last transcript.
     func pasteLastTranscript() async {
-        guard canPasteLast, let text = lastTranscript else {
-            logger.info("Paste last ignored in state \(String(describing: self.currentState), privacy: .public)")
+        guard let text = lastTranscript else {
+            logger.info("Paste last ignored: no transcription yet")
+            return
+        }
+        guard canPasteLast else {
+            logger.info("Paste last ignored: a Hold dictation is recording")
             return
         }
         logger.info("Pasting the last transcript again (\(text.count, privacy: .public) chars)")
